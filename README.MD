@@ -3,7 +3,8 @@
 A completely rewritten Delphi/VCL wrapper for the Scintilla text editor, providing integration with lexers and generated API bindings.
 
 ## Foreword
-My initial goal was to create a simple tool for viewing source files for personal use (in existing always seemed to be missing something). But as often happens, one task led to another, and in the end, I had to rewrite about 80% of the source code from the original project. In my opinion, the final result is quite competitive and can be used in other projects. 
+Initially, my goal was to create a simple tool for viewing source files for personal use (I always felt that something was missing from the existing options). But, as often happens, one task led to another, and then another, and so on... In the end, I had to rewrite about 80% of the source code from the original project. 
+In my opinion, the final result is quite competitive and can be used in other projects.
 
 ## Features
 - **Its still VCL component** - `TDScintilla` derived from `TWinControl` with full design-time support
