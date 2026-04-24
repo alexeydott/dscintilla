@@ -1,0 +1,8 @@
+function AnnotationGetStyles(ALine: NativeInt): TDSciStyles;
+function TDScintilla.AnnotationGetStyles(ALine: NativeInt): TDSciStyles;
+begin
+  SetLength(Result, SendEditor(SCI_ANNOTATIONGETSTYLES, ALine));
+  if Length(Result) > 0 then
+    SendEditor(SCI_ANNOTATIONGETSTYLES, ALine, LPARAM(@Result[0]));
+end;
+

@@ -1,0 +1,29 @@
+function GetTextRangeFull(AStart, AEnd: NativeInt): UnicodeString;
+function TDScintilla.GetTextRangeFull(AStart, AEnd: NativeInt): UnicodeString;
+var
+  lRange: TDSciTextRangeFull;
+  lChars: TDSciChars;
+  lActualLength: NativeInt;
+begin
+  Result := '';
+
+  if AEnd = -1 then
+    AEnd := GetLength
+  else
+    if AEnd > GetLength then
+      Exit;
+
+  if (AStart < 0) or (AEnd < 0) or (AStart >= AEnd) then
+    Exit;
+
+  SetLength(lChars, AEnd - AStart + 1);
+
+  lRange.chrg.cpMin := AStart;
+  lRange.chrg.cpMax := AEnd;
+  lRange.lpstrText := @lChars[0];
+
+  lActualLength := SendEditor(SCI_GETTEXTRANGEFULL, 0, LPARAM(@lRange));
+  lChars[lActualLength] := #0;
+
+  Result := FHelper.GetStrFromPtr(@lChars[0]);
+end;

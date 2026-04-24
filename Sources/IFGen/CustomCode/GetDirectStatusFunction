@@ -1,0 +1,5 @@
+function GetDirectStatusFunction: TDScintillaStatusFunction;
+function %s.GetDirectStatusFunction: TDScintillaStatusFunction;
+begin
+  Result := TDScintillaStatusFunction(SendEditor(SCI_GETDIRECTSTATUSFUNCTION, 0, 0));
+end;

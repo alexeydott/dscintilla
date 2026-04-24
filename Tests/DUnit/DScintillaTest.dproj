@@ -3,7 +3,9 @@
 			<ProjectGuid>{8938D069-04FD-4F46-98EF-96058D34E669}</ProjectGuid>
 			<ProjectVersion>12.0</ProjectVersion>
 			<Config Condition="'$(Config)'==''">Debug</Config>
+			<Platform Condition="'$(Platform)'==''">Win32</Platform>
 			<DCC_DCCCompiler>DCC32</DCC_DCCCompiler>
+			<DCC_Namespace>System;Xml;Data;Datasnap;Web;Soap;Winapi;Vcl;$(DCC_Namespace)</DCC_Namespace>
 			<MainSource>DScintillaTest.dpr</MainSource>
 		</PropertyGroup>
 		<PropertyGroup Condition="'$(Config)'=='Base' or '$(Base)'!=''">
@@ -20,14 +22,23 @@
 			<Base>true</Base>
 		</PropertyGroup>
 		<PropertyGroup Condition="'$(Base)'!=''">
-			<DCC_ExeOutput>Bin</DCC_ExeOutput>
-			<DCC_UnitSearchPath>$(BDS)\Source\DUnit\src;$(DCC_UnitSearchPath)</DCC_UnitSearchPath>
-			<DCC_Define>_CONSOLE_TESTRUNNER;$(DCC_Define)</DCC_Define>
+			<DCC_UnitSearchPath>$(BDS)\Source\DUnit\src;..\..\source;..\..\source\ConfGen;..\Visual;$(DCC_UnitSearchPath)</DCC_UnitSearchPath>
+			<DCC_Define>CONSOLE_TESTRUNNER;$(DCC_Define)</DCC_Define>
 			<DCC_UnitAlias>WinTypes=Windows;WinProcs=Windows;DbiTypes=BDE;DbiProcs=BDE;DbiErrs=BDE;$(DCC_UnitAlias)</DCC_UnitAlias>
 			<DCC_DcuOutput>DCU</DCC_DcuOutput>
-			<DCC_DependencyCheckOutputName>Bin\DScintillaTest.exe</DCC_DependencyCheckOutputName>
 			<DCC_ImageBase>00400000</DCC_ImageBase>
+		</PropertyGroup>
+		<PropertyGroup Condition="'$(Base)'!='' and '$(Platform)'=='Win32'">
+			<DCC_DCCCompiler>DCC32</DCC_DCCCompiler>
+			<DCC_ExeOutput>..\..\bin32</DCC_ExeOutput>
+			<DCC_DependencyCheckOutputName>..\..\bin32\DScintillaTest.exe</DCC_DependencyCheckOutputName>
 			<DCC_Platform>x86</DCC_Platform>
+		</PropertyGroup>
+		<PropertyGroup Condition="'$(Base)'!='' and '$(Platform)'=='Win64'">
+			<DCC_DCCCompiler>DCC64</DCC_DCCCompiler>
+			<DCC_ExeOutput>..\..\bin64</DCC_ExeOutput>
+			<DCC_DependencyCheckOutputName>..\..\bin64\DScintillaTest.exe</DCC_DependencyCheckOutputName>
+			<DCC_Platform>x64</DCC_Platform>
 		</PropertyGroup>
 		<PropertyGroup Condition="'$(Cfg_1)'!=''">
 			<DCC_LocalDebugSymbols>false</DCC_LocalDebugSymbols>
@@ -42,11 +53,18 @@
 			<DelphiCompile Include="DScintillaTest.dpr">
 				<MainSource>MainSource</MainSource>
 			</DelphiCompile>
-			<DCCReference Include="TestDScintilla.pas"/>
-			<DCCReference Include="..\..\Sources\DScintillaTypes.pas"/>
-			<DCCReference Include="..\..\Sources\DScintillaUtils.pas"/>
-			<DCCReference Include="..\..\Sources\DScintillaCustom.pas"/>
-			<DCCReference Include="..\..\Sources\DScintilla.pas"/>
+			<DCCReference Include="TestDScintillaTyped.pas"/>
+			<DCCReference Include="TestDSciVisualUi.pas"/>
+			<DCCReference Include="..\..\source\DScintillaTypes.pas"/>
+			<DCCReference Include="..\..\source\DScintillaUtils.pas"/>
+			<DCCReference Include="..\..\source\DScintillaCustom.pas"/>
+			<DCCReference Include="..\..\source\DScintillaBridge.pas"/>
+			<DCCReference Include="..\..\source\DScintilla.pas"/>
+			<DCCReference Include="..\..\source\DLexilla.pas"/>
+			<DCCReference Include="..\..\source\DScintillaFindDLG.pas"/>
+			<DCCReference Include="..\..\source\DScintillaVisualConfig.pas"/>
+			<DCCReference Include="..\..\source\DScintillaVisualSettingsDLG.pas"/>
+			<DCCReference Include="..\Visual\uDSciVisualTestMain.pas"/>
 			<BuildConfiguration Include="Base">
 				<Key>Base</Key>
 			</BuildConfiguration>

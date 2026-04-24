@@ -1,0 +1,19 @@
+function GetStyledTextFull(AStart, AEnd: NativeInt): TDSciCells;
+function TDScintilla.GetStyledTextFull(AStart, AEnd: NativeInt): TDSciCells;
+var
+  lRange: TDSciTextRangeFull;
+begin
+  if AStart >= AEnd then
+  begin
+    SetLength(Result, 0);
+    Exit;
+  end;
+
+  SetLength(Result, AEnd - AStart + 1{nul});
+
+  lRange.chrg.cpMin := AStart;
+  lRange.chrg.cpMax := AEnd;
+  lRange.lpstrText := @Result[0];
+
+  SendEditor(SCI_GETSTYLEDTEXTFULL, 0, LPARAM(@lRange));
+end;

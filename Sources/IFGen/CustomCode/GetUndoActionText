@@ -1,0 +1,5 @@
+function GetUndoActionText(AAction: Integer): UnicodeString;
+function TDScintilla.GetUndoActionText(AAction: Integer): UnicodeString;
+begin
+  FHelper.GetText(SCI_GETUNDOACTIONTEXT, AAction, Result);
+end;

@@ -1,0 +1,5 @@
+procedure SetCopySeparator(const ASeparator: UnicodeString);
+procedure TDScintilla.SetCopySeparator(const ASeparator: UnicodeString);
+begin
+  FHelper.SetText(SCI_SETCOPYSEPARATOR, 0, ASeparator);
+end;

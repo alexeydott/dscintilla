@@ -1,0 +1,8 @@
+function MarginGetStyles(ALine: NativeInt): TDSciStyles;
+function TDScintilla.MarginGetStyles(ALine: NativeInt): TDSciStyles;
+begin
+  SetLength(Result, SendEditor(SCI_MARGINGETSTYLES, ALine));
+  if Length(Result) > 0 then
+    SendEditor(SCI_MARGINGETSTYLES, ALine, LPARAM(@Result[0]));
+end;
+

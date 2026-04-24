@@ -1,0 +1,8 @@
+function TargetAsUTF8: UTF8String;
+function TDScintilla.TargetAsUTF8: UTF8String;
+var
+  lText: AnsiString;
+begin
+  FHelper.GetTextA(SCI_TARGETASUTF8, 0, lText);
+  Result := UTF8String(lText);
+end;

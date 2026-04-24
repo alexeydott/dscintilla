@@ -1,0 +1,77 @@
+procedure SetLexerLanguage(const ALanguage: UnicodeString);
+procedure TDScintilla.SetLexerLanguage(const ALanguage: UnicodeString);
+var
+  lConfigGroup: TDSciVisualStyleGroup;
+  lConfigObject: TObject;
+  lDllPath: string;
+  lLexilla: TDLexilla;
+  lLexer: TDSciLexer;
+  lRuntimeLanguage: UnicodeString;
+  lResolvedLanguage: UnicodeString;
+begin
+  FRequestedLexerLanguage := Trim(ALanguage);
+  lRuntimeLanguage := FRequestedLexerLanguage;
+  if FRequestedLexerLanguage = '' then
+  begin
+    FActiveLexerLanguage := '';
+    SetILexer(nil);
+    Exit;
+  end;
+
+  lConfigGroup := nil;
+  lConfigObject := nil;
+  lDllPath := ResolveDllModulePath;
+  lLexilla := Lexilla;
+  if lDllPath <> '' then
+    lLexilla.DllModule := lDllPath;
+
+  if Assigned(FSettings) and FSettings.GetCurrentConfig(lConfigObject) and
+    (lConfigObject is TDSciVisualConfig) then
+    lConfigGroup := TDSciVisualConfig(lConfigObject).StyleOverrides.FindGroup(
+      FRequestedLexerLanguage);
+
+  if (lConfigGroup <> nil) and lConfigGroup.HasLexerID then
+    if lConfigGroup.LexerID = Integer(sclNULL) then
+    begin
+      OutputDebugString(PChar('Keeping requested language "' +
+        string(FRequestedLexerLanguage) +
+        '" on the plain/null runtime lexer because config maps it to SCLEX_NULL.'));
+      FActiveLexerLanguage := '';
+      SetILexer(nil);
+      Exit;
+    end
+    else
+      try
+        lResolvedLanguage := Trim(lLexilla.LexerNameFromID(lConfigGroup.LexerID));
+        if lResolvedLanguage <> '' then
+        begin
+          if not SameText(lResolvedLanguage, lRuntimeLanguage) then
+            OutputDebugString(PChar('Mapping requested language "' +
+              string(FRequestedLexerLanguage) + '" to runtime lexer "' +
+              string(lResolvedLanguage) + '" from LexerID ' +
+              IntToStr(lConfigGroup.LexerID) + '.'));
+          lRuntimeLanguage := lResolvedLanguage;
+        end;
+      except
+        on E: Exception do
+          OutputDebugString(PChar('Could not resolve runtime lexer for "' +
+            string(FRequestedLexerLanguage) + '" from LexerID ' +
+            IntToStr(lConfigGroup.LexerID) + ': ' + E.Message));
+      end;
+
+  // SCI_SETLEXERLANGUAGE (4006) and SCI_LOADLEXERLIBRARY (4007) were
+  // removed in Scintilla 5.x and are silently ignored.  Always create a fresh
+  // lexer instance via Lexilla.CreateLexer so the editor receives the requested
+  // lexer reliably on every call — not only the first time.  Callers (Reapply)
+  // re-apply fold properties and Colourise after this, so the new instance is
+  // fully configured before the user sees it.
+  OutputDebugString(PChar('Creating lexer "' + string(lRuntimeLanguage) +
+    '" via Lexilla.CreateLexer.'));
+  lLexer := lLexilla.CreateLexer(lRuntimeLanguage);
+  if Pointer(lLexer) = nil then
+    raise EInvalidOpException.Create('Lexilla lexer "' +
+      string(lRuntimeLanguage) + '" is not available.');
+  SetILexer(Pointer(lLexer));
+  FActiveLexerLanguage := lRuntimeLanguage;
+end;
+

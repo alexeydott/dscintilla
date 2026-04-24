@@ -1,0 +1,6 @@
+function SearchNext(AFlags: Integer; const AText: UnicodeString): NativeInt;
+function TDScintilla.SearchNext(AFlags: Integer; const AText: UnicodeString): NativeInt;
+begin
+  Result := FHelper.SetText(SCI_SEARCHNEXT, AFlags, AText);
+end;
+

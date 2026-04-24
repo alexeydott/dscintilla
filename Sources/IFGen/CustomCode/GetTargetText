@@ -1,0 +1,5 @@
+function GetTargetText: UnicodeString;
+function TDScintilla.GetTargetText: UnicodeString;
+begin
+  FHelper.GetText(SCI_GETTARGETTEXT, 0, Result);
+end;

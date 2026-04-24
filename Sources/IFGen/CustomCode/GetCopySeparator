@@ -1,0 +1,5 @@
+function GetCopySeparator: UnicodeString;
+function TDScintilla.GetCopySeparator: UnicodeString;
+begin
+  FHelper.GetText(SCI_GETCOPYSEPARATOR, 0, Result);
+end;

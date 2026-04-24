@@ -1,0 +1,6 @@
+function GetLine(ALine: NativeInt): UnicodeString;
+function TDScintilla.GetLine(ALine: NativeInt): UnicodeString;
+begin
+  FHelper.GetText(SCI_GETLINE, ALine, Result);
+end;
+

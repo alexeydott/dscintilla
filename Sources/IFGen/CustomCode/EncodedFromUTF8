@@ -1,0 +1,5 @@
+function EncodedFromUTF8(const AUtf8: UTF8String): AnsiString;
+function TDScintilla.EncodedFromUTF8(const AUtf8: UTF8String): AnsiString;
+begin
+  FHelper.GetTextA(SCI_ENCODEDFROMUTF8, AnsiString(AUtf8), Result);
+end;

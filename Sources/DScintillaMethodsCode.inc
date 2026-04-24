@@ -5,10 +5,10 @@ end;
 
 procedure TDScintilla.AddStyledText(const ACells: TDSciCells);
 begin
-  SendEditor(SCI_ADDSTYLEDTEXT, System.Length(ACells) * 2, Integer(ACells));
+  SendEditor(SCI_ADDSTYLEDTEXT, System.Length(ACells) * 2, LPARAM(ACells));
 end;
 
-procedure TDScintilla.InsertText(APos: Integer; const AText: UnicodeString);
+procedure TDScintilla.InsertText(APos: NativeInt; const AText: UnicodeString);
 begin
   FHelper.SetText(SCI_INSERTTEXT, APos, AText);
 end;
@@ -23,9 +23,9 @@ begin
   SendEditor(SCI_CLEARALL, 0, 0);
 end;
 
-procedure TDScintilla.DeleteRange(APos: Integer; ADeleteLength: Integer);
+procedure TDScintilla.DeleteRange(AStart: NativeInt; ALengthDelete: NativeInt);
 begin
-  SendEditor(SCI_DELETERANGE, APos, ADeleteLength);
+  SendEditor(SCI_DELETERANGE, WPARAM(AStart), LPARAM(ALengthDelete));
 end;
 
 procedure TDScintilla.ClearDocumentStyle;
@@ -48,7 +48,7 @@ begin
   SendEditor(SCI_SETSAVEPOINT, 0, 0);
 end;
 
-function TDScintilla.GetStyledText(AStart, AEnd: Integer): TDSciCells;
+function TDScintilla.GetStyledText(AStart, AEnd: NativeInt): TDSciCells;
 var
   lRange: TDSciTextRange;
 begin
@@ -64,132 +64,155 @@ begin
   lRange.chrg.cpMax := AEnd;
   lRange.lpstrText := @Result[0];
 
-  SendEditor(SCI_GETSTYLEDTEXT, 0, Integer(@lRange));
+  SendEditor(SCI_GETSTYLEDTEXT, 0, LPARAM(@lRange));
 end;
 
+function TDScintilla.GetStyledTextFull(AStart, AEnd: NativeInt): TDSciCells;
+var
+  lRange: TDSciTextRangeFull;
+begin
+  if AStart >= AEnd then
+  begin
+    SetLength(Result, 0);
+    Exit;
+  end;
+
+  SetLength(Result, AEnd - AStart + 1{nul});
+
+  lRange.chrg.cpMin := AStart;
+  lRange.chrg.cpMax := AEnd;
+  lRange.lpstrText := @Result[0];
+
+  SendEditor(SCI_GETSTYLEDTEXTFULL, 0, LPARAM(@lRange));
+end;
 function TDScintilla.CanRedo: Boolean;
 begin
   Result := Boolean(SendEditor(SCI_CANREDO, 0, 0));
 end;
 
-function TDScintilla.MarkerLineFromHandle(AHandle: Integer): Integer;
+function TDScintilla.MarkerLineFromHandle(AMarkerHandle: Integer): NativeInt;
 begin
-  Result := SendEditor(SCI_MARKERLINEFROMHANDLE, AHandle, 0);
+  Result := SendEditor(SCI_MARKERLINEFROMHANDLE, WPARAM(AMarkerHandle), 0);
 end;
 
-procedure TDScintilla.MarkerDeleteHandle(AHandle: Integer);
+procedure TDScintilla.MarkerDeleteHandle(AMarkerHandle: Integer);
 begin
-  SendEditor(SCI_MARKERDELETEHANDLE, AHandle, 0);
+  SendEditor(SCI_MARKERDELETEHANDLE, WPARAM(AMarkerHandle), 0);
 end;
 
-function TDScintilla.PositionFromPoint(AX: Integer; AY: Integer): Integer;
+function TDScintilla.MarkerHandleFromLine(ALine: NativeInt; AWhich: Integer): Integer;
 begin
-  Result := SendEditor(SCI_POSITIONFROMPOINT, AX, AY);
+  Result := SendEditor(SCI_MARKERHANDLEFROMLINE, WPARAM(ALine), LPARAM(AWhich));
 end;
 
-function TDScintilla.PositionFromPointClose(AX: Integer; AY: Integer): Integer;
+function TDScintilla.MarkerNumberFromLine(ALine: NativeInt; AWhich: Integer): Integer;
 begin
-  Result := SendEditor(SCI_POSITIONFROMPOINTCLOSE, AX, AY);
+  Result := SendEditor(SCI_MARKERNUMBERFROMLINE, WPARAM(ALine), LPARAM(AWhich));
 end;
 
-procedure TDScintilla.GotoLine(ALine: Integer);
+function TDScintilla.PositionFromPoint(AX: Integer; AY: Integer): NativeInt;
 begin
-  SendEditor(SCI_GOTOLINE, ALine, 0);
+  Result := SendEditor(SCI_POSITIONFROMPOINT, WPARAM(AX), LPARAM(AY));
 end;
 
-procedure TDScintilla.GotoPos(APos: Integer);
+function TDScintilla.PositionFromPointClose(AX: Integer; AY: Integer): NativeInt;
 begin
-  SendEditor(SCI_GOTOPOS, APos, 0);
+  Result := SendEditor(SCI_POSITIONFROMPOINTCLOSE, WPARAM(AX), LPARAM(AY));
 end;
 
-function TDScintilla.GetCurLine(var AText: UnicodeString): Integer;
+procedure TDScintilla.GotoLine(ALine: NativeInt);
+begin
+  SendEditor(SCI_GOTOLINE, WPARAM(ALine), 0);
+end;
+
+procedure TDScintilla.GotoPos(ACaret: NativeInt);
+begin
+  SendEditor(SCI_GOTOPOS, WPARAM(ACaret), 0);
+end;
+
+function TDScintilla.GetCurLine(var AText: UnicodeString): NativeInt;
 begin
   Result := FHelper.GetTextLen(SCI_GETCURLINE, AText);
 end;
 
-procedure TDScintilla.ConvertEOLs(AEolMode: Integer);
+procedure TDScintilla.ConvertEOLs(AEolMode: TDSciEndOfLine);
 begin
-  SendEditor(SCI_CONVERTEOLS, AEolMode, 0);
+  SendEditor(SCI_CONVERTEOLS, WPARAM(TDSciEndOfLineToInt(AEolMode)), 0);
 end;
 
-procedure TDScintilla.StartStyling(APos: Integer; AMask: Integer);
+procedure TDScintilla.StartStyling(AStart: NativeInt; AUnused: Integer);
 begin
-  SendEditor(SCI_STARTSTYLING, APos, AMask);
+  SendEditor(SCI_STARTSTYLING, WPARAM(AStart), LPARAM(AUnused));
 end;
 
-procedure TDScintilla.SetStyling(ALength: Integer; AStyle: Integer);
+procedure TDScintilla.SetStyling(ALength: NativeInt; AStyle: Integer);
 begin
-  SendEditor(SCI_SETSTYLING, ALength, AStyle);
+  SendEditor(SCI_SETSTYLING, WPARAM(ALength), LPARAM(AStyle));
 end;
 
-procedure TDScintilla.MarkerDefine(AMarkerNumber: Integer; AMarkerSymbol: Integer);
+procedure TDScintilla.ClearTabStops(ALine: NativeInt);
 begin
-  SendEditor(SCI_MARKERDEFINE, AMarkerNumber, AMarkerSymbol);
+  SendEditor(SCI_CLEARTABSTOPS, WPARAM(ALine), 0);
 end;
 
-procedure TDScintilla.MarkerSetFore(AMarkerNumber: Integer; AFore: TColor);
+procedure TDScintilla.AddTabStop(ALine: NativeInt; AX: Integer);
 begin
-  SendEditor(SCI_MARKERSETFORE, AMarkerNumber, Integer(AFore));
+  SendEditor(SCI_ADDTABSTOP, WPARAM(ALine), LPARAM(AX));
 end;
 
-procedure TDScintilla.MarkerSetBack(AMarkerNumber: Integer; ABack: TColor);
+function TDScintilla.GetNextTabStop(ALine: NativeInt; AX: Integer): Integer;
 begin
-  SendEditor(SCI_MARKERSETBACK, AMarkerNumber, Integer(ABack));
+  Result := SendEditor(SCI_GETNEXTTABSTOP, WPARAM(ALine), LPARAM(AX));
 end;
 
-procedure TDScintilla.MarkerSetBackSelected(AMarkerNumber: Integer; ABack: TColor);
+procedure TDScintilla.MarkerDefine(AMarkerNumber: Integer; AMarkerSymbol: TDSciMarkerSymbol);
 begin
-  SendEditor(SCI_MARKERSETBACKSELECTED, AMarkerNumber, Integer(ABack));
+  SendEditor(SCI_MARKERDEFINE, WPARAM(AMarkerNumber), LPARAM(TDSciMarkerSymbolToInt(AMarkerSymbol)));
 end;
 
 procedure TDScintilla.MarkerEnableHighlight(AEnabled: Boolean);
 begin
-  SendEditor(SCI_MARKERENABLEHIGHLIGHT, Integer(AEnabled), 0);
+  SendEditor(SCI_MARKERENABLEHIGHLIGHT, WPARAM(Ord(AEnabled)), 0);
 end;
 
-function TDScintilla.MarkerAdd(ALine: Integer; AMarkerNumber: Integer): Integer;
+function TDScintilla.MarkerAdd(ALine: NativeInt; AMarkerNumber: Integer): Integer;
 begin
-  Result := SendEditor(SCI_MARKERADD, ALine, AMarkerNumber);
+  Result := SendEditor(SCI_MARKERADD, WPARAM(ALine), LPARAM(AMarkerNumber));
 end;
 
-procedure TDScintilla.MarkerDelete(ALine: Integer; AMarkerNumber: Integer);
+procedure TDScintilla.MarkerDelete(ALine: NativeInt; AMarkerNumber: Integer);
 begin
-  SendEditor(SCI_MARKERDELETE, ALine, AMarkerNumber);
+  SendEditor(SCI_MARKERDELETE, WPARAM(ALine), LPARAM(AMarkerNumber));
 end;
 
 procedure TDScintilla.MarkerDeleteAll(AMarkerNumber: Integer);
 begin
-  SendEditor(SCI_MARKERDELETEALL, AMarkerNumber, 0);
+  SendEditor(SCI_MARKERDELETEALL, WPARAM(AMarkerNumber), 0);
 end;
 
-function TDScintilla.MarkerGet(ALine: Integer): Integer;
+function TDScintilla.MarkerGet(ALine: NativeInt): Integer;
 begin
-  Result := SendEditor(SCI_MARKERGET, ALine, 0);
+  Result := SendEditor(SCI_MARKERGET, WPARAM(ALine), 0);
 end;
 
-function TDScintilla.MarkerNext(ALineStart: Integer; AMarkerMask: Integer): Integer;
+function TDScintilla.MarkerNext(ALineStart: NativeInt; AMarkerMask: Integer): NativeInt;
 begin
-  Result := SendEditor(SCI_MARKERNEXT, ALineStart, AMarkerMask);
+  Result := SendEditor(SCI_MARKERNEXT, WPARAM(ALineStart), LPARAM(AMarkerMask));
 end;
 
-function TDScintilla.MarkerPrevious(ALineStart: Integer; AMarkerMask: Integer): Integer;
+function TDScintilla.MarkerPrevious(ALineStart: NativeInt; AMarkerMask: Integer): NativeInt;
 begin
-  Result := SendEditor(SCI_MARKERPREVIOUS, ALineStart, AMarkerMask);
+  Result := SendEditor(SCI_MARKERPREVIOUS, WPARAM(ALineStart), LPARAM(AMarkerMask));
 end;
 
 procedure TDScintilla.MarkerDefinePixmap(AMarkerNumber: Integer; const APixmap: TBytes);
 begin
-  SendEditor(SCI_MARKERDEFINEPIXMAP, AMarkerNumber, NativeInt(APixmap));
+  SendEditor(SCI_MARKERDEFINEPIXMAP, AMarkerNumber, LPARAM(APixmap));
 end;
 
-procedure TDScintilla.MarkerAddSet(ALine: Integer; ASet: Integer);
+procedure TDScintilla.MarkerAddSet(ALine: NativeInt; AMarkerSet: Integer);
 begin
-  SendEditor(SCI_MARKERADDSET, ALine, ASet);
-end;
-
-procedure TDScintilla.MarkerSetAlpha(AMarkerNumber: Integer; AAlpha: Integer);
-begin
-  SendEditor(SCI_MARKERSETALPHA, AMarkerNumber, AAlpha);
+  SendEditor(SCI_MARKERADDSET, WPARAM(ALine), LPARAM(AMarkerSet));
 end;
 
 procedure TDScintilla.StyleClearAll;
@@ -202,29 +225,29 @@ begin
   SendEditor(SCI_STYLERESETDEFAULT, 0, 0);
 end;
 
-function TDScintilla.StyleGetFont(AStyle: Integer): UnicodeString;
+procedure TDScintilla.ResetElementColour(AElement: TDSciElement);
 begin
-  FHelper.GetText(SCI_STYLEGETFONT, AStyle, Result);
+  SendEditor(SCI_RESETELEMENTCOLOUR, WPARAM(TDSciElementToInt(AElement)), 0);
 end;
 
 procedure TDScintilla.SetSelFore(AUseSetting: Boolean; AFore: TColor);
 begin
-  SendEditor(SCI_SETSELFORE, Integer(AUseSetting), Integer(AFore));
+  SendEditor(SCI_SETSELFORE, WPARAM(Ord(AUseSetting)), LPARAM(Integer(AFore)));
 end;
 
 procedure TDScintilla.SetSelBack(AUseSetting: Boolean; ABack: TColor);
 begin
-  SendEditor(SCI_SETSELBACK, Integer(AUseSetting), Integer(ABack));
+  SendEditor(SCI_SETSELBACK, WPARAM(Ord(AUseSetting)), LPARAM(Integer(ABack)));
 end;
 
-procedure TDScintilla.AssignCmdKey(AKm: Integer; AMsg: Integer);
+procedure TDScintilla.AssignCmdKey(AKeyDefinition: Integer; ASciCommand: Integer);
 begin
-  SendEditor(SCI_ASSIGNCMDKEY, AKm, AMsg);
+  SendEditor(SCI_ASSIGNCMDKEY, WPARAM(AKeyDefinition), LPARAM(ASciCommand));
 end;
 
-procedure TDScintilla.ClearCmdKey(AKm: Integer);
+procedure TDScintilla.ClearCmdKey(AKeyDefinition: Integer);
 begin
-  SendEditor(SCI_CLEARCMDKEY, AKm, 0);
+  SendEditor(SCI_CLEARCMDKEY, WPARAM(AKeyDefinition), 0);
 end;
 
 procedure TDScintilla.ClearAllCmdKeys;
@@ -234,7 +257,7 @@ end;
 
 procedure TDScintilla.SetStylingEx(const AStyles: TDSciStyles);
 begin
-  SendEditor(SCI_SETSTYLINGEX, System.Length(AStyles), Integer(AStyles));
+  SendEditor(SCI_SETSTYLINGEX, System.Length(AStyles), LPARAM(AStyles));
 end;
 
 procedure TDScintilla.BeginUndoAction;
@@ -247,17 +270,26 @@ begin
   SendEditor(SCI_ENDUNDOACTION, 0, 0);
 end;
 
+procedure TDScintilla.PushUndoActionType(AType: Integer; APos: NativeInt);
+begin
+  SendEditor(SCI_PUSHUNDOACTIONTYPE, WPARAM(AType), LPARAM(APos));
+end;
+
+procedure TDScintilla.ChangeLastUndoActionText(const AText: UnicodeString);
+begin
+  FHelper.SetTextLen(SCI_CHANGELASTUNDOACTIONTEXT, AText);
+end;
 procedure TDScintilla.SetWhitespaceFore(AUseSetting: Boolean; AFore: TColor);
 begin
-  SendEditor(SCI_SETWHITESPACEFORE, Integer(AUseSetting), Integer(AFore));
+  SendEditor(SCI_SETWHITESPACEFORE, WPARAM(Ord(AUseSetting)), LPARAM(Integer(AFore)));
 end;
 
 procedure TDScintilla.SetWhitespaceBack(AUseSetting: Boolean; ABack: TColor);
 begin
-  SendEditor(SCI_SETWHITESPACEBACK, Integer(AUseSetting), Integer(ABack));
+  SendEditor(SCI_SETWHITESPACEBACK, WPARAM(Ord(AUseSetting)), LPARAM(Integer(ABack)));
 end;
 
-procedure TDScintilla.AutoCShow(ALenEntered: Integer; const AItemList: UnicodeString);
+procedure TDScintilla.AutoCShow(ALenEntered: NativeInt; const AItemList: UnicodeString);
 begin
   FHelper.SetText(SCI_AUTOCSHOW, ALenEntered, AItemList);
 end;
@@ -272,7 +304,7 @@ begin
   Result := Boolean(SendEditor(SCI_AUTOCACTIVE, 0, 0));
 end;
 
-function TDScintilla.AutoCPosStart: Integer;
+function TDScintilla.AutoCPosStart: NativeInt;
 begin
   Result := SendEditor(SCI_AUTOCPOSSTART, 0, 0);
 end;
@@ -300,7 +332,7 @@ end;
 procedure TDScintilla.RegisterImage(AType: Integer; const AXpmData: TBytes);
 begin
   if Length(AXpmData) > 0 then
-    SendEditor(SCI_REGISTERIMAGE, AType, NativeInt(AXpmData));
+    SendEditor(SCI_REGISTERIMAGE, AType, LPARAM(@AXpmData[0]));
 end;
 
 procedure TDScintilla.ClearRegisteredImages;
@@ -308,17 +340,22 @@ begin
   SendEditor(SCI_CLEARREGISTEREDIMAGES, 0, 0);
 end;
 
-function TDScintilla.CountCharacters(AStartPos: Integer; AEndPos: Integer): Integer;
+function TDScintilla.CountCharacters(AStart: NativeInt; AEnd: NativeInt): NativeInt;
 begin
-  Result := SendEditor(SCI_COUNTCHARACTERS, AStartPos, AEndPos);
+  Result := SendEditor(SCI_COUNTCHARACTERS, WPARAM(AStart), LPARAM(AEnd));
 end;
 
-procedure TDScintilla.SetEmptySelection(APos: Integer);
+function TDScintilla.CountCodeUnits(AStart: NativeInt; AEnd: NativeInt): NativeInt;
 begin
-  SendEditor(SCI_SETEMPTYSELECTION, APos, 0);
+  Result := SendEditor(SCI_COUNTCODEUNITS, WPARAM(AStart), LPARAM(AEnd));
 end;
 
-function TDScintilla.FindText(AFlags: Integer; const AText: UnicodeString; var ARange: TDSciCharacterRange): Integer;
+procedure TDScintilla.SetEmptySelection(ACaret: NativeInt);
+begin
+  SendEditor(SCI_SETEMPTYSELECTION, WPARAM(ACaret), 0);
+end;
+
+function TDScintilla.FindText(AFlags: Integer; const AText: UnicodeString; var ARange: TDSciCharacterRange): NativeInt;
 var
   lRange: TDSciTextToFind;
 begin
@@ -326,30 +363,52 @@ begin
   if SendEditor(SCI_GETCODEPAGE) = SC_CP_UTF8 then
   begin
     lRange.lpstrText := PAnsiChar(UnicodeStringToUTF8(AText));
-    Result := SendEditor(SCI_FINDTEXT, AFlags, Integer(@lRange));
+    Result := SendEditor(SCI_FINDTEXT, AFlags, LPARAM(@lRange));
   end else
   begin
     lRange.lpstrText := PAnsiChar(AnsiString(AText));
-    Result := SendEditor(SCI_FINDTEXT, AFlags, Integer(@lRange));
+    Result := SendEditor(SCI_FINDTEXT, AFlags, LPARAM(@lRange));
   end;
 
   if Result > INVALID_POSITION then
     ARange := lRange.chrgText;
 end;
 
-function TDScintilla.FormatRange(ADraw: Boolean; var AFr: TDSciRangeToFormat): Integer;
+function TDScintilla.FindTextFull(AFlags: Integer; const AText: UnicodeString; var ARange: TDSciCharacterRangeFull): NativeInt;
+var
+  lRange: TDSciTextToFindFull;
 begin
-  Result := SendEditor(SCI_FORMATRANGE, Integer(ADraw), Integer(@AFr));
+  lRange.chrg := ARange;
+  if SendEditor(SCI_GETCODEPAGE) = SC_CP_UTF8 then
+  begin
+    lRange.lpstrText := PAnsiChar(UnicodeStringToUTF8(AText));
+    Result := SendEditor(SCI_FINDTEXTFULL, AFlags, LPARAM(@lRange));
+  end else
+  begin
+    lRange.lpstrText := PAnsiChar(AnsiString(AText));
+    Result := SendEditor(SCI_FINDTEXTFULL, AFlags, LPARAM(@lRange));
+  end;
+
+  if Result > INVALID_POSITION then
+    ARange := lRange.chrgText;
+end;
+function TDScintilla.FormatRange(ADraw: Boolean; var AFr: TDSciRangeToFormat): NativeInt;
+begin
+  Result := SendEditor(SCI_FORMATRANGE, Ord(ADraw), LPARAM(@AFr));
 end;
 
-function TDScintilla.GetLine(ALine: Integer): UnicodeString;
+function TDScintilla.FormatRangeFull(ADraw: Boolean; var AFr: TDSciRangeToFormatFull): NativeInt;
+begin
+  Result := SendEditor(SCI_FORMATRANGEFULL, Ord(ADraw), LPARAM(@AFr));
+end;
+function TDScintilla.GetLine(ALine: NativeInt): UnicodeString;
 begin
   FHelper.GetText(SCI_GETLINE, ALine, Result);
 end;
 
-procedure TDScintilla.SetSel(AStart: Integer; AEnd: Integer);
+procedure TDScintilla.SetSel(AAnchor: NativeInt; ACaret: NativeInt);
 begin
-  SendEditor(SCI_SETSEL, AStart, AEnd);
+  SendEditor(SCI_SETSEL, WPARAM(AAnchor), LPARAM(ACaret));
 end;
 
 function TDScintilla.GetSelText: UnicodeString;
@@ -357,11 +416,11 @@ begin
   FHelper.GetText(SCI_GETSELTEXT, 0, Result);
 end;
 
-function TDScintilla.GetTextRange(AStart, AEnd: Integer): UnicodeString;
+function TDScintilla.GetTextRange(AStart, AEnd: NativeInt): UnicodeString;
 var
   lRange: TDSciTextRange;
   lChars: TDSciChars;
-  lActualLength: Integer;
+  lActualLength: NativeInt;
 begin
   Result := '';
 
@@ -380,40 +439,73 @@ begin
   lRange.chrg.cpMax := AEnd;
   lRange.lpstrText := @lChars[0];
 
-  lActualLength := SendEditor(SCI_GETTEXTRANGE, 0, Integer(@lRange));
+  lActualLength := SendEditor(SCI_GETTEXTRANGE, 0, LPARAM(@lRange));
   lChars[lActualLength] := #0;
 
   Result := FHelper.GetStrFromPtr(@lChars[0]);
 end;
 
-procedure TDScintilla.HideSelection(ANormal: Boolean);
+function TDScintilla.GetTextRangeFull(AStart, AEnd: NativeInt): UnicodeString;
+var
+  lRange: TDSciTextRangeFull;
+  lChars: TDSciChars;
+  lActualLength: NativeInt;
 begin
-  SendEditor(SCI_HIDESELECTION, Integer(ANormal), 0);
+  Result := '';
+
+  if AEnd = -1 then
+    AEnd := GetLength
+  else
+    if AEnd > GetLength then
+      Exit;
+
+  if (AStart < 0) or (AEnd < 0) or (AStart >= AEnd) then
+    Exit;
+
+  SetLength(lChars, AEnd - AStart + 1);
+
+  lRange.chrg.cpMin := AStart;
+  lRange.chrg.cpMax := AEnd;
+  lRange.lpstrText := @lChars[0];
+
+  lActualLength := SendEditor(SCI_GETTEXTRANGEFULL, 0, LPARAM(@lRange));
+  lChars[lActualLength] := #0;
+
+  Result := FHelper.GetStrFromPtr(@lChars[0]);
+end;
+procedure TDScintilla.HideSelection(AHide: Boolean);
+begin
+  SendEditor(SCI_HIDESELECTION, WPARAM(Ord(AHide)), 0);
 end;
 
-function TDScintilla.PointXFromPosition(APos: Integer): Integer;
+function TDScintilla.PointXFromPosition(APos: NativeInt): Integer;
 begin
-  Result := SendEditor(SCI_POINTXFROMPOSITION, 0, APos);
+  Result := SendEditor(SCI_POINTXFROMPOSITION, 0, LPARAM(APos));
 end;
 
-function TDScintilla.PointYFromPosition(APos: Integer): Integer;
+function TDScintilla.PointYFromPosition(APos: NativeInt): Integer;
 begin
-  Result := SendEditor(SCI_POINTYFROMPOSITION, 0, APos);
+  Result := SendEditor(SCI_POINTYFROMPOSITION, 0, LPARAM(APos));
 end;
 
-function TDScintilla.LineFromPosition(APos: Integer): Integer;
+function TDScintilla.LineFromPosition(APos: NativeInt): NativeInt;
 begin
-  Result := SendEditor(SCI_LINEFROMPOSITION, APos, 0);
+  Result := SendEditor(SCI_LINEFROMPOSITION, WPARAM(APos), 0);
 end;
 
-function TDScintilla.PositionFromLine(ALine: Integer): Integer;
+function TDScintilla.PositionFromLine(ALine: NativeInt): NativeInt;
 begin
-  Result := SendEditor(SCI_POSITIONFROMLINE, ALine, 0);
+  Result := SendEditor(SCI_POSITIONFROMLINE, WPARAM(ALine), 0);
 end;
 
-procedure TDScintilla.LineScroll(AColumns: Integer; ALines: Integer);
+procedure TDScintilla.LineScroll(AColumns: NativeInt; ALines: NativeInt);
 begin
-  SendEditor(SCI_LINESCROLL, AColumns, ALines);
+  SendEditor(SCI_LINESCROLL, WPARAM(AColumns), LPARAM(ALines));
+end;
+
+procedure TDScintilla.ScrollVertical(ADocLine: NativeInt; ASubLine: NativeInt);
+begin
+  SendEditor(SCI_SCROLLVERTICAL, WPARAM(ADocLine), LPARAM(ASubLine));
 end;
 
 procedure TDScintilla.ScrollCaret;
@@ -421,9 +513,9 @@ begin
   SendEditor(SCI_SCROLLCARET, 0, 0);
 end;
 
-procedure TDScintilla.ScrollRange(ASecondary: Integer; APrimary: Integer);
+procedure TDScintilla.ScrollRange(ASecondary: NativeInt; APrimary: NativeInt);
 begin
-  SendEditor(SCI_SCROLLRANGE, ASecondary, APrimary);
+  SendEditor(SCI_SCROLLRANGE, WPARAM(ASecondary), LPARAM(APrimary));
 end;
 
 procedure TDScintilla.ReplaceSel(const AText: UnicodeString);
@@ -431,10 +523,10 @@ begin
   FHelper.SetText(SCI_REPLACESEL, 0, AText);
 end;
 
-// procedure TDScintilla.Null;
-// begin
-//   SendEditor(SCI_NULL, 0, 0);
-// end;
+procedure TDScintilla.Null;
+begin
+  SendEditor(SCI_NULL, 0, 0);
+end;
 
 function TDScintilla.CanPaste: Boolean;
 begin
@@ -478,7 +570,7 @@ end;
 
 procedure TDScintilla.SetText(const AText: UnicodeString);
 begin
-  FHelper.SetText(SCI_SETTEXT, 0, AText);
+  FHelper.SetTextLen(SCI_SETTEXT, AText);
 end;
 
 function TDScintilla.GetText: UnicodeString;
@@ -486,22 +578,41 @@ begin
   FHelper.GetTextLen(SCI_GETTEXT, Result);
 end;
 
-function TDScintilla.ReplaceTarget(const AText: UnicodeString): Integer;
+procedure TDScintilla.SetTargetRange(AStart: NativeInt; AEnd: NativeInt);
+begin
+  SendEditor(SCI_SETTARGETRANGE, WPARAM(AStart), LPARAM(AEnd));
+end;
+
+procedure TDScintilla.TargetFromSelection;
+begin
+  SendEditor(SCI_TARGETFROMSELECTION, 0, 0);
+end;
+
+procedure TDScintilla.TargetWholeDocument;
+begin
+  SendEditor(SCI_TARGETWHOLEDOCUMENT, 0, 0);
+end;
+
+function TDScintilla.ReplaceTarget(const AText: UnicodeString): NativeInt;
 begin
   Result := FHelper.SetTextLen(SCI_REPLACETARGET, AText);
 end;
 
-function TDScintilla.ReplaceTargetRE(const AText: UnicodeString): Integer;
+function TDScintilla.ReplaceTargetRE(const AText: UnicodeString): NativeInt;
 begin
   Result := FHelper.SetTextLen(SCI_REPLACETARGETRE, AText);
 end;
 
-function TDScintilla.SearchInTarget(const AText: UnicodeString): Integer;
+function TDScintilla.ReplaceTargetMinimal(const AText: UnicodeString): NativeInt;
+begin
+  Result := FHelper.SetTextLen(SCI_REPLACETARGETMINIMAL, AText);
+end;
+function TDScintilla.SearchInTarget(const AText: UnicodeString): NativeInt;
 begin
   Result := FHelper.SetTextLen(SCI_SEARCHINTARGET, AText);
 end;
 
-procedure TDScintilla.CallTipShow(APos: Integer; const ADefinition: UnicodeString);
+procedure TDScintilla.CallTipShow(APos: NativeInt; const ADefinition: UnicodeString);
 begin
   if ADefinition = '' then
     CallTipCancel
@@ -519,89 +630,99 @@ begin
   Result := Boolean(SendEditor(SCI_CALLTIPACTIVE, 0, 0));
 end;
 
-function TDScintilla.CallTipPosStart: Integer;
+procedure TDScintilla.CallTipSetHlt(AHighlightStart: NativeInt; AHighlightEnd: NativeInt);
 begin
-  Result := SendEditor(SCI_CALLTIPPOSSTART, 0, 0);
+  SendEditor(SCI_CALLTIPSETHLT, WPARAM(AHighlightStart), LPARAM(AHighlightEnd));
 end;
 
-procedure TDScintilla.CallTipSetHlt(AStart: Integer; AEnd: Integer);
+function TDScintilla.VisibleFromDocLine(ADocLine: NativeInt): NativeInt;
 begin
-  SendEditor(SCI_CALLTIPSETHLT, AStart, AEnd);
+  Result := SendEditor(SCI_VISIBLEFROMDOCLINE, WPARAM(ADocLine), 0);
 end;
 
-function TDScintilla.VisibleFromDocLine(ALine: Integer): Integer;
+function TDScintilla.DocLineFromVisible(ADisplayLine: NativeInt): NativeInt;
 begin
-  Result := SendEditor(SCI_VISIBLEFROMDOCLINE, ALine, 0);
+  Result := SendEditor(SCI_DOCLINEFROMVISIBLE, WPARAM(ADisplayLine), 0);
 end;
 
-function TDScintilla.DocLineFromVisible(ALineDisplay: Integer): Integer;
+function TDScintilla.WrapCount(ADocLine: NativeInt): NativeInt;
 begin
-  Result := SendEditor(SCI_DOCLINEFROMVISIBLE, ALineDisplay, 0);
+  Result := SendEditor(SCI_WRAPCOUNT, WPARAM(ADocLine), 0);
 end;
 
-function TDScintilla.WrapCount(ALine: Integer): Integer;
+procedure TDScintilla.ShowLines(ALineStart: NativeInt; ALineEnd: NativeInt);
 begin
-  Result := SendEditor(SCI_WRAPCOUNT, ALine, 0);
+  SendEditor(SCI_SHOWLINES, WPARAM(ALineStart), LPARAM(ALineEnd));
 end;
 
-procedure TDScintilla.ShowLines(ALineStart: Integer; ALineEnd: Integer);
+procedure TDScintilla.HideLines(ALineStart: NativeInt; ALineEnd: NativeInt);
 begin
-  SendEditor(SCI_SHOWLINES, ALineStart, ALineEnd);
+  SendEditor(SCI_HIDELINES, WPARAM(ALineStart), LPARAM(ALineEnd));
 end;
 
-procedure TDScintilla.HideLines(ALineStart: Integer; ALineEnd: Integer);
+procedure TDScintilla.ToggleFold(ALine: NativeInt);
 begin
-  SendEditor(SCI_HIDELINES, ALineStart, ALineEnd);
+  SendEditor(SCI_TOGGLEFOLD, WPARAM(ALine), 0);
 end;
 
-procedure TDScintilla.ToggleFold(ALine: Integer);
+procedure TDScintilla.ToggleFoldShowText(ALine: NativeInt; AText: UnicodeString);
 begin
-  SendEditor(SCI_TOGGLEFOLD, ALine, 0);
+  SendEditor(SCI_TOGGLEFOLDSHOWTEXT, WPARAM(ALine), LPARAM(AText));
 end;
 
-procedure TDScintilla.FoldLine(ALine: Integer; AAction: Integer);
+procedure TDScintilla.SetDefaultFoldDisplayText(AText: UnicodeString);
 begin
-  SendEditor(SCI_FOLDLINE, ALine, AAction);
+  SendEditor(SCI_SETDEFAULTFOLDDISPLAYTEXT, 0, LPARAM(AText));
 end;
 
-procedure TDScintilla.FoldChildren(ALine: Integer; AAction: Integer);
+function TDScintilla.GetDefaultFoldDisplayText(AText: PAnsiChar): Integer;
 begin
-  SendEditor(SCI_FOLDCHILDREN, ALine, AAction);
+  Result := SendEditor(SCI_GETDEFAULTFOLDDISPLAYTEXT, 0, LPARAM(AText));
 end;
 
-procedure TDScintilla.ExpandChildren(ALine: Integer; ALevel: Integer);
+procedure TDScintilla.FoldLine(ALine: NativeInt; AAction: TDSciFoldAction);
 begin
-  SendEditor(SCI_EXPANDCHILDREN, ALine, ALevel);
+  SendEditor(SCI_FOLDLINE, WPARAM(ALine), LPARAM(TDSciFoldActionToInt(AAction)));
 end;
 
-procedure TDScintilla.FoldAll(AAction: Integer);
+procedure TDScintilla.FoldChildren(ALine: NativeInt; AAction: TDSciFoldAction);
 begin
-  SendEditor(SCI_FOLDALL, AAction, 0);
+  SendEditor(SCI_FOLDCHILDREN, WPARAM(ALine), LPARAM(TDSciFoldActionToInt(AAction)));
 end;
 
-procedure TDScintilla.EnsureVisible(ALine: Integer);
+procedure TDScintilla.ExpandChildren(ALine: NativeInt; ALevel: TDSciFoldLevel);
 begin
-  SendEditor(SCI_ENSUREVISIBLE, ALine, 0);
+  SendEditor(SCI_EXPANDCHILDREN, WPARAM(ALine), LPARAM(TDSciFoldLevelToInt(ALevel)));
 end;
 
-procedure TDScintilla.SetFoldFlags(AFlags: Integer);
+procedure TDScintilla.FoldAll(AAction: TDSciFoldAction);
 begin
-  SendEditor(SCI_SETFOLDFLAGS, AFlags, 0);
+  SendEditor(SCI_FOLDALL, WPARAM(TDSciFoldActionToInt(AAction)), 0);
 end;
 
-procedure TDScintilla.EnsureVisibleEnforcePolicy(ALine: Integer);
+procedure TDScintilla.EnsureVisible(ALine: NativeInt);
 begin
-  SendEditor(SCI_ENSUREVISIBLEENFORCEPOLICY, ALine, 0);
+  SendEditor(SCI_ENSUREVISIBLE, WPARAM(ALine), 0);
 end;
 
-function TDScintilla.WordStartPosition(APos: Integer; AOnlyWordCharacters: Boolean): Integer;
+procedure TDScintilla.EnsureVisibleEnforcePolicy(ALine: NativeInt);
 begin
-  Result := SendEditor(SCI_WORDSTARTPOSITION, APos, Integer(AOnlyWordCharacters));
+  SendEditor(SCI_ENSUREVISIBLEENFORCEPOLICY, WPARAM(ALine), 0);
 end;
 
-function TDScintilla.WordEndPosition(APos: Integer; AOnlyWordCharacters: Boolean): Integer;
+function TDScintilla.WordStartPosition(APos: NativeInt; AOnlyWordCharacters: Boolean): NativeInt;
 begin
-  Result := SendEditor(SCI_WORDENDPOSITION, APos, Integer(AOnlyWordCharacters));
+  Result := SendEditor(SCI_WORDSTARTPOSITION, WPARAM(APos), LPARAM(Ord(AOnlyWordCharacters)));
+end;
+
+function TDScintilla.WordEndPosition(APos: NativeInt; AOnlyWordCharacters: Boolean): NativeInt;
+begin
+  Result := SendEditor(SCI_WORDENDPOSITION, WPARAM(APos), LPARAM(Ord(AOnlyWordCharacters)));
+end;
+
+function TDScintilla.IsRangeWord(AStart: NativeInt; AEnd: NativeInt): Boolean;
+begin
+  Result := Boolean(SendEditor(SCI_ISRANGEWORD, WPARAM(AStart), LPARAM(AEnd)));
 end;
 
 function TDScintilla.TextWidth(AStyle: Integer; const AText: UnicodeString): Integer;
@@ -609,24 +730,14 @@ begin
   Result := FHelper.SetText(SCI_TEXTWIDTH, AStyle, AText);
 end;
 
-function TDScintilla.TextHeight(ALine: Integer): Integer;
+function TDScintilla.TextHeight(ALine: NativeInt): Integer;
 begin
-  Result := SendEditor(SCI_TEXTHEIGHT, ALine, 0);
+  Result := SendEditor(SCI_TEXTHEIGHT, WPARAM(ALine), 0);
 end;
 
 procedure TDScintilla.AppendText(const AText: UnicodeString);
 begin
   FHelper.SetTextLen(SCI_APPENDTEXT, AText);
-end;
-
-function TDScintilla.GetTag(ATagNumber: Integer): UnicodeString;
-begin
-  FHelper.GetText(SCI_GETTAG, ATagNumber, Result);
-end;
-
-procedure TDScintilla.TargetFromSelection;
-begin
-  SendEditor(SCI_TARGETFROMSELECTION, 0, 0);
 end;
 
 procedure TDScintilla.LinesJoin;
@@ -636,17 +747,17 @@ end;
 
 procedure TDScintilla.LinesSplit(APixelWidth: Integer);
 begin
-  SendEditor(SCI_LINESSPLIT, APixelWidth, 0);
+  SendEditor(SCI_LINESSPLIT, WPARAM(APixelWidth), 0);
 end;
 
 procedure TDScintilla.SetFoldMarginColour(AUseSetting: Boolean; ABack: TColor);
 begin
-  SendEditor(SCI_SETFOLDMARGINCOLOUR, Integer(AUseSetting), Integer(ABack));
+  SendEditor(SCI_SETFOLDMARGINCOLOUR, WPARAM(Ord(AUseSetting)), LPARAM(Integer(ABack)));
 end;
 
 procedure TDScintilla.SetFoldMarginHiColour(AUseSetting: Boolean; AFore: TColor);
 begin
-  SendEditor(SCI_SETFOLDMARGINHICOLOUR, Integer(AUseSetting), Integer(AFore));
+  SendEditor(SCI_SETFOLDMARGINHICOLOUR, WPARAM(Ord(AUseSetting)), LPARAM(Integer(AFore)));
 end;
 
 procedure TDScintilla.LineDown;
@@ -789,9 +900,19 @@ begin
   SendEditor(SCI_TAB, 0, 0);
 end;
 
+procedure TDScintilla.LineIndent;
+begin
+  SendEditor(SCI_LINEINDENT, 0, 0);
+end;
+
 procedure TDScintilla.BackTab;
 begin
   SendEditor(SCI_BACKTAB, 0, 0);
+end;
+
+procedure TDScintilla.LineDedent;
+begin
+  SendEditor(SCI_LINEDEDENT, 0, 0);
 end;
 
 procedure TDScintilla.NewLine;
@@ -852,6 +973,11 @@ end;
 procedure TDScintilla.LineTranspose;
 begin
   SendEditor(SCI_LINETRANSPOSE, 0, 0);
+end;
+
+procedure TDScintilla.LineReverse;
+begin
+  SendEditor(SCI_LINEREVERSE, 0, 0);
 end;
 
 procedure TDScintilla.LineDuplicate;
@@ -944,34 +1070,49 @@ begin
   SendEditor(SCI_MOVECARETINSIDEVIEW, 0, 0);
 end;
 
-function TDScintilla.LineLength(ALine: Integer): Integer;
+function TDScintilla.LineLength(ALine: NativeInt): NativeInt;
 begin
-  Result := SendEditor(SCI_LINELENGTH, ALine, 0);
+  Result := SendEditor(SCI_LINELENGTH, WPARAM(ALine), 0);
 end;
 
-procedure TDScintilla.BraceHighlight(APos1: Integer; APos2: Integer);
+procedure TDScintilla.BraceHighlight(APosA: NativeInt; APosB: NativeInt);
 begin
-  SendEditor(SCI_BRACEHIGHLIGHT, APos1, APos2);
+  SendEditor(SCI_BRACEHIGHLIGHT, WPARAM(APosA), LPARAM(APosB));
 end;
 
-procedure TDScintilla.BraceHighlightIndicator(AUseBraceHighlightIndicator: Boolean; AIndicator: Integer);
+procedure TDScintilla.BraceHighlightIndicator(AUseSetting: Boolean; AIndicator: Integer);
 begin
-  SendEditor(SCI_BRACEHIGHLIGHTINDICATOR, Integer(AUseBraceHighlightIndicator), AIndicator);
+  SendEditor(SCI_BRACEHIGHLIGHTINDICATOR, WPARAM(Ord(AUseSetting)), LPARAM(AIndicator));
 end;
 
-procedure TDScintilla.BraceBadLight(APos: Integer);
+procedure TDScintilla.BraceBadLight(APos: NativeInt);
 begin
-  SendEditor(SCI_BRACEBADLIGHT, APos, 0);
+  SendEditor(SCI_BRACEBADLIGHT, WPARAM(APos), 0);
 end;
 
-procedure TDScintilla.BraceBadLightIndicator(AUseBraceBadLightIndicator: Boolean; AIndicator: Integer);
+procedure TDScintilla.BraceBadLightIndicator(AUseSetting: Boolean; AIndicator: Integer);
 begin
-  SendEditor(SCI_BRACEBADLIGHTINDICATOR, Integer(AUseBraceBadLightIndicator), AIndicator);
+  SendEditor(SCI_BRACEBADLIGHTINDICATOR, WPARAM(Ord(AUseSetting)), LPARAM(AIndicator));
 end;
 
-function TDScintilla.BraceMatch(APos: Integer): Integer;
+function TDScintilla.BraceMatch(APos: NativeInt; AMaxReStyle: Integer): NativeInt;
 begin
-  Result := SendEditor(SCI_BRACEMATCH, APos, 0);
+  Result := SendEditor(SCI_BRACEMATCH, WPARAM(APos), LPARAM(AMaxReStyle));
+end;
+
+function TDScintilla.BraceMatchNext(APos: NativeInt; AStartPos: NativeInt): NativeInt;
+begin
+  Result := SendEditor(SCI_BRACEMATCHNEXT, WPARAM(APos), LPARAM(AStartPos));
+end;
+
+procedure TDScintilla.MultiEdgeAddLine(AColumn: NativeInt; AEdgeColour: TColor);
+begin
+  SendEditor(SCI_MULTIEDGEADDLINE, WPARAM(AColumn), LPARAM(Integer(AEdgeColour)));
+end;
+
+procedure TDScintilla.MultiEdgeClearAll;
+begin
+  SendEditor(SCI_MULTIEDGECLEARALL, 0, 0);
 end;
 
 procedure TDScintilla.SearchAnchor;
@@ -979,46 +1120,19 @@ begin
   SendEditor(SCI_SEARCHANCHOR, 0, 0);
 end;
 
-function TDScintilla.SearchNext(AFlags: Integer; const AText: UnicodeString): Integer;
+function TDScintilla.SearchNext(AFlags: Integer; const AText: UnicodeString): NativeInt;
 begin
   Result := FHelper.SetText(SCI_SEARCHNEXT, AFlags, AText);
 end;
 
-function TDScintilla.SearchPrev(AFlags: Integer; const AText: UnicodeString): Integer;
+function TDScintilla.SearchPrev(AFlags: Integer; const AText: UnicodeString): NativeInt;
 begin
   Result := FHelper.SetText(SCI_SEARCHPREV, AFlags, AText);
 end;
 
-function TDScintilla.LinesOnScreen: Integer;
+procedure TDScintilla.UsePopUp(APopUpMode: TDSciPopUp);
 begin
-  Result := SendEditor(SCI_LINESONSCREEN, 0, 0);
-end;
-
-procedure TDScintilla.UsePopUp(AAllowPopUp: Boolean);
-begin
-  SendEditor(SCI_USEPOPUP, Integer(AAllowPopUp), 0);
-end;
-
-function TDScintilla.SelectionIsRectangle: Boolean;
-begin
-  Result := Boolean(SendEditor(SCI_SELECTIONISRECTANGLE, 0, 0));
-end;
-
-function TDScintilla.CreateDocument: TDSciDocument;
-begin
-  Result := TDSciDocument(SendEditor(SCI_CREATEDOCUMENT, 0, 0));
-end;
-
-procedure TDScintilla.AddRefDocument(ADoc: TDSciDocument);
-begin
-  if ADoc <>  nil then
-    SendEditor(SCI_ADDREFDOCUMENT, 0, Integer(ADoc));
-end;
-
-procedure TDScintilla.ReleaseDocument(ADoc: TDSciDocument);
-begin
-  if ADoc <> nil then
-    SendEditor(SCI_RELEASEDOCUMENT, 0, Integer(ADoc));
+  SendEditor(SCI_USEPOPUP, WPARAM(TDSciPopUpToInt(APopUpMode)), 0);
 end;
 
 procedure TDScintilla.WordPartLeft;
@@ -1041,9 +1155,9 @@ begin
   SendEditor(SCI_WORDPARTRIGHTEXTEND, 0, 0);
 end;
 
-procedure TDScintilla.SetVisiblePolicy(AVisiblePolicy: Integer; AVisibleSlop: Integer);
+procedure TDScintilla.SetVisiblePolicy(AVisiblePolicy: TDSciVisiblePolicySet; AVisibleSlop: Integer);
 begin
-  SendEditor(SCI_SETVISIBLEPOLICY, AVisiblePolicy, AVisibleSlop);
+  SendEditor(SCI_SETVISIBLEPOLICY, WPARAM(TDSciVisiblePolicySetToInt(AVisiblePolicy)), LPARAM(AVisibleSlop));
 end;
 
 procedure TDScintilla.DelLineLeft;
@@ -1066,14 +1180,14 @@ begin
   SendEditor(SCI_GRABFOCUS, 0, 0);
 end;
 
-procedure TDScintilla.SetXCaretPolicy(ACaretPolicy: Integer; ACaretSlop: Integer);
+procedure TDScintilla.SetXCaretPolicy(ACaretPolicy: TDSciCaretPolicySet; ACaretSlop: Integer);
 begin
-  SendEditor(SCI_SETXCARETPOLICY, ACaretPolicy, ACaretSlop);
+  SendEditor(SCI_SETXCARETPOLICY, WPARAM(TDSciCaretPolicySetToInt(ACaretPolicy)), LPARAM(ACaretSlop));
 end;
 
-procedure TDScintilla.SetYCaretPolicy(ACaretPolicy: Integer; ACaretSlop: Integer);
+procedure TDScintilla.SetYCaretPolicy(ACaretPolicy: TDSciCaretPolicySet; ACaretSlop: Integer);
 begin
-  SendEditor(SCI_SETYCARETPOLICY, ACaretPolicy, ACaretSlop);
+  SendEditor(SCI_SETYCARETPOLICY, WPARAM(TDSciCaretPolicySetToInt(ACaretPolicy)), LPARAM(ACaretSlop));
 end;
 
 procedure TDScintilla.ParaDown;
@@ -1096,38 +1210,48 @@ begin
   SendEditor(SCI_PARAUPEXTEND, 0, 0);
 end;
 
-function TDScintilla.PositionBefore(APos: Integer): Integer;
+function TDScintilla.PositionBefore(APos: NativeInt): NativeInt;
 begin
-  Result := SendEditor(SCI_POSITIONBEFORE, APos, 0);
+  Result := SendEditor(SCI_POSITIONBEFORE, WPARAM(APos), 0);
 end;
 
-function TDScintilla.PositionAfter(APos: Integer): Integer;
+function TDScintilla.PositionAfter(APos: NativeInt): NativeInt;
 begin
-  Result := SendEditor(SCI_POSITIONAFTER, APos, 0);
+  Result := SendEditor(SCI_POSITIONAFTER, WPARAM(APos), 0);
 end;
 
-function TDScintilla.PositionRelative(APos: Integer; ARelative: Integer): Integer;
+function TDScintilla.PositionRelative(APos: NativeInt; ARelative: NativeInt): NativeInt;
 begin
-  Result := SendEditor(SCI_POSITIONRELATIVE, APos, ARelative);
+  Result := SendEditor(SCI_POSITIONRELATIVE, WPARAM(APos), LPARAM(ARelative));
 end;
 
-procedure TDScintilla.CopyRange(AStart: Integer; AEnd: Integer);
+function TDScintilla.PositionRelativeCodeUnits(APos: NativeInt; ARelative: NativeInt): NativeInt;
 begin
-  SendEditor(SCI_COPYRANGE, AStart, AEnd);
+  Result := SendEditor(SCI_POSITIONRELATIVECODEUNITS, WPARAM(APos), LPARAM(ARelative));
+end;
+
+procedure TDScintilla.CopyRange(AStart: NativeInt; AEnd: NativeInt);
+begin
+  SendEditor(SCI_COPYRANGE, WPARAM(AStart), LPARAM(AEnd));
 end;
 
 procedure TDScintilla.CopyText(const AText: UnicodeString);
 begin
   FHelper.SetTextLen(SCI_COPYTEXT, AText);
 end;
-function TDScintilla.GetLineSelStartPosition(ALine: Integer): Integer;
+procedure TDScintilla.ChangeSelectionMode(ASelectionMode: TDSciSelectionMode);
 begin
-  Result := SendEditor(SCI_GETLINESELSTARTPOSITION, ALine, 0);
+  SendEditor(SCI_CHANGESELECTIONMODE, WPARAM(TDSciSelectionModeToInt(ASelectionMode)), 0);
 end;
 
-function TDScintilla.GetLineSelEndPosition(ALine: Integer): Integer;
+function TDScintilla.GetLineSelStartPosition(ALine: NativeInt): NativeInt;
 begin
-  Result := SendEditor(SCI_GETLINESELENDPOSITION, ALine, 0);
+  Result := SendEditor(SCI_GETLINESELSTARTPOSITION, WPARAM(ALine), 0);
+end;
+
+function TDScintilla.GetLineSelEndPosition(ALine: NativeInt): NativeInt;
+begin
+  Result := SendEditor(SCI_GETLINESELENDPOSITION, WPARAM(ALine), 0);
 end;
 
 procedure TDScintilla.LineDownRectExtend;
@@ -1220,39 +1344,30 @@ begin
   SendEditor(SCI_SETCHARSDEFAULT, 0, 0);
 end;
 
-function TDScintilla.AutoCGetCurrent: Integer;
+procedure TDScintilla.Allocate(ABytes: NativeInt);
 begin
-  Result := SendEditor(SCI_AUTOCGETCURRENT, 0, 0);
+  SendEditor(SCI_ALLOCATE, WPARAM(ABytes), 0);
 end;
 
-function TDScintilla.AutoCGetCurrentText: UnicodeString;
+function TDScintilla.TargetAsUTF8: UTF8String;
+var
+  lText: AnsiString;
 begin
-  FHelper.GetText(SCI_AUTOCGETCURRENTTEXT, 0, Result);
+  FHelper.GetTextA(SCI_TARGETASUTF8, 0, lText);
+  Result := UTF8String(lText);
+end;
+procedure TDScintilla.SetLengthForEncode(ABytes: NativeInt);
+begin
+  SendEditor(SCI_SETLENGTHFORENCODE, WPARAM(ABytes), 0);
 end;
 
-procedure TDScintilla.Allocate(ABytes: Integer);
+function TDScintilla.EncodedFromUTF8(const AUtf8: UTF8String): AnsiString;
 begin
-  SendEditor(SCI_ALLOCATE, ABytes, 0);
+  FHelper.GetTextA(SCI_ENCODEDFROMUTF8, AnsiString(AUtf8), Result);
 end;
-
-// function TDScintilla.TargetAsUTF8(AS: PAnsiChar): Integer;
-// begin
-//   Result := SendEditor(SCI_TARGETASUTF8, 0, Integer(AS));
-// end;
-
-// procedure TDScintilla.SetLengthForEncode(ABytes: Integer);
-// begin
-//   SendEditor(SCI_SETLENGTHFORENCODE, ABytes, 0);
-// end;
-
-// function TDScintilla.EncodedFromUTF8(AUtf8: PAnsiChar; AEncoded: PAnsiChar): Integer;
-// begin
-//   Result := SendEditor(SCI_ENCODEDFROMUTF8, Integer(AUtf8), Integer(AEncoded));
-// end;
-
-function TDScintilla.FindColumn(ALine: Integer; AColumn: Integer): Integer;
+function TDScintilla.FindColumn(ALine: NativeInt; AColumn: NativeInt): NativeInt;
 begin
-  Result := SendEditor(SCI_FINDCOLUMN, ALine, AColumn);
+  Result := SendEditor(SCI_FINDCOLUMN, WPARAM(ALine), LPARAM(AColumn));
 end;
 
 procedure TDScintilla.ToggleCaretSticky;
@@ -1260,39 +1375,44 @@ begin
   SendEditor(SCI_TOGGLECARETSTICKY, 0, 0);
 end;
 
+procedure TDScintilla.ReplaceRectangular(ALength: NativeInt; AText: UnicodeString);
+begin
+  SendEditor(SCI_REPLACERECTANGULAR, WPARAM(ALength), LPARAM(AText));
+end;
+
 procedure TDScintilla.SelectionDuplicate;
 begin
   SendEditor(SCI_SELECTIONDUPLICATE, 0, 0);
 end;
 
-procedure TDScintilla.IndicatorFillRange(APosition: Integer; AFillLength: Integer);
+procedure TDScintilla.IndicatorFillRange(AStart: NativeInt; ALengthFill: NativeInt);
 begin
-  SendEditor(SCI_INDICATORFILLRANGE, APosition, AFillLength);
+  SendEditor(SCI_INDICATORFILLRANGE, WPARAM(AStart), LPARAM(ALengthFill));
 end;
 
-procedure TDScintilla.IndicatorClearRange(APosition: Integer; AClearLength: Integer);
+procedure TDScintilla.IndicatorClearRange(AStart: NativeInt; ALengthClear: NativeInt);
 begin
-  SendEditor(SCI_INDICATORCLEARRANGE, APosition, AClearLength);
+  SendEditor(SCI_INDICATORCLEARRANGE, WPARAM(AStart), LPARAM(ALengthClear));
 end;
 
-function TDScintilla.IndicatorAllOnFor(APosition: Integer): Integer;
+function TDScintilla.IndicatorAllOnFor(APos: NativeInt): Integer;
 begin
-  Result := SendEditor(SCI_INDICATORALLONFOR, APosition, 0);
+  Result := SendEditor(SCI_INDICATORALLONFOR, WPARAM(APos), 0);
 end;
 
-function TDScintilla.IndicatorValueAt(AIndicator: Integer; APosition: Integer): Integer;
+function TDScintilla.IndicatorValueAt(AIndicator: Integer; APos: NativeInt): Integer;
 begin
-  Result := SendEditor(SCI_INDICATORVALUEAT, AIndicator, APosition);
+  Result := SendEditor(SCI_INDICATORVALUEAT, WPARAM(AIndicator), LPARAM(APos));
 end;
 
-function TDScintilla.IndicatorStart(AIndicator: Integer; APosition: Integer): Integer;
+function TDScintilla.IndicatorStart(AIndicator: Integer; APos: NativeInt): NativeInt;
 begin
-  Result := SendEditor(SCI_INDICATORSTART, AIndicator, APosition);
+  Result := SendEditor(SCI_INDICATORSTART, WPARAM(AIndicator), LPARAM(APos));
 end;
 
-function TDScintilla.IndicatorEnd(AIndicator: Integer; APosition: Integer): Integer;
+function TDScintilla.IndicatorEnd(AIndicator: Integer; APos: NativeInt): NativeInt;
 begin
-  Result := SendEditor(SCI_INDICATOREND, AIndicator, APosition);
+  Result := SendEditor(SCI_INDICATOREND, WPARAM(AIndicator), LPARAM(APos));
 end;
 
 procedure TDScintilla.CopyAllowLine;
@@ -1300,14 +1420,14 @@ begin
   SendEditor(SCI_COPYALLOWLINE, 0, 0);
 end;
 
-function TDScintilla.GetGapPosition: Integer;
+procedure TDScintilla.CutAllowLine;
 begin
-  Result := SendEditor(SCI_GETGAPPOSITION, 0, 0);
+  SendEditor(SCI_CUTALLOWLINE, 0, 0);
 end;
 
-function TDScintilla.MarkerSymbolDefined(AMarkerNumber: Integer): Integer;
+function TDScintilla.MarkerSymbolDefined(AMarkerNumber: Integer): TDSciMarkerSymbol;
 begin
-  Result := SendEditor(SCI_MARKERSYMBOLDEFINED, AMarkerNumber, 0);
+  Result := TDSciMarkerSymbolFromInt(SendEditor(SCI_MARKERSYMBOLDEFINED, WPARAM(AMarkerNumber), 0));
 end;
 
 procedure TDScintilla.MarginTextClearAll;
@@ -1327,22 +1447,22 @@ end;
 
 function TDScintilla.AllocateExtendedStyles(ANumberStyles: Integer): Integer;
 begin
-  Result := SendEditor(SCI_ALLOCATEEXTENDEDSTYLES, ANumberStyles, 0);
+  Result := SendEditor(SCI_ALLOCATEEXTENDEDSTYLES, WPARAM(ANumberStyles), 0);
 end;
 
-procedure TDScintilla.AddUndoAction(AToken: Integer; AFlags: Integer);
+procedure TDScintilla.AddUndoAction(AToken: Integer; AFlags: TDSciUndoFlagsSet);
 begin
-  SendEditor(SCI_ADDUNDOACTION, AToken, AFlags);
+  SendEditor(SCI_ADDUNDOACTION, WPARAM(AToken), LPARAM(TDSciUndoFlagsSetToInt(AFlags)));
 end;
 
-function TDScintilla.CharPositionFromPoint(AX: Integer; AY: Integer): Integer;
+function TDScintilla.CharPositionFromPoint(AX: Integer; AY: Integer): NativeInt;
 begin
-  Result := SendEditor(SCI_CHARPOSITIONFROMPOINT, AX, AY);
+  Result := SendEditor(SCI_CHARPOSITIONFROMPOINT, WPARAM(AX), LPARAM(AY));
 end;
 
-function TDScintilla.CharPositionFromPointClose(AX: Integer; AY: Integer): Integer;
+function TDScintilla.CharPositionFromPointClose(AX: Integer; AY: Integer): NativeInt;
 begin
-  Result := SendEditor(SCI_CHARPOSITIONFROMPOINTCLOSE, AX, AY);
+  Result := SendEditor(SCI_CHARPOSITIONFROMPOINTCLOSE, WPARAM(AX), LPARAM(AY));
 end;
 
 procedure TDScintilla.ClearSelections;
@@ -1350,19 +1470,24 @@ begin
   SendEditor(SCI_CLEARSELECTIONS, 0, 0);
 end;
 
-function TDScintilla.SetSelection(ACaret: Integer; AAnchor: Integer): Integer;
+procedure TDScintilla.SetSelection(ACaret: NativeInt; AAnchor: NativeInt);
 begin
-  Result := SendEditor(SCI_SETSELECTION, ACaret, AAnchor);
+  SendEditor(SCI_SETSELECTION, WPARAM(ACaret), LPARAM(AAnchor));
 end;
 
-function TDScintilla.AddSelection(ACaret: Integer; AAnchor: Integer): Integer;
+procedure TDScintilla.AddSelection(ACaret: NativeInt; AAnchor: NativeInt);
 begin
-  Result := SendEditor(SCI_ADDSELECTION, ACaret, AAnchor);
+  SendEditor(SCI_ADDSELECTION, WPARAM(ACaret), LPARAM(AAnchor));
+end;
+
+function TDScintilla.SelectionFromPoint(AX: Integer; AY: Integer): Integer;
+begin
+  Result := SendEditor(SCI_SELECTIONFROMPOINT, WPARAM(AX), LPARAM(AY));
 end;
 
 procedure TDScintilla.DropSelectionN(ASelection: Integer);
 begin
-  SendEditor(SCI_DROPSELECTIONN, ASelection, 0);
+  SendEditor(SCI_DROPSELECTIONN, WPARAM(ASelection), 0);
 end;
 
 procedure TDScintilla.RotateSelection;
@@ -1375,14 +1500,24 @@ begin
   SendEditor(SCI_SWAPMAINANCHORCARET, 0, 0);
 end;
 
-function TDScintilla.ChangeLexerState(AStart: Integer; AEnd: Integer): Integer;
+procedure TDScintilla.MultipleSelectAddNext;
 begin
-  Result := SendEditor(SCI_CHANGELEXERSTATE, AStart, AEnd);
+  SendEditor(SCI_MULTIPLESELECTADDNEXT, 0, 0);
 end;
 
-function TDScintilla.ContractedFoldNext(ALineStart: Integer): Integer;
+procedure TDScintilla.MultipleSelectAddEach;
 begin
-  Result := SendEditor(SCI_CONTRACTEDFOLDNEXT, ALineStart, 0);
+  SendEditor(SCI_MULTIPLESELECTADDEACH, 0, 0);
+end;
+
+function TDScintilla.ChangeLexerState(AStart: NativeInt; AEnd: NativeInt): Integer;
+begin
+  Result := SendEditor(SCI_CHANGELEXERSTATE, WPARAM(AStart), LPARAM(AEnd));
+end;
+
+function TDScintilla.ContractedFoldNext(ALineStart: NativeInt): NativeInt;
+begin
+  Result := SendEditor(SCI_CONTRACTEDFOLDNEXT, WPARAM(ALineStart), 0);
 end;
 
 procedure TDScintilla.VerticalCentreCaret;
@@ -1400,19 +1535,14 @@ begin
   SendEditor(SCI_MOVESELECTEDLINESDOWN, 0, 0);
 end;
 
-procedure TDScintilla.RGBAImageSetScale(AScalePercent: Integer);
+procedure TDScintilla.MarkerDefineRGBAImage(AMarkerNumber: Integer; APixels: UnicodeString);
 begin
-  SendEditor(SCI_RGBAIMAGESETSCALE, AScalePercent, 0);
+  SendEditor(SCI_MARKERDEFINERGBAIMAGE, WPARAM(AMarkerNumber), LPARAM(APixels));
 end;
 
-procedure TDScintilla.MarkerDefineRGBAImage(AMarkerNumber: Integer; APixels: PAnsiChar);
+procedure TDScintilla.RegisterRGBAImage(AType: Integer; APixels: UnicodeString);
 begin
-  SendEditor(SCI_MARKERDEFINERGBAIMAGE, AMarkerNumber, Integer(APixels));
-end;
-
-procedure TDScintilla.RegisterRGBAImage(AType: Integer; APixels: PAnsiChar);
-begin
-  SendEditor(SCI_REGISTERRGBAIMAGE, AType, Integer(APixels));
+  SendEditor(SCI_REGISTERRGBAIMAGE, WPARAM(AType), LPARAM(APixels));
 end;
 
 procedure TDScintilla.ScrollToStart;
@@ -1425,19 +1555,14 @@ begin
   SendEditor(SCI_SCROLLTOEND, 0, 0);
 end;
 
-function TDScintilla.CreateLoader(ABytes: Integer): Pointer;
-begin
-  Result := Pointer(SendEditor(SCI_CREATELOADER, ABytes, 0));
-end;
-
-// procedure TDScintilla.FindIndicatorShow(AStart: Integer; AEnd: Integer);
+// procedure TDScintilla.FindIndicatorShow(AStart: NativeInt; AEnd: NativeInt);
 // begin
-//   SendEditor(SCI_FINDINDICATORSHOW, AStart, AEnd);
+//   SendEditor(SCI_FINDINDICATORSHOW, WPARAM(AStart), LPARAM(AEnd));
 // end;
 
-// procedure TDScintilla.FindIndicatorFlash(AStart: Integer; AEnd: Integer);
+// procedure TDScintilla.FindIndicatorFlash(AStart: NativeInt; AEnd: NativeInt);
 // begin
-//   SendEditor(SCI_FINDINDICATORFLASH, AStart, AEnd);
+//   SendEditor(SCI_FINDINDICATORFLASH, WPARAM(AStart), LPARAM(AEnd));
 // end;
 
 // procedure TDScintilla.FindIndicatorHide;
@@ -1460,6 +1585,36 @@ begin
   SendEditor(SCI_CLEARREPRESENTATION, Integer(FHelper.GetPtrFromAStr(AEncodedCharacter)), 0);
 end;
 
+procedure TDScintilla.ClearAllRepresentations;
+begin
+  SendEditor(SCI_CLEARALLREPRESENTATIONS, 0, 0);
+end;
+
+procedure TDScintilla.EOLAnnotationClearAll;
+begin
+  SendEditor(SCI_EOLANNOTATIONCLEARALL, 0, 0);
+end;
+
+procedure TDScintilla.AllocateLineCharacterIndex(ALineCharacterIndex: TDSciLineCharacterIndexType);
+begin
+  SendEditor(SCI_ALLOCATELINECHARACTERINDEX, WPARAM(TDSciLineCharacterIndexTypeToInt(ALineCharacterIndex)), 0);
+end;
+
+procedure TDScintilla.ReleaseLineCharacterIndex(ALineCharacterIndex: TDSciLineCharacterIndexType);
+begin
+  SendEditor(SCI_RELEASELINECHARACTERINDEX, WPARAM(TDSciLineCharacterIndexTypeToInt(ALineCharacterIndex)), 0);
+end;
+
+function TDScintilla.LineFromIndexPosition(APos: NativeInt; ALineCharacterIndex: TDSciLineCharacterIndexType): NativeInt;
+begin
+  Result := SendEditor(SCI_LINEFROMINDEXPOSITION, WPARAM(APos), LPARAM(TDSciLineCharacterIndexTypeToInt(ALineCharacterIndex)));
+end;
+
+function TDScintilla.IndexPositionFromLine(ALine: NativeInt; ALineCharacterIndex: TDSciLineCharacterIndexType): NativeInt;
+begin
+  Result := SendEditor(SCI_INDEXPOSITIONFROMLINE, WPARAM(ALine), LPARAM(TDSciLineCharacterIndexTypeToInt(ALineCharacterIndex)));
+end;
+
 procedure TDScintilla.StartRecord;
 begin
   SendEditor(SCI_STARTRECORD, 0, 0);
@@ -1470,45 +1625,14 @@ begin
   SendEditor(SCI_STOPRECORD, 0, 0);
 end;
 
-procedure TDScintilla.Colourise(AStart: Integer; AEnd: Integer);
+procedure TDScintilla.Colourise(AStart: NativeInt; AEnd: NativeInt);
 begin
-  SendEditor(SCI_COLOURISE, AStart, AEnd);
+  SendEditor(SCI_COLOURISE, WPARAM(AStart), LPARAM(AEnd));
 end;
 
-procedure TDScintilla.SetKeyWords(AKeywordSet: Integer; const AKeyWords: UnicodeString);
+function TDScintilla.PrivateLexerCall(AOperation: Integer; APointer: Pointer): Pointer;
 begin
-  FHelper.SetText(SCI_SETKEYWORDS, AKeywordSet, AKeyWords);
-end;
-
-procedure TDScintilla.SetLexerLanguage(const ALanguage: UnicodeString);
-begin
-  SendEditor(SCI_SETLEXERLANGUAGE, 0, NativeInt(AnsiString(ALanguage)));
-end;
-
-procedure TDScintilla.LoadLexerLibrary(const APath: UnicodeString);
-begin
-  SendEditor(SCI_LOADLEXERLIBRARY, 0, NativeInt(AnsiString(APath)));
-end;
-
-function TDScintilla.GetProperty(const AKey: UnicodeString): UnicodeString;
-begin
-  if AKey = '' then
-    Result := ''
-  else
-    FHelper.GetText(SCI_GETPROPERTY, NativeInt(AnsiString(AKey)), Result);
-end;
-
-function TDScintilla.GetPropertyExpanded(const AKey: UnicodeString): UnicodeString;
-begin
-  if AKey = '' then
-    Result := ''
-  else
-    FHelper.GetText(SCI_GETPROPERTYEXPANDED, NativeInt(AnsiString(AKey)), Result);
-end;
-
-function TDScintilla.PrivateLexerCall(AOperation: Integer; APointer: Integer): Integer;
-begin
-  Result := SendEditor(SCI_PRIVATELEXERCALL, AOperation, APointer);
+  Result := Pointer(SendEditor(SCI_PRIVATELEXERCALL, WPARAM(AOperation), LPARAM(NativeInt(APointer))));
 end;
 
 function TDScintilla.PropertyNames: UnicodeString;
@@ -1521,7 +1645,7 @@ begin
   if AName = '' then
     Result := -1
   else
-    Result := SendEditor(SCI_PROPERTYTYPE, NativeInt(UnicodeStringToUTF8(AName)), 0);
+    Result := SendEditor(SCI_PROPERTYTYPE, LPARAM(UnicodeStringToUTF8(AName)), 0);
 end;
 
 function TDScintilla.DescribeProperty(AName: UnicodeString): UnicodeString;
@@ -1529,7 +1653,7 @@ begin
   if AName = '' then
     Result := ''
   else
-    FHelper.GetText(SCI_DESCRIBEPROPERTY, NativeInt(UnicodeStringToUTF8(AName)), Result);
+    FHelper.GetText(SCI_DESCRIBEPROPERTY, LPARAM(UnicodeStringToUTF8(AName)), Result);
 end;
 
 function TDScintilla.DescribeKeyWordSets: UnicodeString;
@@ -1539,11 +1663,31 @@ end;
 
 function TDScintilla.AllocateSubStyles(AStyleBase: Integer; ANumberStyles: Integer): Integer;
 begin
-  Result := SendEditor(SCI_ALLOCATESUBSTYLES, AStyleBase, ANumberStyles);
+  Result := SendEditor(SCI_ALLOCATESUBSTYLES, WPARAM(AStyleBase), LPARAM(ANumberStyles));
 end;
 
 procedure TDScintilla.FreeSubStyles;
 begin
   SendEditor(SCI_FREESUBSTYLES, 0, 0);
+end;
+
+function TDScintilla.NameOfStyle(AStyle: Integer; AName: PAnsiChar): Integer;
+begin
+  Result := SendEditor(SCI_NAMEOFSTYLE, WPARAM(AStyle), LPARAM(AName));
+end;
+
+function TDScintilla.TagsOfStyle(AStyle: Integer; ATags: PAnsiChar): Integer;
+begin
+  Result := SendEditor(SCI_TAGSOFSTYLE, WPARAM(AStyle), LPARAM(ATags));
+end;
+
+function TDScintilla.DescriptionOfStyle(AStyle: Integer; ADescription: PAnsiChar): Integer;
+begin
+  Result := SendEditor(SCI_DESCRIPTIONOFSTYLE, WPARAM(AStyle), LPARAM(ADescription));
+end;
+
+procedure TDScintilla.LoadLexerLibrary(const APath: UnicodeString);
+begin
+  SendEditor(SCI_LOADLEXERLIBRARY, 0, LPARAM(AnsiString(APath)));
 end;
 

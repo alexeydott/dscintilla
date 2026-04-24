@@ -1,0 +1,6 @@
+function CreateLoader(ABytes: NativeInt): Pointer;
+function TDScintilla.CreateLoader(ABytes: NativeInt): Pointer;
+begin
+  Result := Pointer(SendEditor(SCI_CREATELOADER, ABytes, 0));
+end;
+

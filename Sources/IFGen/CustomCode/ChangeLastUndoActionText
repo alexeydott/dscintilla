@@ -1,0 +1,5 @@
+procedure ChangeLastUndoActionText(const AText: UnicodeString);
+procedure TDScintilla.ChangeLastUndoActionText(const AText: UnicodeString);
+begin
+  FHelper.SetTextLen(SCI_CHANGELASTUNDOACTIONTEXT, AText);
+end;

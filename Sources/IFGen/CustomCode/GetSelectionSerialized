@@ -1,0 +1,5 @@
+function GetSelectionSerialized: UnicodeString;
+function TDScintilla.GetSelectionSerialized: UnicodeString;
+begin
+  FHelper.GetText(SCI_GETSELECTIONSERIALIZED, 0, Result);
+end;

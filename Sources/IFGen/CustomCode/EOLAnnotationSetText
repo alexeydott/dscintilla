@@ -1,0 +1,5 @@
+procedure EOLAnnotationSetText(ALine: NativeInt; const AText: UnicodeString);
+procedure TDScintilla.EOLAnnotationSetText(ALine: NativeInt; const AText: UnicodeString);
+begin
+  FHelper.SetText(SCI_EOLANNOTATIONSETTEXT, ALine, AText);
+end;

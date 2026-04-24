@@ -46,13 +46,13 @@ unit DScintillaUtils;
 interface
 
 uses
-  DScintillaTypes,
+  Graphics, DScintillaTypes,
 
 {$IF Defined(DSCI_JCLWIDESTRINGS)}
   JclWideStrings,
 {$IFEND}
 
-  SysUtils, Classes, Windows;
+  SysUtils, Classes, Windows, Math;
 
 const
   cDSciNull: AnsiChar = #0;
@@ -86,8 +86,8 @@ type
   public
     constructor Create(ASendEditor: TDSciSendEditor);
 
-    function SendEditor(AMessage: Integer;
-      WParam: NativeInt = 0; LParam: NativeInt = 0): NativeInt;
+    function SendEditor(AMessage: UINT;
+      WParam: WPARAM = 0; LParam: LPARAM = 0): LRESULT;
 
     function IsUTF8: Boolean;
 
@@ -95,12 +95,16 @@ type
     function GetStrFromPtrA(ABuf: PAnsiChar): AnsiString;
     function GetPtrFromAStr(AStr: AnsiString): PAnsiChar;
 
-    function GetText(AMessage: Integer; AWParam: Integer; var AText: UnicodeString): Integer;
-    function GetTextA(AMessage: Integer; AWParam: Integer; var AText: AnsiString): Integer;
-    function SetText(AMessage: Integer; AWParam: Integer; const AText: UnicodeString): Integer;
-    function SetTextA(AMessage: Integer; AWParam: Integer; const AText: AnsiString): Integer;
-    function GetTextLen(AMessage: Integer; var AText: UnicodeString): Integer;
-    function SetTextLen(AMessage: Integer; const AText: UnicodeString): Integer;
+    function GetText(AMessage: Integer; AWParam: WPARAM; var AText: UnicodeString): Integer; overload;
+    function GetText(AMessage: Integer; AWParam: UnicodeString; var AText: UnicodeString): Integer; overload;
+    function GetTextA(AMessage: Integer; AWParam: WPARAM; var AText: AnsiString): Integer; overload;
+    function GetTextA(AMessage: Integer; AWParam: AnsiString; var AText: AnsiString): Integer; overload;
+    function SetText(AMessage: Integer; AWParam: WPARAM; const AText: UnicodeString): Integer; overload;
+    function SetText(AMessage: Integer; AWParam: UnicodeString; const AText: UnicodeString): Integer; overload;
+    function SetTextA(AMessage: Integer; AWParam: WPARAM; const AText: AnsiString): Integer; overload;
+    function SetTextA(AMessage: Integer; AWParam: AnsiString; const AText: AnsiString): Integer; overload;
+    function GetTextLen(AMessage: Integer; var AText: UnicodeString): NativeInt;
+    function SetTextLen(AMessage: Integer; const AText: UnicodeString): NativeInt;
 
     function SetTargetLine(ALine: Integer): Boolean;
   end;
@@ -109,7 +113,7 @@ type
 
   TDSciLines = class(TDSciUnicodeStrings)
   protected
-    FHelper: TDSciHelper;   
+    FHelper: TDSciHelper;
 {$IFDEF DSCI_JCLWIDESTRINGS}
     FLastGetP: UnicodeString;
 {$ENDIF}
@@ -156,6 +160,16 @@ type
 {$ENDIF}
   end;
 
+{ TDSciColourAlpha }
+  TDSciColourAlpha = record
+    Color: TColor;
+    Alpha: Byte;
+    class operator Explicit(ColorAlpha: TDSciColourAlpha): Integer;
+    class operator Explicit(Value: Integer): TDSciColourAlpha;
+    class operator Implicit(ColorAlpha: TDSciColourAlpha): Integer;
+    class operator Implicit(Value: Integer): TDSciColourAlpha;
+  end;
+
 {$IF CompilerVersion > 19}
 type
   // Compiler 'magic' will do conversion
@@ -165,7 +179,286 @@ function UTF8ToUnicodeString(const S: PAnsiChar): UnicodeString;
 function UnicodeStringToUTF8(const S: UnicodeString): UTF8String;
 {$IFEND}
 
+function IsValidUtf8Bytes(const ABytes: TBytes; AOffset, ACount: Integer): Boolean;
+function DSciFileEncodingDisplayName(AEncoding: TDSciFileEncoding): UnicodeString;
+function DSciFileEncodingCodePage(AEncoding: TDSciFileEncoding): Cardinal;
+function ResolveFileEncoding(const ABytes: TBytes; ARequestedEncoding: TDSciFileEncoding;
+  out AEncoding: TEncoding; out APreambleSize: Integer;
+  out ADetectedEncoding: TDSciFileEncoding; out ADetectedCodePage: Cardinal;
+  out ADetectedName: UnicodeString): Boolean;
+
 implementation
+
+uses
+{$ifdef DScintilla_USE_chsdet}
+  ChsDet.Fluent,
+{$endif}
+  DScintillaLogger;
+
+{$ifdef DScintilla_USE_chsdet}
+const
+  cChsDetMaxSampleBytes = 65536;
+  cChsDetChunkBytes     = 4096;
+  cChsDetMinConfidence  = 0.5;
+{$endif}
+
+function ByteIsUtf8Continuation(AValue: Byte): Boolean; inline;
+begin
+  Result := (AValue and $C0) = $80;
+end;
+
+function IsValidUtf8Bytes(const ABytes: TBytes; AOffset, ACount: Integer): Boolean;
+var
+  lB0: Byte;
+  lB1: Byte;
+  lB2: Byte;
+  lB3: Byte;
+  lIndex: Integer;
+  lLimit: Integer;
+begin
+  Result := True;
+  lIndex := AOffset;
+  lLimit := AOffset + Max(0, ACount);
+  while lIndex < lLimit do
+  begin
+    lB0 := ABytes[lIndex];
+    if lB0 < $80 then
+    begin
+      Inc(lIndex);
+      Continue;
+    end;
+
+    if (lB0 >= $C2) and (lB0 <= $DF) then
+    begin
+      if lIndex + 1 >= lLimit then
+        Exit(False);
+      if not ByteIsUtf8Continuation(ABytes[lIndex + 1]) then
+        Exit(False);
+      Inc(lIndex, 2);
+      Continue;
+    end;
+
+    if (lB0 >= $E0) and (lB0 <= $EF) then
+    begin
+      if lIndex + 2 >= lLimit then
+        Exit(False);
+      lB1 := ABytes[lIndex + 1];
+      lB2 := ABytes[lIndex + 2];
+      if not ByteIsUtf8Continuation(lB2) then
+        Exit(False);
+      case lB0 of
+        $E0:
+          if not InRange(lB1, $A0, $BF) then
+            Exit(False);
+        $ED:
+          if not InRange(lB1, $80, $9F) then
+            Exit(False);
+      else
+        if not ByteIsUtf8Continuation(lB1) then
+          Exit(False);
+      end;
+      Inc(lIndex, 3);
+      Continue;
+    end;
+
+    if (lB0 >= $F0) and (lB0 <= $F4) then
+    begin
+      if lIndex + 3 >= lLimit then
+        Exit(False);
+      lB1 := ABytes[lIndex + 1];
+      lB2 := ABytes[lIndex + 2];
+      lB3 := ABytes[lIndex + 3];
+      if not ByteIsUtf8Continuation(lB2) or
+         not ByteIsUtf8Continuation(lB3) then
+        Exit(False);
+      case lB0 of
+        $F0:
+          if not InRange(lB1, $90, $BF) then
+            Exit(False);
+        $F4:
+          if not InRange(lB1, $80, $8F) then
+            Exit(False);
+      else
+        if not ByteIsUtf8Continuation(lB1) then
+          Exit(False);
+      end;
+      Inc(lIndex, 4);
+      Continue;
+    end;
+
+    Exit(False);
+  end;
+end;
+
+function DSciFileEncodingDisplayName(AEncoding: TDSciFileEncoding): UnicodeString;
+begin
+  case AEncoding of
+    dsfeAutoDetect:
+      Result := 'Automatic detection';
+    dsfeAnsi:
+      Result := 'ANSI';
+    dsfeUtf8:
+      Result := 'UTF-8';
+    dsfeUtf8Bom:
+      Result := 'UTF-8 with BOM';
+    dsfeUtf16BEBom:
+      Result := 'UTF-16 BE with BOM';
+    dsfeUtf16LEBom:
+      Result := 'UTF-16 LE with BOM';
+  else
+    Result := 'Other';
+  end;
+end;
+
+function DSciFileEncodingCodePage(AEncoding: TDSciFileEncoding): Cardinal;
+begin
+  case AEncoding of
+    dsfeAnsi:
+      Result := Cardinal(TEncoding.ANSI.CodePage);
+    dsfeUtf8,
+    dsfeUtf8Bom:
+      Result := Cardinal(TEncoding.UTF8.CodePage);
+    dsfeUtf16BEBom:
+      Result := Cardinal(TEncoding.BigEndianUnicode.CodePage);
+    dsfeUtf16LEBom:
+      Result := Cardinal(TEncoding.Unicode.CodePage);
+  else
+    Result := 0;
+  end;
+end;
+
+function ResolveFileEncoding(const ABytes: TBytes; ARequestedEncoding: TDSciFileEncoding;
+  out AEncoding: TEncoding; out APreambleSize: Integer;
+  out ADetectedEncoding: TDSciFileEncoding; out ADetectedCodePage: Cardinal;
+  out ADetectedName: UnicodeString): Boolean;
+var
+  lDetectedBomEncoding: TEncoding;
+  {$ifdef DScintilla_USE_chsdet}
+  lChsResult: TChsDetectionResult;
+  lChsEncoding: TEncoding;
+  {$endif}
+begin
+  Result := True;
+  AEncoding := nil;
+  APreambleSize := 0;
+  ADetectedEncoding := dsfeOther;
+  ADetectedCodePage := 0;
+  ADetectedName := '';
+
+  case ARequestedEncoding of
+    dsfeAnsi:
+      begin
+        AEncoding := TEncoding.ANSI;
+        ADetectedEncoding := dsfeAnsi;
+      end;
+    dsfeUtf8,
+    dsfeUtf8Bom:
+      begin
+        AEncoding := TEncoding.UTF8;
+        ADetectedEncoding := ARequestedEncoding;
+        APreambleSize := TEncoding.GetBufferEncoding(ABytes, lDetectedBomEncoding, nil);
+        if not ((lDetectedBomEncoding <> nil) and
+          (lDetectedBomEncoding.CodePage = TEncoding.UTF8.CodePage)) then
+          APreambleSize := 0;
+      end;
+    dsfeUtf16BEBom:
+      begin
+        AEncoding := TEncoding.BigEndianUnicode;
+        ADetectedEncoding := dsfeUtf16BEBom;
+        APreambleSize := TEncoding.GetBufferEncoding(ABytes, lDetectedBomEncoding, nil);
+        if not ((lDetectedBomEncoding <> nil) and
+          (lDetectedBomEncoding.CodePage = TEncoding.BigEndianUnicode.CodePage)) then
+          APreambleSize := 0;
+      end;
+    dsfeUtf16LEBom:
+      begin
+        AEncoding := TEncoding.Unicode;
+        ADetectedEncoding := dsfeUtf16LEBom;
+        APreambleSize := TEncoding.GetBufferEncoding(ABytes, lDetectedBomEncoding, nil);
+        if not ((lDetectedBomEncoding <> nil) and
+          (lDetectedBomEncoding.CodePage = TEncoding.Unicode.CodePage)) then
+          APreambleSize := 0;
+      end;
+  else
+    lDetectedBomEncoding := nil;
+    APreambleSize := TEncoding.GetBufferEncoding(ABytes, lDetectedBomEncoding, nil);
+    if (APreambleSize > 0) and (lDetectedBomEncoding <> nil) then
+    begin
+      AEncoding := lDetectedBomEncoding;
+      if lDetectedBomEncoding.CodePage = TEncoding.UTF8.CodePage then
+        ADetectedEncoding := dsfeUtf8Bom
+      else if lDetectedBomEncoding.CodePage = TEncoding.BigEndianUnicode.CodePage then
+        ADetectedEncoding := dsfeUtf16BEBom
+      else if lDetectedBomEncoding.CodePage = TEncoding.Unicode.CodePage then
+        ADetectedEncoding := dsfeUtf16LEBom
+      else
+        ADetectedEncoding := dsfeOther;
+    end
+    else
+    begin
+      APreambleSize := 0;
+      {$ifdef DScintilla_USE_chsdet}
+      begin
+        var lChsDetector := TChsDetect.New;
+        var lFeedOffset := 0;
+        while (lFeedOffset < Length(ABytes)) and
+              (lFeedOffset < cChsDetMaxSampleBytes) and
+              not lChsDetector.IsDone do
+        begin
+          var lFeedCount := Min(cChsDetChunkBytes,
+            Min(Length(ABytes), cChsDetMaxSampleBytes) - lFeedOffset);
+          lChsDetector.Feed(ABytes, lFeedOffset, lFeedCount);
+          Inc(lFeedOffset, lFeedCount);
+        end;
+        lChsResult := lChsDetector.Detect;
+      end;
+      if (not lChsResult.IsUnknown) and (lChsResult.Confidence >= cChsDetMinConfidence) then
+      begin
+        lChsEncoding := nil;
+        if lChsResult.GetEncoding(lChsEncoding) and (lChsEncoding <> nil) then
+        begin
+          AEncoding := lChsEncoding;
+          if AEncoding.CodePage = TEncoding.UTF8.CodePage then
+            ADetectedEncoding := dsfeUtf8
+          else
+            ADetectedEncoding := dsfeOther;
+          DSciLog(Format('[DSCI-LOAD] chsdet: detected "%s" (CodePage=%d, Confidence=%.0f%%).',
+            [lChsResult.Name, lChsResult.CodePage, lChsResult.Confidence * 100]), cDSciLogDebug);
+        end;
+      end;
+      {$endif}
+      if AEncoding = nil then
+      begin
+        if IsValidUtf8Bytes(ABytes, 0, Length(ABytes)) then
+        begin
+          AEncoding := TEncoding.UTF8;
+          ADetectedEncoding := dsfeUtf8;
+        end
+        else
+        begin
+          AEncoding := TEncoding.ANSI;
+          ADetectedEncoding := dsfeAnsi;
+        end;
+      end;
+    end;
+  end;
+
+  if AEncoding = nil then
+    Exit(False);
+
+  if ADetectedEncoding = dsfeOther then
+  begin
+    ADetectedCodePage := Cardinal(AEncoding.CodePage);
+    ADetectedName := Trim(AEncoding.EncodingName);
+    if ADetectedName = '' then
+      ADetectedName := Format('Code page %d', [AEncoding.CodePage]);
+  end
+  else
+  begin
+    ADetectedCodePage := DSciFileEncodingCodePage(ADetectedEncoding);
+    ADetectedName := DSciFileEncodingDisplayName(ADetectedEncoding);
+  end;
+end;
 
 {$IF CompilerVersion < 20}
 function _strlenA(lpString: PAnsiChar): Integer; stdcall;
@@ -236,7 +529,7 @@ begin
   inherited Create;
 end;
 
-function TDSciHelper.SendEditor(AMessage: Integer; WParam: NativeInt; LParam: NativeInt): NativeInt;
+function TDSciHelper.SendEditor(AMessage: UINT; WParam: WPARAM; LParam: LPARAM): LRESULT;
 begin
   Result := FSendEditor(AMessage, WParam, LParam);
 end;
@@ -273,57 +566,99 @@ begin
     Result:= AnsiString(ABuf);
 end;
 
-function TDSciHelper.GetText(AMessage, AWParam: Integer;
+function TDSciHelper.GetText(AMessage: Integer; AWParam: WPARAM;
   var AText: UnicodeString): Integer;
 var
   lBuf: PAnsiChar;
 begin
   lBuf := AllocMem(SendEditor(AMessage, AWParam) + 1);
   try
-    Result := SendEditor(AMessage, AWParam, NativeInt(lBuf));
+    Result := SendEditor(AMessage, AWParam, LPARAM(lBuf));
     AText := GetStrFromPtr(lBuf);
   finally
     FreeMem(lBuf);
   end;
 end;
 
-function TDSciHelper.GetTextA(AMessage, AWParam: Integer;
+function TDSciHelper.GetText(AMessage: Integer; AWParam: UnicodeString;
+  var AText: UnicodeString): Integer;
+begin
+  if AWParam = '' then
+    Result := GetText(AMessage, WPARAM(@cDSciNull), AText)
+  else
+    if IsUTF8 then
+      Result := GetText(AMessage, WPARAM(UnicodeStringToUTF8(AWParam)), AText)
+    else
+      Result := GetText(AMessage, WPARAM(AnsiString(AWParam)), AText);
+end;
+
+function TDSciHelper.GetTextA(AMessage: Integer; AWParam: WPARAM;
   var AText: AnsiString): Integer;
 var
   lBuf: PAnsiChar;
 begin
   lBuf := AllocMem(SendEditor(AMessage, AWParam) + 1);
   try
-    Result := SendEditor(AMessage, AWParam, NativeInt(lBuf));
+    Result := SendEditor(AMessage, AWParam, LPARAM(lBuf));
     AText := GetStrFromPtrA(lBuf);
   finally
     FreeMem(lBuf);
   end;
 end;
 
-function TDSciHelper.SetText(AMessage, AWParam: Integer;
+function TDSciHelper.GetTextA(AMessage: Integer; AWParam: AnsiString;
+  var AText: AnsiString): Integer;
+begin
+  if AWParam = '' then
+    Result := GetTextA(AMessage, WPARAM(@cDSciNull), AText)
+  else
+    Result := GetTextA(AMessage, WPARAM(AWParam), AText);
+end;
+
+function TDSciHelper.SetText(AMessage: Integer; AWParam: WPARAM;
   const AText: UnicodeString): Integer;
 begin
   if AText = '' then
-    Result := SendEditor(AMessage, AWParam, NativeInt(@cDSciNull))
+    Result := SendEditor(AMessage, AWParam, LPARAM(@cDSciNull))
   else
     if IsUTF8 then
-      Result := SendEditor(AMessage, AWParam, NativeInt(UnicodeStringToUTF8(AText)))
+      Result := SendEditor(AMessage, AWParam, LPARAM(UnicodeStringToUTF8(AText)))
     else
-      Result := SendEditor(AMessage, AWParam, NativeInt(AnsiString(AText)));
+      Result := SendEditor(AMessage, AWParam, LPARAM(AnsiString(AText)));
 end;
 
-function TDSciHelper.SetTextA(AMessage, AWParam: Integer;
+function TDSciHelper.SetText(AMessage: Integer; AWParam: UnicodeString;
+  const AText: UnicodeString): Integer;
+begin
+  if AWParam = '' then
+    Result := SetText(AMessage, WParam(@cDSciNull), AText)
+  else
+    if IsUTF8 then
+      Result := SetText(AMessage, WPARAM(UnicodeStringToUTF8(AWParam)), AText)
+    else
+      Result := SetText(AMessage, WPARAM(AnsiString(AWParam)), AText);
+end;
+
+function TDSciHelper.SetTextA(AMessage: Integer; AWParam: WPARAM;
   const AText: AnsiString): Integer;
 begin
   if AText = '' then
-    Result := SendEditor(AMessage, AWParam, NativeInt(@cDSciNull))
+    Result := SendEditor(AMessage, AWParam, LPARAM(@cDSciNull))
   else
-    Result := SendEditor(AMessage, AWParam, NativeInt(AText));
+    Result := SendEditor(AMessage, AWParam, LPARAM(AText));
+end;
+
+function TDSciHelper.SetTextA(AMessage: Integer; AWParam: AnsiString;
+  const AText: AnsiString): Integer;
+begin
+  if AWParam = '' then
+    Result := SetTextA(AMessage, WPARAM(@cDSciNull), AText)
+  else
+    Result := SetTextA(AMessage, WPARAM(AWParam), AText);
 end;
 
 function TDSciHelper.GetTextLen(AMessage: Integer;
-  var AText: UnicodeString): Integer;
+  var AText: UnicodeString): NativeInt;
 var
   lBuf: PAnsiChar;
   lLen: NativeInt;
@@ -332,7 +667,7 @@ begin
 
   lBuf := AllocMem(lLen + 1);
   try
-    Result := SendEditor(AMessage, lLen + 1, NativeInt(lBuf));
+    Result := SendEditor(AMessage, lLen + 1, LPARAM(lBuf));
     AText := GetStrFromPtr(lBuf);
   finally
     FreeMem(lBuf);
@@ -340,22 +675,22 @@ begin
 end;
 
 function TDSciHelper.SetTextLen(AMessage: Integer;
-  const AText: UnicodeString): Integer;
+  const AText: UnicodeString): NativeInt;
 var
   lUTF8: UTF8String;
   lAnsi: AnsiString;
 begin
   if AText = '' then
-    Result := SendEditor(AMessage, 0, NativeInt(@cDSciNull))
+    Result := SendEditor(AMessage, 0, LPARAM(@cDSciNull))
   else
     if IsUTF8 then
     begin
       lUTF8 := UnicodeStringToUTF8(AText);
-      Result := SendEditor(AMessage, System.Length(lUTF8), NativeInt(lUTF8));
+      Result := SendEditor(AMessage, System.Length(lUTF8), LPARAM(lUTF8));
     end else
     begin
       lAnsi := AnsiString(AText);
-      Result := SendEditor(AMessage, System.Length(lAnsi), NativeInt(lAnsi));
+      Result := SendEditor(AMessage, System.Length(lAnsi), LPARAM(lAnsi));
     end;
 end;
 
@@ -565,6 +900,29 @@ begin
 
   end else
     FHelper.SetTextLen(SCI_REPLACETARGET, AString + lEOL);
+end;
+
+{ TDSciColourAlpha }
+
+class operator TDSciColourAlpha.Explicit(ColorAlpha: TDSciColourAlpha): Integer;
+begin
+  Result := (ColorAlpha.Alpha shl 24) + ColorAlpha.Color;
+end;
+
+class operator TDSciColourAlpha.Explicit(Value: Integer): TDSciColourAlpha;
+begin
+  Result.Alpha := Value shr 24;
+  Result.Color := Value and $00FFFFFF;
+end;
+
+class operator TDSciColourAlpha.Implicit(ColorAlpha: TDSciColourAlpha): Integer;
+begin
+  Result := Integer(ColorAlpha);
+end;
+
+class operator TDSciColourAlpha.Implicit(Value: Integer): TDSciColourAlpha;
+begin
+  Result := TDSciColourAlpha(Value);
 end;
 
 end.

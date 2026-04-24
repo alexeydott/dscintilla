@@ -1,0 +1,19 @@
+function FindTextFull(AFlags: Integer; const AText: UnicodeString; var ARange: TDSciCharacterRangeFull): NativeInt;
+function TDScintilla.FindTextFull(AFlags: Integer; const AText: UnicodeString; var ARange: TDSciCharacterRangeFull): NativeInt;
+var
+  lRange: TDSciTextToFindFull;
+begin
+  lRange.chrg := ARange;
+  if SendEditor(SCI_GETCODEPAGE) = SC_CP_UTF8 then
+  begin
+    lRange.lpstrText := PAnsiChar(UnicodeStringToUTF8(AText));
+    Result := SendEditor(SCI_FINDTEXTFULL, AFlags, LPARAM(@lRange));
+  end else
+  begin
+    lRange.lpstrText := PAnsiChar(AnsiString(AText));
+    Result := SendEditor(SCI_FINDTEXTFULL, AFlags, LPARAM(@lRange));
+  end;
+
+  if Result > INVALID_POSITION then
+    ARange := lRange.chrgText;
+end;

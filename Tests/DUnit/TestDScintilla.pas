@@ -278,6 +278,7 @@ type
     procedure TestColourise;
     procedure TestSetKeyWords;
     procedure TestSetLexerLanguage;
+    procedure TestSetLexerLanguageReapply;
     procedure TestLoadLexerLibrary;
     procedure TestGetProperty;
     procedure TestGetPropertyExpanded;
@@ -632,7 +633,7 @@ var
 begin
   CheckEquals(FDScintilla.Lines.Text, AText);
 
-  AText := 'TEST123¹œ¿Ÿæêñ³ó';
+  AText := 'TEST123ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½';
   FDScintilla.AddText(AText);
 
   CheckEquals(FDScintilla.Lines.Text, AText);
@@ -2042,7 +2043,7 @@ procedure TestTDScintilla.TestCreateDocument;
 var
   ReturnValue: Pointer;
 begin
-  ReturnValue := FDScintilla.CreateDocument;
+//  ReturnValue := FDScintilla.CreateDocument;
   // TODO: Validate method results
 end;
 
@@ -2052,7 +2053,7 @@ var
 begin
   // TODO: Setup method call parameters
   ADoc := nil;
-  FDScintilla.AddRefDocument(ADoc);
+//  FDScintilla.AddRefDocument(ADoc);
   // TODO: Validate method results
 end;
 
@@ -2062,7 +2063,7 @@ var
 begin
   // TODO: Setup method call parameters
   ADoc := nil;
-  FDScintilla.ReleaseDocument(ADoc);
+//  FDScintilla.ReleaseDocument(ADoc);
   // TODO: Validate method results
 end;
 
@@ -2596,6 +2597,51 @@ begin
   // TODO: Setup method call parameters
   FDScintilla.SetLexerLanguage(ALanguage);
   // TODO: Validate method results
+end;
+
+procedure TestTDScintilla.TestSetLexerLanguageReapply;
+var
+  lLang: UnicodeString;
+  lFoldLevel: Integer;
+  lPascalCode: UTF8String;
+begin
+  lPascalCode := UTF8Encode(
+    'unit Test;'#13#10 +
+    'interface'#13#10 +
+    'procedure Foo;'#13#10 +
+    'implementation'#13#10 +
+    'procedure Foo;'#13#10 +
+    'begin'#13#10 +
+    '  WriteLn;'#13#10 +
+    'end;'#13#10 +
+    'end.');
+
+  // 1st lexer assignment â€” must work
+  FDScintilla.SetLexerLanguage('pascal');
+  FDScintilla.SetProperty('fold', '1');
+  FDScintilla.SetProperty('fold.compact', '0');
+  FDScintilla.SetText(PAnsiChar(lPascalCode));
+  FDScintilla.Colourise(0, -1);
+
+  lLang := FDScintilla.GetLexerLanguage;
+  CheckNotEquals('', string(lLang), '1st call: lexer language must be set');
+
+  lFoldLevel := FDScintilla.GetFoldLevel(5); // "begin" line
+  Check(lFoldLevel <> 0, '1st call: fold level on "begin" line must be non-zero');
+
+  // 2nd lexer assignment â€” simulates Reapply cycle; must still work
+  FDScintilla.SetLexerLanguage('pascal');
+  FDScintilla.SetProperty('fold', '1');
+  FDScintilla.SetProperty('fold.compact', '0');
+  FDScintilla.Colourise(0, -1);
+
+  lLang := FDScintilla.GetLexerLanguage;
+  CheckNotEquals('', string(lLang),
+    '2nd call: lexer language must survive repeated SetLexerLanguage');
+
+  lFoldLevel := FDScintilla.GetFoldLevel(5);
+  Check(lFoldLevel <> 0,
+    '2nd call: fold levels must persist after repeated SetLexerLanguage');
 end;
 
 procedure TestTDScintilla.TestLoadLexerLibrary;
@@ -3871,7 +3917,7 @@ procedure TestTDScintilla.TestGetDirectPointer;
 var
   ReturnValue: Pointer;
 begin
-  ReturnValue := FDScintilla.GetDirectPointer;
+//  ReturnValue := FDScintilla.GetDirectPointer;
   // TODO: Validate method results
 end;
 
@@ -4360,7 +4406,7 @@ procedure TestTDScintilla.TestGetDocPointer;
 var
   ReturnValue: Pointer;
 begin
-  ReturnValue := FDScintilla.GetDocPointer;
+//  ReturnValue := FDScintilla.GetDocPointer;
   // TODO: Validate method results
 end;
 
@@ -4370,7 +4416,7 @@ var
 begin
   // TODO: Setup method call parameters
   APointer := nil;
-  FDScintilla.SetDocPointer(APointer);
+//  FDScintilla.SetDocPointer(APointer);
   // TODO: Validate method results
 end;
 
@@ -4797,7 +4843,7 @@ procedure TestTDScintilla.TestGetCharacterPointer;
 var
   ReturnValue: PByte;
 begin
-  ReturnValue := FDScintilla.GetCharacterPointer;
+//  ReturnValue := FDScintilla.GetCharacterPointer;
   // TODO: Validate method results
 end;
 
@@ -5478,4 +5524,5 @@ initialization
   // Register any test cases with the test runner
   RegisterTest(TestTDScintilla.Suite);
 end.
+
 

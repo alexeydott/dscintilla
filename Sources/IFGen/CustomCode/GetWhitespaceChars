@@ -1,0 +1,6 @@
+function GetWhitespaceChars: UnicodeString;
+function TDScintilla.GetWhitespaceChars: UnicodeString;
+begin
+  FHelper.GetText(SCI_GETWHITESPACECHARS, 0, Result);
+end;
+

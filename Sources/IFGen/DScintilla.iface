@@ -1,0 +1,7 @@
+# Project-specific Scintilla API extensions preserved by the Delphi wrapper.
+
+# Set the lexing language of the document.
+set void SetLexerLanguage=4006(, string language)
+
+# Load an external lexer library.
+fun void LoadLexerLibrary=4007(, string path)

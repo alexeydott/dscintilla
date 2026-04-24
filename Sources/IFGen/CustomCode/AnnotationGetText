@@ -1,0 +1,5 @@
+function AnnotationGetText(ALine: NativeInt): UnicodeString;
+function TDScintilla.AnnotationGetText(ALine: NativeInt): UnicodeString;
+begin
+  FHelper.GetText(SCI_ANNOTATIONGETTEXT, ALine, Result);
+end;

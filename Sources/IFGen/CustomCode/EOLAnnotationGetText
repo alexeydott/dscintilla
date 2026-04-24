@@ -1,0 +1,5 @@
+function EOLAnnotationGetText(ALine: NativeInt): UnicodeString;
+function TDScintilla.EOLAnnotationGetText(ALine: NativeInt): UnicodeString;
+begin
+  FHelper.GetText(SCI_EOLANNOTATIONGETTEXT, ALine, Result);
+end;

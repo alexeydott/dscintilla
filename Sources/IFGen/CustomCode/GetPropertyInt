@@ -1,0 +1,9 @@
+function GetPropertyInt(AKey: UnicodeString; ADefault: Integer): Integer;
+function TDScintilla.GetPropertyInt(AKey: UnicodeString; ADefault: Integer): Integer;
+begin
+  if AKey = '' then
+    Result := ADefault
+  else
+    Result := SendEditor(SCI_GETPROPERTYINT, WPARAM(AnsiString(AKey)), ADefault);
+end;
+

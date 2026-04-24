@@ -1,0 +1,5 @@
+procedure StyleSetInvisibleRepresentation(AStyle: Integer; const ARepresentation: UnicodeString);
+procedure TDScintilla.StyleSetInvisibleRepresentation(AStyle: Integer; const ARepresentation: UnicodeString);
+begin
+  FHelper.SetText(SCI_STYLESETINVISIBLEREPRESENTATION, AStyle, ARepresentation);
+end;

@@ -1,0 +1,6 @@
+procedure MarginSetText(ALine: NativeInt; const AText: UnicodeString);
+procedure TDScintilla.MarginSetText(ALine: NativeInt; const AText: UnicodeString);
+begin
+  FHelper.SetText(SCI_MARGINSETTEXT, ALine, AText);
+end;
+

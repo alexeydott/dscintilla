@@ -1,0 +1,6 @@
+procedure MarginSetStyles(ALine: NativeInt; const AStyles: TDSciStyles);
+procedure TDScintilla.MarginSetStyles(ALine: NativeInt; const AStyles: TDSciStyles);
+begin
+  SendEditor(SCI_MARGINSETSTYLES, ALine, LPARAM(AStyles));
+end;
+

@@ -1,0 +1,5 @@
+function ReplaceTargetMinimal(const AText: UnicodeString): NativeInt;
+function TDScintilla.ReplaceTargetMinimal(const AText: UnicodeString): NativeInt;
+begin
+  Result := FHelper.SetTextLen(SCI_REPLACETARGETMINIMAL, AText);
+end;

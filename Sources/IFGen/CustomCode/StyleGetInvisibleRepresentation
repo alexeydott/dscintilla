@@ -1,0 +1,5 @@
+function StyleGetInvisibleRepresentation(AStyle: Integer): UnicodeString;
+function TDScintilla.StyleGetInvisibleRepresentation(AStyle: Integer): UnicodeString;
+begin
+  FHelper.GetText(SCI_STYLEGETINVISIBLEREPRESENTATION, AStyle, Result);
+end;

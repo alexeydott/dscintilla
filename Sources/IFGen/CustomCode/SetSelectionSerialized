@@ -1,0 +1,5 @@
+procedure SetSelectionSerialized(const ASelectionString: UnicodeString);
+procedure TDScintilla.SetSelectionSerialized(const ASelectionString: UnicodeString);
+begin
+  FHelper.SetText(SCI_SETSELECTIONSERIALIZED, 0, ASelectionString);
+end;

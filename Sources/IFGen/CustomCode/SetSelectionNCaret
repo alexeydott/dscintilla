@@ -1,0 +1,7 @@
+procedure SetSelectionNCaret(ASelection: Integer; APos: NativeInt);
+procedure %s.SetSelectionNCaret(ASelection: Integer; APos: NativeInt);
+begin
+  if (ASelection >= 0) and (ASelection < GetSelections) then
+    SendEditor(SCI_SETSELECTIONNCARET, ASelection, APos);
+end;
+

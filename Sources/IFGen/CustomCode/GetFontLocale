@@ -1,0 +1,5 @@
+function GetFontLocale: UnicodeString;
+function TDScintilla.GetFontLocale: UnicodeString;
+begin
+  FHelper.GetText(SCI_GETFONTLOCALE, 0, Result);
+end;

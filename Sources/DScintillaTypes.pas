@@ -50,6 +50,7 @@ type
 // I'm not sure about, D2010-XE, but they are 32bit only.
 {$IF CompilerVersion < 23}
   NativeInt = Integer;
+  NativeUInt = Cardinal;
 {$IFEND}
 
 {$IF CompilerVersion < 20}
@@ -62,12 +63,23 @@ type
 
 { TDSciSendEditor }
 
-  TDSciSendEditor = function(AMessage: Integer;
-    WParam: NativeInt = 0; LParam: NativeInt = 0): NativeInt of object;
+  TDSciSendEditor = function(AMessage: UINT;
+    WParam: WPARAM = 0; LParam: LPARAM = 0): LRESULT of object;
+
+{ TDSciLexer }
+
+  TDSciLexer = type Pointer;
 
 { TDSciDocument }
 
   TDSciDocument = type Pointer;
+
+{ TDScintilla direct function types }
+
+  TDScintillaFunction = function(APointer: Pointer; AMessage: Integer;
+    WParam: WPARAM; LParam: LPARAM): LRESULT; cdecl;
+  TDScintillaStatusFunction = function(APointer: Pointer; AMessage: Integer;
+    WParam: WPARAM; LParam: LPARAM; var AStatus: Integer): LRESULT; cdecl;
 
 { TDSciCell }
 
@@ -87,8 +99,15 @@ type
 { TDSciCharacterRange }
 
   TDSciCharacterRange = record
-    cpMin: Integer;
-    cpMax: Integer;
+    cpMin: Long;
+    cpMax: Long;
+  end;
+
+{ TDSciCharacterRangeFull }
+
+  TDSciCharacterRangeFull = record
+    cpMin: NativeInt;
+    cpMax: NativeInt;
   end;
 
 { TDSciTextRange }
@@ -99,6 +118,14 @@ type
     lpstrText: PAnsiChar;
   end;
 
+{ TDSciTextRangeFull }
+
+  PDSciTextRangeFull = ^TDSciTextRangeFull;
+  TDSciTextRangeFull = record
+    chrg: TDSciCharacterRangeFull;
+    lpstrText: PAnsiChar;
+  end;
+
 { TDSciTextToFind }
 
   PDSciTextToFind = ^TDSciTextToFind;
@@ -106,6 +133,15 @@ type
     chrg: TDSciCharacterRange;
     lpstrText: PAnsiChar;
     chrgText: TDSciCharacterRange;
+  end;
+
+{ TDSciTextToFindFull }
+
+  PDSciTextToFindFull = ^TDSciTextToFindFull;
+  TDSciTextToFindFull = record
+    chrg: TDSciCharacterRangeFull;
+    lpstrText: PAnsiChar;
+    chrgText: TDSciCharacterRangeFull;
   end;
 
 { TDSciRangeToFormat }
@@ -119,6 +155,17 @@ type
     chrg: TDSciCharacterRange;        // Range of characters to print
   end;
 
+{ TDSciRangeToFormatFull }
+
+  PDSciRangeToFormatFull = ^TDSciRangeToFormatFull;
+  TDSciRangeToFormatFull = record
+    hdc: HDC;                         // The HDC (device context) we print to
+    hdcTarget: HDC;                   // The HDC we use for measuring (may be same as hdc)
+    rc: TRect;                        // Rectangle in which to print
+    rcPage: TRect;                    // Physically printable page size
+    chrg: TDSciCharacterRangeFull;    // Range of characters to print
+  end;
+
 { TDSciSCNotification }
 
   TDSciNotifyHeader = TNMHdr;
@@ -126,110 +173,924 @@ type
   PDSciSCNotification = ^TDSciSCNotification;
   TDSciSCNotification = record
     NotifyHeader: TDSciNotifyHeader;
-    position: Integer;
-	  // SCN_STYLENEEDED, SCN_DOUBLECLICK, SCN_MODIFIED, SCN_MARGINCLICK,
-	  // SCN_NEEDSHOWN, SCN_DWELLSTART, SCN_DWELLEND, SCN_CALLTIPCLICK,
-	  // SCN_HOTSPOTCLICK, SCN_HOTSPOTDOUBLECLICK, SCN_HOTSPOTRELEASECLICK,
-	  // SCN_INDICATORCLICK, SCN_INDICATORRELEASE,
-	  // SCN_USERLISTSELECTION, SCN_AUTOCSELECTION
+    position: NativeInt;
+    // SCN_STYLENEEDED, SCN_DOUBLECLICK, SCN_MODIFIED, SCN_MARGINCLICK,
+    // SCN_NEEDSHOWN, SCN_DWELLSTART, SCN_DWELLEND, SCN_CALLTIPCLICK,
+    // SCN_HOTSPOTCLICK, SCN_HOTSPOTDOUBLECLICK, SCN_HOTSPOTRELEASECLICK,
+    // SCN_INDICATORCLICK, SCN_INDICATORRELEASE,
+    // SCN_USERLISTSELECTION, SCN_AUTOCSELECTION
 
-    ch: Integer;                    // SCN_CHARADDED, SCN_KEY
+    ch: Integer;
+    // SCN_CHARADDED, SCN_KEY, SCN_AUTOCCOMPLETED, SCN_AUTOCSELECTION
+    // SCN_USERLISTSELECTION
     modifiers: Integer;
-	  // SCN_KEY, SCN_DOUBLECLICK, SCN_HOTSPOTCLICK, SCN_HOTSPOTDOUBLECLICK,
-	  // SCN_HOTSPOTRELEASECLICK, SCN_INDICATORCLICK, SCN_INDICATORRELEASE,
+    // SCN_KEY, SCN_DOUBLECLICK, SCN_HOTSPOTCLICK, SCN_HOTSPOTDOUBLECLICK,
+    // SCN_HOTSPOTRELEASECLICK, SCN_INDICATORCLICK, SCN_INDICATORRELEASE
 
-    modificationType: Integer;      // SCN_MODIFIED
-    text: PAnsiChar;                // SCN_MODIFIED
-    length: Integer;                // SCN_MODIFIED
-    linesAdded: Integer;            // SCN_MODIFIED
-    message: Integer;               // SCN_MACRORECORD
-    wParam: NativeInt;                 // SCN_MACRORECORD
-    lParam: NativeInt;                 // SCN_MACRORECORD
-    line: Integer;                  // SCN_MODIFIED
-    foldLevelNow: Integer;          // SCN_MODIFIED
-    foldLevelPrev: Integer;         // SCN_MODIFIED
-    margin: Integer;                // SCN_MARGINCLICK
-    listType: Integer;              // SCN_USERLISTSELECTION
-    x: Integer;                     // SCN_DWELLSTART, SCN_DWELLEND
-    y: Integer;                     // SCN_DWELLSTART, SCN_DWELLEND
-    token: Integer;                 // SCN_MODIFIED with SC_MOD_CONTAINER
-    annotationLinesAdded: Integer;	// SCN_MODIFIED with SC_MOD_CHANGEANNOTATION
-    updated: Integer;	              // SCN_UPDATEUI
+    modificationType: Integer;          // SCN_MODIFIED
+    text: PAnsiChar;                    // SCN_MODIFIED, SCN_USERLISTSELECTION, SCN_AUTOCSELECTION, SCN_URIDROPPED
+    length: NativeInt;                  // SCN_MODIFIED
+    linesAdded: NativeInt;              // SCN_MODIFIED
+    message: Integer;                   // SCN_MACRORECORD
+    wParam: NativeUInt;                 // SCN_MACRORECORD
+    lParam: NativeInt;                  // SCN_MACRORECORD
+    line: NativeInt;                    // SCN_MODIFIED
+    foldLevelNow: Integer;              // SCN_MODIFIED
+    foldLevelPrev: Integer;             // SCN_MODIFIED
+    margin: Integer;                    // SCN_MARGINCLICK
+    listType: Integer;                  // SCN_USERLISTSELECTION
+    x: Integer;                         // SCN_DWELLSTART, SCN_DWELLEND
+    y: Integer;                         // SCN_DWELLSTART, SCN_DWELLEND
+    token: Integer;                     // SCN_MODIFIED with SC_MOD_CONTAINER
+    annotationLinesAdded: NativeInt;    // SCN_MODIFIED with SC_MOD_CHANGEANNOTATION
+    updated: Integer;	                  // SCN_UPDATEUI
+    listCompletionMethod: Integer;      // SCN_AUTOCSELECTION, SCN_AUTOCCOMPLETED, SCN_USERLISTSELECTION
+    characterSource: Integer;           // SCN_CHARADDED
   end;
 
-{ TDScintilla events - http://www.scintilla.org/ScintillaDoc.html#Notifications }
+{ TDSciFileEncoding }
 
-  TDSciNotificationEvent = procedure(ASender: TObject; const ASCN: TDSciSCNotification;
-    var AHandled: Boolean) of object;
+  TDSciFileEncoding = (
+    dsfeAutoDetect,
+    dsfeAnsi,
+    dsfeUtf8,
+    dsfeUtf8Bom,
+    dsfeUtf16BEBom,
+    dsfeUtf16LEBom,
+    dsfeOther
+  );
 
-  TDSciStyleNeededEvent = procedure(ASender: TObject; APosition: Integer) of object;
-  TDSciCharAddedEvent = procedure(ASender: TObject; ACh: Integer) of object;
-  TDSciSavePointReachedEvent = procedure(ASender: TObject) of object;
-  TDSciSavePointLeftEvent = procedure(ASender: TObject) of object;
-  TDSciModifyAttemptROEvent = procedure(ASender: TObject) of object;
-  // # GTK+ Specific to work around focus and accelerator problems:
-  // evt  Key=2005(Integer ch; Integer modifiers)
-  // evt  DoubleClick=2006()
-  TDSciUpdateUIEvent = procedure(ASender: TObject; AUpdated: Integer) of object;
-  TDSciModifiedEvent = procedure(ASender: TObject; APosition: Integer; AModificationType: Integer;
-    AText: UnicodeString; ALength: Integer; ALinesAdded: Integer; ALine: Integer;
-    AFoldLevelNow: Integer; AFoldLevelPrev: Integer) of object;
-  TDSciModified2Event = procedure(ASender: TObject; APosition: Integer; AModificationType: Integer;
-    AText: UnicodeString; ALength: Integer; ALinesAdded: Integer; ALine: Integer;
-    AFoldLevelNow: Integer; AFoldLevelPrev: Integer;
-    AToken: Integer; AAnnotationLinesAdded: Integer) of object;
-  TDSciMacroRecordEvent = procedure(ASender: TObject; AMessage: Integer; AWParam: Integer; ALParam: Integer) of object;
-  TDSciMarginClickEvent = procedure(ASender: TObject; AModifiers: Integer; APosition: Integer; AMargin: Integer) of object;
-  TDSciNeedShownEvent = procedure(ASender: TObject; APosition: Integer; ALength: Integer) of object;
-  TDSciPaintedEvent = procedure(ASender: TObject) of object;
-  TDSciUserListSelectionEvent = procedure(ASender: TObject; AListType: Integer; AText: UnicodeString) of object;
-  TDSciUserListSelection2Event = procedure(ASender: TObject; AListType: Integer; AText: UnicodeString; APosition: Integer) of object;
-  TDSciDwellStartEvent = procedure(ASender: TObject; APosition, X, Y: Integer) of object;
-  TDSciDwellEndEvent = procedure(ASender: TObject; APosition, X, Y: Integer) of object;
-  TDSciZoomEvent = procedure(ASender: TObject) of object;
-  TDSciHotSpotClickEvent = procedure(ASender: TObject; AModifiers: Integer; APosition: Integer) of object;
-  TDSciHotSpotDoubleClickEvent = procedure(ASender: TObject; AModifiers: Integer; APosition: Integer) of object;
-  TDSciHotSpotReleaseClickEvent = procedure(ASender: TObject; AModifiers: Integer; APosition: Integer) of object;
-  TDSciCallTipClickEvent = procedure(ASender: TObject; APosition: Integer) of object;
-  TDSciAutoCSelectionEvent = procedure(ASender: TObject; AText: UnicodeString; APosition: Integer) of object;
-  TDSciIndicatorClickEvent = procedure(ASender: TObject; AModifiers: Integer; APosition: Integer) of object;
-  TDSciIndicatorReleaseEvent = procedure(ASender: TObject; AModifiers: Integer; APosition: Integer) of object;
-  TDSciAutoCCancelledEvent = procedure(ASender: TObject) of object;
-  TDSciAutoCCharDeletedEvent = procedure(ASender: TObject) of object;
+{ TDSciFileLoadStage }
+
+  TDSciFileLoadStage = (
+    sflsIdle,
+    sflsPreparing,
+    sflsReading,
+    sflsDecoding,
+    sflsLoading,
+    sflsAttaching,
+    sflsCompleted,
+    sflsFailed,
+    sflsCancelled
+  );
+
+{ TDSciFileLoadStatus }
+
+  TDSciFileLoadStatus = record
+    FileName: UnicodeString;
+    Stage: TDSciFileLoadStage;
+    BytesRead: Int64;
+    TotalBytes: Int64;
+    ErrorMessage: UnicodeString;
+    IsAsync: Boolean;
+    Encoding: TDSciFileEncoding;
+    EncodingCodePage: Cardinal;
+    EncodingName: UnicodeString;
+  end;
+
+  TDSciFileLoadStateEvent = procedure(Sender: TObject;
+    const AStatus: TDSciFileLoadStatus) of object;
+
+// <scigen-types>
+
+  TDSciWhiteSpace = (
+    scwsINVISIBLE,                          /// <summary>SCWS_INVISIBLE = 0
+    scwsVISIBLE_ALWAYS,                     /// <summary>SCWS_VISIBLEALWAYS = 1
+    scwsVISIBLE_AFTER_INDENT,               /// <summary>SCWS_VISIBLEAFTERINDENT = 2
+    scwsVISIBLE_ONLY_IN_INDENT              /// <summary>SCWS_VISIBLEONLYININDENT = 3
+  );
+
+  TDSciTabDrawMode = (
+    sctdmLONG_ARROW,                        /// <summary>SCTD_LONGARROW = 0
+    sctdmSTRIKE_OUT,                        /// <summary>SCTD_STRIKEOUT = 1
+    sctdmCONTROL_CHAR                       /// <summary>SCTD_CONTROLCHAR = 2
+  );
+
+  TDSciEndOfLine = (
+    sceolCR_LF,                             /// <summary>SC_EOL_CRLF = 0
+    sceolCR,                                /// <summary>SC_EOL_CR = 1
+    sceolLF                                 /// <summary>SC_EOL_LF = 2
+  );
+
+  TDSciIMEInteraction = (
+    scimeiWINDOWED,                         /// <summary>SC_IME_WINDOWED = 0
+    scimeiINLINE                            /// <summary>SC_IME_INLINE = 1
+  );
+
+  TDSciAlpha = (
+    scaTRANSPARENT,                         /// <summary>SC_ALPHA_TRANSPARENT = 0
+    scaOPAQUE,                              /// <summary>SC_ALPHA_OPAQUE = 255
+    scaNO_ALPHA                             /// <summary>SC_ALPHA_NOALPHA = 256
+  );
+
+  TDSciCursorShape = (
+    sccsNORMAL,                             /// <summary>SC_CURSORNORMAL = -1
+    sccsARROW,                              /// <summary>SC_CURSORARROW = 2
+    sccsWAIT,                               /// <summary>SC_CURSORWAIT = 4
+    sccsREVERSE_ARROW                       /// <summary>SC_CURSORREVERSEARROW = 7
+  );
+
+  TDSciMarkerSymbol = (
+    scmsCIRCLE,                             /// <summary>SC_MARK_CIRCLE = 0
+    scmsROUND_RECT,                         /// <summary>SC_MARK_ROUNDRECT = 1
+    scmsARROW,                              /// <summary>SC_MARK_ARROW = 2
+    scmsSMALL_RECT,                         /// <summary>SC_MARK_SMALLRECT = 3
+    scmsSHORT_ARROW,                        /// <summary>SC_MARK_SHORTARROW = 4
+    scmsEMPTY,                              /// <summary>SC_MARK_EMPTY = 5
+    scmsARROW_DOWN,                         /// <summary>SC_MARK_ARROWDOWN = 6
+    scmsMINUS,                              /// <summary>SC_MARK_MINUS = 7
+    scmsPLUS,                               /// <summary>SC_MARK_PLUS = 8
+    scmsV_LINE,                             /// <summary>SC_MARK_VLINE = 9
+    scmsL_CORNER,                           /// <summary>SC_MARK_LCORNER = 10
+    scmsT_CORNER,                           /// <summary>SC_MARK_TCORNER = 11
+    scmsBOX_PLUS,                           /// <summary>SC_MARK_BOXPLUS = 12
+    scmsBOX_PLUS_CONNECTED,                 /// <summary>SC_MARK_BOXPLUSCONNECTED = 13
+    scmsBOX_MINUS,                          /// <summary>SC_MARK_BOXMINUS = 14
+    scmsBOX_MINUS_CONNECTED,                /// <summary>SC_MARK_BOXMINUSCONNECTED = 15
+    scmsL_CORNER_CURVE,                     /// <summary>SC_MARK_LCORNERCURVE = 16
+    scmsT_CORNER_CURVE,                     /// <summary>SC_MARK_TCORNERCURVE = 17
+    scmsCIRCLE_PLUS,                        /// <summary>SC_MARK_CIRCLEPLUS = 18
+    scmsCIRCLE_PLUS_CONNECTED,              /// <summary>SC_MARK_CIRCLEPLUSCONNECTED = 19
+    scmsCIRCLE_MINUS,                       /// <summary>SC_MARK_CIRCLEMINUS = 20
+    scmsCIRCLE_MINUS_CONNECTED,             /// <summary>SC_MARK_CIRCLEMINUSCONNECTED = 21
+    scmsBACKGROUND,                         /// <summary>SC_MARK_BACKGROUND = 22
+    scmsDOT_DOT_DOT,                        /// <summary>SC_MARK_DOTDOTDOT = 23
+    scmsARROWS,                             /// <summary>SC_MARK_ARROWS = 24
+    scmsPIXMAP,                             /// <summary>SC_MARK_PIXMAP = 25
+    scmsFULL_RECT,                          /// <summary>SC_MARK_FULLRECT = 26
+    scmsLEFT_RECT,                          /// <summary>SC_MARK_LEFTRECT = 27
+    scmsAVAILABLE,                          /// <summary>SC_MARK_AVAILABLE = 28
+    scmsUNDERLINE,                          /// <summary>SC_MARK_UNDERLINE = 29
+    scmsRGBA_IMAGE,                         /// <summary>SC_MARK_RGBAIMAGE = 30
+    scmsBOOKMARK,                           /// <summary>SC_MARK_BOOKMARK = 31
+    scmsVERTICAL_BOOKMARK,                  /// <summary>SC_MARK_VERTICALBOOKMARK = 32
+    scmsBAR,                                /// <summary>SC_MARK_BAR = 33
+    scmsCHARACTER                           /// <summary>SC_MARK_CHARACTER = 10000
+  );
+
+  TDSciMarkerOutline = (
+    scmoHISTORY_REVERTED_TO_ORIGIN,         /// <summary>SC_MARKNUM_HISTORY_REVERTED_TO_ORIGIN = 21
+    scmoHISTORY_SAVED,                      /// <summary>SC_MARKNUM_HISTORY_SAVED = 22
+    scmoHISTORY_MODIFIED,                   /// <summary>SC_MARKNUM_HISTORY_MODIFIED = 23
+    scmoHISTORY_REVERTED_TO_MODIFIED,       /// <summary>SC_MARKNUM_HISTORY_REVERTED_TO_MODIFIED = 24
+    scmoFOLDER_END,                         /// <summary>SC_MARKNUM_FOLDEREND = 25
+    scmoFOLDER_OPEN_MID,                    /// <summary>SC_MARKNUM_FOLDEROPENMID = 26
+    scmoFOLDER_MID_TAIL,                    /// <summary>SC_MARKNUM_FOLDERMIDTAIL = 27
+    scmoFOLDER_TAIL,                        /// <summary>SC_MARKNUM_FOLDERTAIL = 28
+    scmoFOLDER_SUB,                         /// <summary>SC_MARKNUM_FOLDERSUB = 29
+    scmoFOLDER,                             /// <summary>SC_MARKNUM_FOLDER = 30
+    scmoFOLDER_OPEN                         /// <summary>SC_MARKNUM_FOLDEROPEN = 31
+  );
+
+  TDSciMarginType = (
+    scmtSYMBOL,                             /// <summary>SC_MARGIN_SYMBOL = 0
+    scmtNUMBER,                             /// <summary>SC_MARGIN_NUMBER = 1
+    scmtBACK,                               /// <summary>SC_MARGIN_BACK = 2
+    scmtFORE,                               /// <summary>SC_MARGIN_FORE = 3
+    scmtTEXT,                               /// <summary>SC_MARGIN_TEXT = 4
+    scmtR_TEXT,                             /// <summary>SC_MARGIN_RTEXT = 5
+    scmtCOLOUR                              /// <summary>SC_MARGIN_COLOUR = 6
+  );
+
+  TDSciStylesCommon = (
+    scscDEFAULT,                            /// <summary>STYLE_DEFAULT = 32
+    scscLINE_NUMBER,                        /// <summary>STYLE_LINENUMBER = 33
+    scscBRACE_LIGHT,                        /// <summary>STYLE_BRACELIGHT = 34
+    scscBRACE_BAD,                          /// <summary>STYLE_BRACEBAD = 35
+    scscCONTROL_CHAR,                       /// <summary>STYLE_CONTROLCHAR = 36
+    scscINDENT_GUIDE,                       /// <summary>STYLE_INDENTGUIDE = 37
+    scscCALL_TIP,                           /// <summary>STYLE_CALLTIP = 38
+    scscFOLD_DISPLAY_TEXT,                  /// <summary>STYLE_FOLDDISPLAYTEXT = 39
+    scscLAST_PREDEFINED,                    /// <summary>STYLE_LASTPREDEFINED = 39
+    scscMAX                                 /// <summary>STYLE_MAX = 255
+  );
+
+  TDSciCharacterSet = (
+    sccsANSI,                               /// <summary>SC_CHARSET_ANSI = 0
+    sccsDEFAULT,                            /// <summary>SC_CHARSET_DEFAULT = 1
+    sccsBALTIC,                             /// <summary>SC_CHARSET_BALTIC = 186
+    sccsCHINESE_BIG5,                       /// <summary>SC_CHARSET_CHINESEBIG5 = 136
+    sccsEAST_EUROPE,                        /// <summary>SC_CHARSET_EASTEUROPE = 238
+    sccsG_B_2312,                           /// <summary>SC_CHARSET_GB2312 = 134
+    sccsGREEK,                              /// <summary>SC_CHARSET_GREEK = 161
+    sccsHANGUL,                             /// <summary>SC_CHARSET_HANGUL = 129
+    sccsMAC,                                /// <summary>SC_CHARSET_MAC = 77
+    sccsOEM,                                /// <summary>SC_CHARSET_OEM = 255
+    sccsRUSSIAN,                            /// <summary>SC_CHARSET_RUSSIAN = 204
+    sccsOEM_866,                            /// <summary>SC_CHARSET_OEM866 = 866
+    sccsCYRILLIC,                           /// <summary>SC_CHARSET_CYRILLIC = 1251
+    sccsSHIFT_JIS,                          /// <summary>SC_CHARSET_SHIFTJIS = 128
+    sccsSYMBOL,                             /// <summary>SC_CHARSET_SYMBOL = 2
+    sccsTURKISH,                            /// <summary>SC_CHARSET_TURKISH = 162
+    sccsJOHAB,                              /// <summary>SC_CHARSET_JOHAB = 130
+    sccsHEBREW,                             /// <summary>SC_CHARSET_HEBREW = 177
+    sccsARABIC,                             /// <summary>SC_CHARSET_ARABIC = 178
+    sccsVIETNAMESE,                         /// <summary>SC_CHARSET_VIETNAMESE = 163
+    sccsTHAI,                               /// <summary>SC_CHARSET_THAI = 222
+    sccsISO_8859_15                         /// <summary>SC_CHARSET_8859_15 = 1000
+  );
+
+  TDSciCaseVisible = (
+    sccvMIXED,                              /// <summary>SC_CASE_MIXED = 0
+    sccvUPPER,                              /// <summary>SC_CASE_UPPER = 1
+    sccvLOWER,                              /// <summary>SC_CASE_LOWER = 2
+    sccvCAMEL                               /// <summary>SC_CASE_CAMEL = 3
+  );
+
+  TDSciFontWeight = (
+    scfwNORMAL,                             /// <summary>SC_WEIGHT_NORMAL = 400
+    scfwSEMI_BOLD,                          /// <summary>SC_WEIGHT_SEMIBOLD = 600
+    scfwBOLD                                /// <summary>SC_WEIGHT_BOLD = 700
+  );
+
+  TDSciFontStretch = (
+    scfsULTRA_CONDENSED,                    /// <summary>SC_STRETCH_ULTRA_CONDENSED = 1
+    scfsEXTRA_CONDENSED,                    /// <summary>SC_STRETCH_EXTRA_CONDENSED = 2
+    scfsCONDENSED,                          /// <summary>SC_STRETCH_CONDENSED = 3
+    scfsSEMI_CONDENSED,                     /// <summary>SC_STRETCH_SEMI_CONDENSED = 4
+    scfsNORMAL,                             /// <summary>SC_STRETCH_NORMAL = 5
+    scfsSEMI_EXPANDED,                      /// <summary>SC_STRETCH_SEMI_EXPANDED = 6
+    scfsEXPANDED,                           /// <summary>SC_STRETCH_EXPANDED = 7
+    scfsEXTRA_EXPANDED,                     /// <summary>SC_STRETCH_EXTRA_EXPANDED = 8
+    scfsULTRA_EXPANDED                      /// <summary>SC_STRETCH_ULTRA_EXPANDED = 9
+  );
+
+  TDSciElement = (
+    sceLIST,                                /// <summary>SC_ELEMENT_LIST = 0
+    sceLIST_BACK,                           /// <summary>SC_ELEMENT_LIST_BACK = 1
+    sceLIST_SELECTED,                       /// <summary>SC_ELEMENT_LIST_SELECTED = 2
+    sceLIST_SELECTED_BACK,                  /// <summary>SC_ELEMENT_LIST_SELECTED_BACK = 3
+    sceSELECTION_TEXT,                      /// <summary>SC_ELEMENT_SELECTION_TEXT = 10
+    sceSELECTION_BACK,                      /// <summary>SC_ELEMENT_SELECTION_BACK = 11
+    sceSELECTION_ADDITIONAL_TEXT,           /// <summary>SC_ELEMENT_SELECTION_ADDITIONAL_TEXT = 12
+    sceSELECTION_ADDITIONAL_BACK,           /// <summary>SC_ELEMENT_SELECTION_ADDITIONAL_BACK = 13
+    sceSELECTION_SECONDARY_TEXT,            /// <summary>SC_ELEMENT_SELECTION_SECONDARY_TEXT = 14
+    sceSELECTION_SECONDARY_BACK,            /// <summary>SC_ELEMENT_SELECTION_SECONDARY_BACK = 15
+    sceSELECTION_INACTIVE_TEXT,             /// <summary>SC_ELEMENT_SELECTION_INACTIVE_TEXT = 16
+    sceSELECTION_INACTIVE_BACK,             /// <summary>SC_ELEMENT_SELECTION_INACTIVE_BACK = 17
+    sceSELECTION_INACTIVE_ADDITIONAL_TEXT,  /// <summary>SC_ELEMENT_SELECTION_INACTIVE_ADDITIONAL_TEXT = 18
+    sceSELECTION_INACTIVE_ADDITIONAL_BACK,  /// <summary>SC_ELEMENT_SELECTION_INACTIVE_ADDITIONAL_BACK = 19
+    sceCARET,                               /// <summary>SC_ELEMENT_CARET = 40
+    sceCARET_ADDITIONAL,                    /// <summary>SC_ELEMENT_CARET_ADDITIONAL = 41
+    sceCARET_LINE_BACK,                     /// <summary>SC_ELEMENT_CARET_LINE_BACK = 50
+    sceWHITE_SPACE,                         /// <summary>SC_ELEMENT_WHITE_SPACE = 60
+    sceWHITE_SPACE_BACK,                    /// <summary>SC_ELEMENT_WHITE_SPACE_BACK = 61
+    sceHOT_SPOT_ACTIVE,                     /// <summary>SC_ELEMENT_HOT_SPOT_ACTIVE = 70
+    sceHOT_SPOT_ACTIVE_BACK,                /// <summary>SC_ELEMENT_HOT_SPOT_ACTIVE_BACK = 71
+    sceFOLD_LINE,                           /// <summary>SC_ELEMENT_FOLD_LINE = 80
+    sceHIDDEN_LINE                          /// <summary>SC_ELEMENT_HIDDEN_LINE = 81
+  );
+
+  TDSciLayer = (
+    sclBASE,                                /// <summary>SC_LAYER_BASE = 0
+    sclUNDER_TEXT,                          /// <summary>SC_LAYER_UNDER_TEXT = 1
+    sclOVER_TEXT                            /// <summary>SC_LAYER_OVER_TEXT = 2
+  );
+
+  TDSciIndicatorStyle = (
+    scisPLAIN,                              /// <summary>INDIC_PLAIN = 0
+    scisSQUIGGLE,                           /// <summary>INDIC_SQUIGGLE = 1
+    scisT_T,                                /// <summary>INDIC_TT = 2
+    scisDIAGONAL,                           /// <summary>INDIC_DIAGONAL = 3
+    scisSTRIKE,                             /// <summary>INDIC_STRIKE = 4
+    scisHIDDEN,                             /// <summary>INDIC_HIDDEN = 5
+    scisBOX,                                /// <summary>INDIC_BOX = 6
+    scisROUND_BOX,                          /// <summary>INDIC_ROUNDBOX = 7
+    scisSTRAIGHT_BOX,                       /// <summary>INDIC_STRAIGHTBOX = 8
+    scisDASH,                               /// <summary>INDIC_DASH = 9
+    scisDOTS,                               /// <summary>INDIC_DOTS = 10
+    scisSQUIGGLE_LOW,                       /// <summary>INDIC_SQUIGGLELOW = 11
+    scisDOT_BOX,                            /// <summary>INDIC_DOTBOX = 12
+    scisSQUIGGLE_PIXMAP,                    /// <summary>INDIC_SQUIGGLEPIXMAP = 13
+    scisCOMPOSITION_THICK,                  /// <summary>INDIC_COMPOSITIONTHICK = 14
+    scisCOMPOSITION_THIN,                   /// <summary>INDIC_COMPOSITIONTHIN = 15
+    scisFULL_BOX,                           /// <summary>INDIC_FULLBOX = 16
+    scisTEXT_FORE,                          /// <summary>INDIC_TEXTFORE = 17
+    scisPOINT,                              /// <summary>INDIC_POINT = 18
+    scisPOINT_CHARACTER,                    /// <summary>INDIC_POINTCHARACTER = 19
+    scisGRADIENT,                           /// <summary>INDIC_GRADIENT = 20
+    scisGRADIENT_CENTRE,                    /// <summary>INDIC_GRADIENTCENTRE = 21
+    scisPOINT_TOP,                          /// <summary>INDIC_POINT_TOP = 22
+    scisCONTAINER,                          /// <summary>INDIC_CONTAINER = 8
+    scisIME,                                /// <summary>INDIC_IME = 32
+    scisIME_MAX,                            /// <summary>INDIC_IME_MAX = 35
+    scisMAX                                 /// <summary>INDIC_MAX = 35
+  );
+
+  TDSciIndicatorNumbers = (
+    scinCONTAINER,                          /// <summary>INDICATOR_CONTAINER = 8
+    scinIME,                                /// <summary>INDICATOR_IME = 32
+    scinIME_MAX,                            /// <summary>INDICATOR_IME_MAX = 35
+    scinHISTORY_REVERTED_TO_ORIGIN_INSERTION,/// <summary>INDICATOR_HISTORY_REVERTED_TO_ORIGIN_INSERTION = 36
+    scinHISTORY_REVERTED_TO_ORIGIN_DELETION,/// <summary>INDICATOR_HISTORY_REVERTED_TO_ORIGIN_DELETION = 37
+    scinHISTORY_SAVED_INSERTION,            /// <summary>INDICATOR_HISTORY_SAVED_INSERTION = 38
+    scinHISTORY_SAVED_DELETION,             /// <summary>INDICATOR_HISTORY_SAVED_DELETION = 39
+    scinHISTORY_MODIFIED_INSERTION,         /// <summary>INDICATOR_HISTORY_MODIFIED_INSERTION = 40
+    scinHISTORY_MODIFIED_DELETION,          /// <summary>INDICATOR_HISTORY_MODIFIED_DELETION = 41
+    scinHISTORY_REVERTED_TO_MODIFIED_INSERTION,/// <summary>INDICATOR_HISTORY_REVERTED_TO_MODIFIED_INSERTION = 42
+    scinHISTORY_REVERTED_TO_MODIFIED_DELETION,/// <summary>INDICATOR_HISTORY_REVERTED_TO_MODIFIED_DELETION = 43
+    scinMAX                                 /// <summary>INDICATOR_MAX = 43
+  );
+
+  TDSciIndicValue = (
+    scivBIT,                                /// <summary>SC_INDICVALUEBIT = $1000000
+    scivMASK                                /// <summary>SC_INDICVALUEMASK = $FFFFFF
+  );
+
+  TDSciIndicFlag = (
+    scifNONE,                               /// <summary>SC_INDICFLAG_NONE = 0
+    scifVALUE_FORE                          /// <summary>SC_INDICFLAG_VALUEFORE = 1
+  );
+
+  TDSciAutoCompleteOption = (
+    scacoNORMAL,                            /// <summary>SC_AUTOCOMPLETE_NORMAL = 0
+    scacoFIXED_SIZE,                        /// <summary>SC_AUTOCOMPLETE_FIXED_SIZE = 1
+    scacoSELECT_FIRST_ITEM                  /// <summary>SC_AUTOCOMPLETE_SELECT_FIRST_ITEM = 2
+  );
+
+  TDSciIndentView = (
+    scivNONE,                               /// <summary>SC_IV_NONE = 0
+    scivREAL,                               /// <summary>SC_IV_REAL = 1
+    scivLOOK_FORWARD,                       /// <summary>SC_IV_LOOKFORWARD = 2
+    scivLOOK_BOTH                           /// <summary>SC_IV_LOOKBOTH = 3
+  );
+
+  TDSciPrintOption = (
+    scpoNORMAL,                             /// <summary>SC_PRINT_NORMAL = 0
+    scpoINVERT_LIGHT,                       /// <summary>SC_PRINT_INVERTLIGHT = 1
+    scpoBLACK_ON_WHITE,                     /// <summary>SC_PRINT_BLACKONWHITE = 2
+    scpoCOLOUR_ON_WHITE,                    /// <summary>SC_PRINT_COLOURONWHITE = 3
+    scpoCOLOUR_ON_WHITE_DEFAULT_B_G,        /// <summary>SC_PRINT_COLOURONWHITEDEFAULTBG = 4
+    scpoSCREEN_COLOURS                      /// <summary>SC_PRINT_SCREENCOLOURS = 5
+  );
+
+  TDSciFindOption = (
+    scfoWHOLE_WORD,                         /// <summary>SCFIND_WHOLEWORD = $2
+    scfoMATCH_CASE,                         /// <summary>SCFIND_MATCHCASE = $4
+    scfoWORD_START,                         /// <summary>SCFIND_WORDSTART = $00100000
+    scfoREG_EXP,                            /// <summary>SCFIND_REGEXP = $00200000
+    scfoPOSIX,                              /// <summary>SCFIND_POSIX = $00400000
+    scfoCXX11_REG_EX                        /// <summary>SCFIND_CXX11REGEX = $00800000
+  );
+  TDSciFindOptionSet = set of TDSciFindOption;
+
+  TDSciChangeHistoryOption = (
+    scchoDISABLED,                          /// <summary>SC_CHANGE_HISTORY_DISABLED = 0
+    scchoENABLED,                           /// <summary>SC_CHANGE_HISTORY_ENABLED = 1
+    scchoMARKERS,                           /// <summary>SC_CHANGE_HISTORY_MARKERS = 2
+    scchoINDICATORS                         /// <summary>SC_CHANGE_HISTORY_INDICATORS = 4
+  );
+
+  TDSciUndoSelectionHistoryOption = (
+    scushoDISABLED,                         /// <summary>SC_UNDO_SELECTION_HISTORY_DISABLED = 0
+    scushoENABLED,                          /// <summary>SC_UNDO_SELECTION_HISTORY_ENABLED = 1
+    scushoSCROLL                            /// <summary>SC_UNDO_SELECTION_HISTORY_SCROLL = 2
+  );
+
+  TDSciFoldLevel = (
+    scflBASE,                               /// <summary>SC_FOLDLEVELBASE = $400
+    scflWHITE_FLAG,                         /// <summary>SC_FOLDLEVELWHITEFLAG = $1000
+    scflHEADER_FLAG,                        /// <summary>SC_FOLDLEVELHEADERFLAG = $2000
+    scflNUMBER_MASK                         /// <summary>SC_FOLDLEVELNUMBERMASK = $0FFF
+  );
+  TDSciFoldLevelSet = set of TDSciFoldLevel;
+
+  TDSciFoldDisplayTextStyle = (
+    scfdtsHIDDEN,                           /// <summary>SC_FOLDDISPLAYTEXT_HIDDEN = 0
+    scfdtsSTANDARD,                         /// <summary>SC_FOLDDISPLAYTEXT_STANDARD = 1
+    scfdtsBOXED                             /// <summary>SC_FOLDDISPLAYTEXT_BOXED = 2
+  );
+
+  TDSciFoldAction = (
+    scfaCONTRACT,                           /// <summary>SC_FOLDACTION_CONTRACT = 0
+    scfaEXPAND,                             /// <summary>SC_FOLDACTION_EXPAND = 1
+    scfaTOGGLE,                             /// <summary>SC_FOLDACTION_TOGGLE = 2
+    scfaCONTRACT_EVERY_LEVEL                /// <summary>SC_FOLDACTION_CONTRACT_EVERY_LEVEL = 4
+  );
+
+  TDSciAutomaticFold = (
+    scafNONE,                               /// <summary>SC_AUTOMATICFOLD_NONE = $0000
+    scafSHOW,                               /// <summary>SC_AUTOMATICFOLD_SHOW = $0001
+    scafCLICK,                              /// <summary>SC_AUTOMATICFOLD_CLICK = $0002
+    scafCHANGE                              /// <summary>SC_AUTOMATICFOLD_CHANGE = $0004
+  );
+
+  TDSciFoldFlag = (
+    scffLINE_BEFORE_EXPANDED,               /// <summary>SC_FOLDFLAG_LINEBEFORE_EXPANDED = $0002
+    scffLINE_BEFORE_CONTRACTED,             /// <summary>SC_FOLDFLAG_LINEBEFORE_CONTRACTED = $0004
+    scffLINE_AFTER_EXPANDED,                /// <summary>SC_FOLDFLAG_LINEAFTER_EXPANDED = $0008
+    scffLINE_AFTER_CONTRACTED,              /// <summary>SC_FOLDFLAG_LINEAFTER_CONTRACTED = $0010
+    scffLEVEL_NUMBERS,                      /// <summary>SC_FOLDFLAG_LEVELNUMBERS = $0040
+    scffLINE_STATE                          /// <summary>SC_FOLDFLAG_LINESTATE = $0080
+  );
+  TDSciFoldFlagSet = set of TDSciFoldFlag;
+
+  TDSciIdleStyling = (
+    scisNONE,                               /// <summary>SC_IDLESTYLING_NONE = 0
+    scisTO_VISIBLE,                         /// <summary>SC_IDLESTYLING_TOVISIBLE = 1
+    scisAFTER_VISIBLE,                      /// <summary>SC_IDLESTYLING_AFTERVISIBLE = 2
+    scisALL                                 /// <summary>SC_IDLESTYLING_ALL = 3
+  );
+
+  TDSciWrap = (
+    scwNONE,                                /// <summary>SC_WRAP_NONE = 0
+    scwWORD,                                /// <summary>SC_WRAP_WORD = 1
+    scwCHAR,                                /// <summary>SC_WRAP_CHAR = 2
+    scwWHITE_SPACE                          /// <summary>SC_WRAP_WHITESPACE = 3
+  );
+
+  TDSciWrapVisualFlag = (
+    scwvfEND,                               /// <summary>SC_WRAPVISUALFLAG_END = $0001
+    scwvfSTART,                             /// <summary>SC_WRAPVISUALFLAG_START = $0002
+    scwvfMARGIN                             /// <summary>SC_WRAPVISUALFLAG_MARGIN = $0004
+  );
+  TDSciWrapVisualFlagSet = set of TDSciWrapVisualFlag;
+
+  TDSciWrapVisualLocation = (
+    scwvlEND_BY_TEXT,                       /// <summary>SC_WRAPVISUALFLAGLOC_END_BY_TEXT = $0001
+    scwvlSTART_BY_TEXT                      /// <summary>SC_WRAPVISUALFLAGLOC_START_BY_TEXT = $0002
+  );
+  TDSciWrapVisualLocationSet = set of TDSciWrapVisualLocation;
+
+  TDSciWrapIndentMode = (
+    scwimFIXED,                             /// <summary>SC_WRAPINDENT_FIXED = 0
+    scwimSAME,                              /// <summary>SC_WRAPINDENT_SAME = 1
+    scwimINDENT,                            /// <summary>SC_WRAPINDENT_INDENT = 2
+    scwimDEEP_INDENT                        /// <summary>SC_WRAPINDENT_DEEPINDENT = 3
+  );
+
+  TDSciLineCache = (
+    sclcNONE,                               /// <summary>SC_CACHE_NONE = 0
+    sclcCARET,                              /// <summary>SC_CACHE_CARET = 1
+    sclcPAGE,                               /// <summary>SC_CACHE_PAGE = 2
+    sclcDOCUMENT                            /// <summary>SC_CACHE_DOCUMENT = 3
+  );
+
+  TDSciPhasesDraw = (
+    scpdONE,                                /// <summary>SC_PHASES_ONE = 0
+    scpdTWO,                                /// <summary>SC_PHASES_TWO = 1
+    scpdMULTIPLE                            /// <summary>SC_PHASES_MULTIPLE = 2
+  );
+
+  TDSciFontQuality = (
+    scfqQUALITY_MASK,                       /// <summary>SC_EFF_QUALITY_MASK = $F
+    scfqQUALITY_DEFAULT,                    /// <summary>SC_EFF_QUALITY_DEFAULT = 0
+    scfqQUALITY_NON_ANTIALIASED,            /// <summary>SC_EFF_QUALITY_NON_ANTIALIASED = 1
+    scfqQUALITY_ANTIALIASED,                /// <summary>SC_EFF_QUALITY_ANTIALIASED = 2
+    scfqQUALITY_LCD_OPTIMIZED               /// <summary>SC_EFF_QUALITY_LCD_OPTIMIZED = 3
+  );
+
+  TDSciMultiPaste = (
+    scmpONCE,                               /// <summary>SC_MULTIPASTE_ONCE = 0
+    scmpEACH                                /// <summary>SC_MULTIPASTE_EACH = 1
+  );
+
+  TDSciAccessibility = (
+    scaDISABLED,                            /// <summary>SC_ACCESSIBILITY_DISABLED = 0
+    scaENABLED                              /// <summary>SC_ACCESSIBILITY_ENABLED = 1
+  );
+
+  TDSciEdgeVisualStyle = (
+    scevsNONE,                              /// <summary>EDGE_NONE = 0
+    scevsLINE,                              /// <summary>EDGE_LINE = 1
+    scevsBACKGROUND,                        /// <summary>EDGE_BACKGROUND = 2
+    scevsMULTI_LINE                         /// <summary>EDGE_MULTILINE = 3
+  );
+
+  TDSciPopUp = (
+    scpuNEVER,                              /// <summary>SC_POPUP_NEVER = 0
+    scpuALL,                                /// <summary>SC_POPUP_ALL = 1
+    scpuTEXT                                /// <summary>SC_POPUP_TEXT = 2
+  );
+
+  TDSciDocumentOption = (
+    scdoDEFAULT,                            /// <summary>SC_DOCUMENTOPTION_DEFAULT = 0
+    scdoSTYLES_NONE,                        /// <summary>SC_DOCUMENTOPTION_STYLES_NONE = $1
+    scdoTEXT_LARGE                          /// <summary>SC_DOCUMENTOPTION_TEXT_LARGE = $100
+  );
+
+  TDSciStatus = (
+    scsOK,                                  /// <summary>SC_STATUS_OK = 0
+    scsFAILURE,                             /// <summary>SC_STATUS_FAILURE = 1
+    scsBAD_ALLOC,                           /// <summary>SC_STATUS_BADALLOC = 2
+    scsWARN_START,                          /// <summary>SC_STATUS_WARN_START = 1000
+    scsREG_EX                               /// <summary>SC_STATUS_WARN_REGEX = 1001
+  );
+
+  TDSciVisiblePolicy = (
+    scvpSLOP,                               /// <summary>VISIBLE_SLOP = $01
+    scvpSTRICT                              /// <summary>VISIBLE_STRICT = $04
+  );
+  TDSciVisiblePolicySet = set of TDSciVisiblePolicy;
+
+  TDSciCaretPolicy = (
+    sccpSLOP,                               /// <summary>CARET_SLOP = $01
+    sccpSTRICT,                             /// <summary>CARET_STRICT = $04
+    sccpJUMPS,                              /// <summary>CARET_JUMPS = $10
+    sccpEVEN                                /// <summary>CARET_EVEN = $08
+  );
+  TDSciCaretPolicySet = set of TDSciCaretPolicy;
+
+  TDSciSelectionMode = (
+    scsmSTREAM,                             /// <summary>SC_SEL_STREAM = 0
+    scsmRECTANGLE,                          /// <summary>SC_SEL_RECTANGLE = 1
+    scsmLINES,                              /// <summary>SC_SEL_LINES = 2
+    scsmTHIN                                /// <summary>SC_SEL_THIN = 3
+  );
+
+  TDSciCaseInsensitiveBehaviour = (
+    sccibRESPECT_CASE,                      /// <summary>SC_CASEINSENSITIVEBEHAVIOUR_RESPECTCASE = 0
+    sccibIGNORE_CASE                        /// <summary>SC_CASEINSENSITIVEBEHAVIOUR_IGNORECASE = 1
+  );
+
+  TDSciMultiAutoComplete = (
+    scmacONCE,                              /// <summary>SC_MULTIAUTOC_ONCE = 0
+    scmacEACH                               /// <summary>SC_MULTIAUTOC_EACH = 1
+  );
+
+  TDSciOrdering = (
+    scoPRE_SORTED,                          /// <summary>SC_ORDER_PRESORTED = 0
+    scoPERFORM_SORT,                        /// <summary>SC_ORDER_PERFORMSORT = 1
+    scoCUSTOM                               /// <summary>SC_ORDER_CUSTOM = 2
+  );
+
+  TDSciCaretSticky = (
+    sccsOFF,                                /// <summary>SC_CARETSTICKY_OFF = 0
+    sccsON,                                 /// <summary>SC_CARETSTICKY_ON = 1
+    sccsWHITE_SPACE                         /// <summary>SC_CARETSTICKY_WHITESPACE = 2
+  );
+
+  TDSciCaretStyle = (
+    sccsINVISIBLE,                          /// <summary>CARETSTYLE_INVISIBLE = 0
+    sccsLINE,                               /// <summary>CARETSTYLE_LINE = 1
+    sccsBLOCK,                              /// <summary>CARETSTYLE_BLOCK = 2
+    sccsOVERSTRIKE_BAR,                     /// <summary>CARETSTYLE_OVERSTRIKE_BAR = 0
+    sccsOVERSTRIKE_BLOCK,                   /// <summary>CARETSTYLE_OVERSTRIKE_BLOCK = $10
+    sccsCURSES,                             /// <summary>CARETSTYLE_CURSES = $20
+    sccsINS_MASK,                           /// <summary>CARETSTYLE_INS_MASK = $F
+    sccsBLOCK_AFTER                         /// <summary>CARETSTYLE_BLOCK_AFTER = $100
+  );
+
+  TDSciMarginOption = (
+    scmoNONE,                               /// <summary>SC_MARGINOPTION_NONE = 0
+    scmoSUB_LINE_SELECT                     /// <summary>SC_MARGINOPTION_SUBLINESELECT = 1
+  );
+
+  TDSciAnnotationVisible = (
+    scavHIDDEN,                             /// <summary>ANNOTATION_HIDDEN = 0
+    scavSTANDARD,                           /// <summary>ANNOTATION_STANDARD = 1
+    scavBOXED,                              /// <summary>ANNOTATION_BOXED = 2
+    scavINDENTED                            /// <summary>ANNOTATION_INDENTED = 3
+  );
+
+  TDSciUndoFlags = (
+    scufMAY_COALESCE                        /// <summary>UNDO_MAY_COALESCE = 1
+  );
+  TDSciUndoFlagsSet = set of TDSciUndoFlags;
+
+  TDSciVirtualSpace = (
+    scvsRECTANGULAR_SELECTION,              /// <summary>SCVS_RECTANGULARSELECTION = 1
+    scvsUSER_ACCESSIBLE,                    /// <summary>SCVS_USERACCESSIBLE = 2
+    scvsNO_WRAP_LINE_START                  /// <summary>SCVS_NOWRAPLINESTART = 4
+  );
+  TDSciVirtualSpaceSet = set of TDSciVirtualSpace;
+
+  TDSciTechnology = (
+    sctDEFAULT,                             /// <summary>SC_TECHNOLOGY_DEFAULT = 0
+    sctDIRECT_WRITE,                        /// <summary>SC_TECHNOLOGY_DIRECTWRITE = 1
+    sctDIRECT_WRITE_RETAIN,                 /// <summary>SC_TECHNOLOGY_DIRECTWRITERETAIN = 2
+    sctDIRECT_WRITE_D_C,                    /// <summary>SC_TECHNOLOGY_DIRECTWRITEDC = 3
+    sctDIRECT_WRITE_1                       /// <summary>SC_TECHNOLOGY_DIRECT_WRITE_1 = 4
+  );
+
+  TDSciLineEndType = (
+    scletDEFAULT,                           /// <summary>SC_LINE_END_TYPE_DEFAULT = 0
+    scletUNICODE                            /// <summary>SC_LINE_END_TYPE_UNICODE = 1
+  );
+
+  TDSciRepresentationAppearance = (
+    scra_PLAIN,                             /// <summary>SC_REPRESENTATION_PLAIN = 0
+    scra_BLOB,                              /// <summary>SC_REPRESENTATION_BLOB = 1
+    scra_COLOUR                             /// <summary>SC_REPRESENTATION_COLOUR = $10
+  );
+
+  TDSciEOLAnnotationVisible = (
+    sceolavHIDDEN,                          /// <summary>EOLANNOTATION_HIDDEN = $0
+    sceolavSTANDARD,                        /// <summary>EOLANNOTATION_STANDARD = $1
+    sceolavBOXED,                           /// <summary>EOLANNOTATION_BOXED = $2
+    sceolavSTADIUM,                         /// <summary>EOLANNOTATION_STADIUM = $100
+    sceolavFLAT_CIRCLE,                     /// <summary>EOLANNOTATION_FLAT_CIRCLE = $101
+    sceolavANGLE_CIRCLE,                    /// <summary>EOLANNOTATION_ANGLE_CIRCLE = $102
+    sceolavCIRCLE_FLAT,                     /// <summary>EOLANNOTATION_CIRCLE_FLAT = $110
+    sceolavFLATS,                           /// <summary>EOLANNOTATION_FLATS = $111
+    sceolavANGLE_FLAT,                      /// <summary>EOLANNOTATION_ANGLE_FLAT = $112
+    sceolavCIRCLE_ANGLE,                    /// <summary>EOLANNOTATION_CIRCLE_ANGLE = $120
+    sceolavFLAT_ANGLE,                      /// <summary>EOLANNOTATION_FLAT_ANGLE = $121
+    sceolavANGLES                           /// <summary>EOLANNOTATION_ANGLES = $122
+  );
+
+  TDSciSupports = (
+    scsLINE_DRAWS_FINAL,                    /// <summary>SC_SUPPORTS_LINE_DRAWS_FINAL = 0
+    scsPIXEL_DIVISIONS,                     /// <summary>SC_SUPPORTS_PIXEL_DIVISIONS = 1
+    scsFRACTIONAL_STROKE_WIDTH,             /// <summary>SC_SUPPORTS_FRACTIONAL_STROKE_WIDTH = 2
+    scsTRANSLUCENT_STROKE,                  /// <summary>SC_SUPPORTS_TRANSLUCENT_STROKE = 3
+    scsPIXEL_MODIFICATION,                  /// <summary>SC_SUPPORTS_PIXEL_MODIFICATION = 4
+    scsTHREAD_SAFE_MEASURE_WIDTHS           /// <summary>SC_SUPPORTS_THREAD_SAFE_MEASURE_WIDTHS = 5
+  );
+
+  TDSciLineCharacterIndexType = (
+    sclcitNONE,                             /// <summary>SC_LINECHARACTERINDEX_NONE = 0
+    sclcitUTF32,                            /// <summary>SC_LINECHARACTERINDEX_UTF32 = 1
+    sclcitUTF16                             /// <summary>SC_LINECHARACTERINDEX_UTF16 = 2
+  );
+
+  TDSciTypeProperty = (
+    sctpBOOLEAN,                            /// <summary>SC_TYPE_BOOLEAN = 0
+    sctpINTEGER,                            /// <summary>SC_TYPE_INTEGER = 1
+    sctpSTRING                              /// <summary>SC_TYPE_STRING = 2
+  );
+
+  TDSciModificationFlags = (
+    scmfINSERT_TEXT,                        /// <summary>SC_MOD_INSERTTEXT = $1
+    scmfDELETE_TEXT,                        /// <summary>SC_MOD_DELETETEXT = $2
+    scmfCHANGE_STYLE,                       /// <summary>SC_MOD_CHANGESTYLE = $4
+    scmfCHANGE_FOLD,                        /// <summary>SC_MOD_CHANGEFOLD = $8
+    scmfUSER,                               /// <summary>SC_PERFORMED_USER = $10
+    scmfUNDO,                               /// <summary>SC_PERFORMED_UNDO = $20
+    scmfREDO,                               /// <summary>SC_PERFORMED_REDO = $40
+    scmfMULTI_STEP_UNDO_REDO,               /// <summary>SC_MULTISTEPUNDOREDO = $80
+    scmfLAST_STEP_IN_UNDO_REDO,             /// <summary>SC_LASTSTEPINUNDOREDO = $100
+    scmfCHANGE_MARKER,                      /// <summary>SC_MOD_CHANGEMARKER = $200
+    scmfBEFORE_INSERT,                      /// <summary>SC_MOD_BEFOREINSERT = $400
+    scmfBEFORE_DELETE,                      /// <summary>SC_MOD_BEFOREDELETE = $800
+    scmfMULTILINE_UNDO_REDO,                /// <summary>SC_MULTILINEUNDOREDO = $1000
+    scmfSTART_ACTION,                       /// <summary>SC_STARTACTION = $2000
+    scmfCHANGE_INDICATOR,                   /// <summary>SC_MOD_CHANGEINDICATOR = $4000
+    scmfCHANGE_LINE_STATE,                  /// <summary>SC_MOD_CHANGELINESTATE = $8000
+    scmfCHANGE_MARGIN,                      /// <summary>SC_MOD_CHANGEMARGIN = $10000
+    scmfCHANGE_ANNOTATION,                  /// <summary>SC_MOD_CHANGEANNOTATION = $20000
+    scmfCONTAINER,                          /// <summary>SC_MOD_CONTAINER = $40000
+    scmfLEXER_STATE,                        /// <summary>SC_MOD_LEXERSTATE = $80000
+    scmfINSERT_CHECK,                       /// <summary>SC_MOD_INSERTCHECK = $100000
+    scmfCHANGE_TAB_STOPS,                   /// <summary>SC_MOD_CHANGETABSTOPS = $200000
+    scmfCHANGE_E_O_L_ANNOTATION,            /// <summary>SC_MOD_CHANGEEOLANNOTATION = $400000
+    scmfEVENT_MASK_ALL                      /// <summary>SC_MODEVENTMASKALL = $7FFFFF
+  );
+  TDSciModificationFlagsSet = set of TDSciModificationFlags;
+
+  TDSciUpdate = (
+    scuNONE,                                /// <summary>SC_UPDATE_NONE = $0
+    scuCONTENT,                             /// <summary>SC_UPDATE_CONTENT = $1
+    scuSELECTION,                           /// <summary>SC_UPDATE_SELECTION = $2
+    scuV_SCROLL,                            /// <summary>SC_UPDATE_V_SCROLL = $4
+    scuH_SCROLL                             /// <summary>SC_UPDATE_H_SCROLL = $8
+  );
+
+  TDSciFocusChange = (
+    scfcCHANGE,                             /// <summary>SCEN_CHANGE = 768
+    scfcSETFOCUS,                           /// <summary>SCEN_SETFOCUS = 512
+    scfcKILLFOCUS                           /// <summary>SCEN_KILLFOCUS = 256
+  );
+
+  TDSciKeys = (
+    sckDOWN,                                /// <summary>SCK_DOWN = 300
+    sckUP,                                  /// <summary>SCK_UP = 301
+    sckLEFT,                                /// <summary>SCK_LEFT = 302
+    sckRIGHT,                               /// <summary>SCK_RIGHT = 303
+    sckHOME,                                /// <summary>SCK_HOME = 304
+    sckEND,                                 /// <summary>SCK_END = 305
+    sckPRIOR,                               /// <summary>SCK_PRIOR = 306
+    sckNEXT,                                /// <summary>SCK_NEXT = 307
+    sckDELETE,                              /// <summary>SCK_DELETE = 308
+    sckINSERT,                              /// <summary>SCK_INSERT = 309
+    sckESCAPE,                              /// <summary>SCK_ESCAPE = 7
+    sckBACK,                                /// <summary>SCK_BACK = 8
+    sckTAB,                                 /// <summary>SCK_TAB = 9
+    sckRETURN,                              /// <summary>SCK_RETURN = 13
+    sckADD,                                 /// <summary>SCK_ADD = 310
+    sckSUBTRACT,                            /// <summary>SCK_SUBTRACT = 311
+    sckDIVIDE,                              /// <summary>SCK_DIVIDE = 312
+    sckWIN,                                 /// <summary>SCK_WIN = 313
+    sckR_WIN,                               /// <summary>SCK_RWIN = 314
+    sckMENU                                 /// <summary>SCK_MENU = 315
+  );
+
+  TDSciKeyMod = (
+    sckmSHIFT,                              /// <summary>SCMOD_SHIFT = 1
+    sckmCTRL,                               /// <summary>SCMOD_CTRL = 2
+    sckmALT,                                /// <summary>SCMOD_ALT = 4
+    sckmSUPER,                              /// <summary>SCMOD_SUPER = 8
+    sckmMETA                                /// <summary>SCMOD_META = 16
+  );
+  TDSciKeyModSet = set of TDSciKeyMod;
+
+  TDSciCompletionMethods = (
+    sccmFILL_UP,                            /// <summary>SC_AC_FILLUP = 1
+    sccmDOUBLE_CLICK,                       /// <summary>SC_AC_DOUBLECLICK = 2
+    sccmTAB,                                /// <summary>SC_AC_TAB = 3
+    sccmNEWLINE,                            /// <summary>SC_AC_NEWLINE = 4
+    sccmCOMMAND,                            /// <summary>SC_AC_COMMAND = 5
+    sccmSINGLE_CHOICE                       /// <summary>SC_AC_SINGLE_CHOICE = 6
+  );
+
+  TDSciCharacterSource = (
+    sccsDIRECT_INPUT,                       /// <summary>SC_CHARACTERSOURCE_DIRECT_INPUT = 0
+    sccsTENTATIVE_INPUT,                    /// <summary>SC_CHARACTERSOURCE_TENTATIVE_INPUT = 1
+    sccsIME_RESULT                          /// <summary>SC_CHARACTERSOURCE_IME_RESULT = 2
+  );
+
+  TDSciBidirectional = (
+    scbDISABLED,                            /// <summary>SC_BIDIRECTIONAL_DISABLED = 0
+    scbL2R,                                 /// <summary>SC_BIDIRECTIONAL_L2R = 1
+    scbR2L                                  /// <summary>SC_BIDIRECTIONAL_R2L = 2
+  );
+
+  TDSciLexerId = (
+    sclCONTAINER,                           /// <summary>SCLEX_CONTAINER = 0
+    sclNULL,                                /// <summary>SCLEX_NULL = 1
+    sclPYTHON,                              /// <summary>SCLEX_PYTHON = 2
+    sclCPP,                                 /// <summary>SCLEX_CPP = 3
+    sclHTML,                                /// <summary>SCLEX_HTML = 4
+    sclXML,                                 /// <summary>SCLEX_XML = 5
+    sclPERL,                                /// <summary>SCLEX_PERL = 6
+    sclSQL,                                 /// <summary>SCLEX_SQL = 7
+    sclVB,                                  /// <summary>SCLEX_VB = 8
+    sclPROPERTIES,                          /// <summary>SCLEX_PROPERTIES = 9
+    sclERRORLIST,                           /// <summary>SCLEX_ERRORLIST = 10
+    sclMAKEFILE,                            /// <summary>SCLEX_MAKEFILE = 11
+    sclBATCH,                               /// <summary>SCLEX_BATCH = 12
+    sclXCODE,                               /// <summary>SCLEX_XCODE = 13
+    sclLATEX,                               /// <summary>SCLEX_LATEX = 14
+    sclLUA,                                 /// <summary>SCLEX_LUA = 15
+    sclDIFF,                                /// <summary>SCLEX_DIFF = 16
+    sclCONF,                                /// <summary>SCLEX_CONF = 17
+    sclPASCAL,                              /// <summary>SCLEX_PASCAL = 18
+    sclAVE,                                 /// <summary>SCLEX_AVE = 19
+    sclADA,                                 /// <summary>SCLEX_ADA = 20
+    sclLISP,                                /// <summary>SCLEX_LISP = 21
+    sclRUBY,                                /// <summary>SCLEX_RUBY = 22
+    sclEIFFEL,                              /// <summary>SCLEX_EIFFEL = 23
+    sclEIFFELKW,                            /// <summary>SCLEX_EIFFELKW = 24
+    sclTCL,                                 /// <summary>SCLEX_TCL = 25
+    sclNNCRONTAB,                           /// <summary>SCLEX_NNCRONTAB = 26
+    sclBULLANT,                             /// <summary>SCLEX_BULLANT = 27
+    sclVBSCRIPT,                            /// <summary>SCLEX_VBSCRIPT = 28
+    sclBAAN,                                /// <summary>SCLEX_BAAN = 31
+    sclMATLAB,                              /// <summary>SCLEX_MATLAB = 32
+    sclSCRIPTOL,                            /// <summary>SCLEX_SCRIPTOL = 33
+    sclASM,                                 /// <summary>SCLEX_ASM = 34
+    sclCPPNOCASE,                           /// <summary>SCLEX_CPPNOCASE = 35
+    sclFORTRAN,                             /// <summary>SCLEX_FORTRAN = 36
+    sclF77,                                 /// <summary>SCLEX_F77 = 37
+    sclCSS,                                 /// <summary>SCLEX_CSS = 38
+    sclPOV,                                 /// <summary>SCLEX_POV = 39
+    sclLOUT,                                /// <summary>SCLEX_LOUT = 40
+    sclESCRIPT,                             /// <summary>SCLEX_ESCRIPT = 41
+    sclPS,                                  /// <summary>SCLEX_PS = 42
+    sclNSIS,                                /// <summary>SCLEX_NSIS = 43
+    sclMMIXAL,                              /// <summary>SCLEX_MMIXAL = 44
+    sclCLW,                                 /// <summary>SCLEX_CLW = 45
+    sclCLWNOCASE,                           /// <summary>SCLEX_CLWNOCASE = 46
+    sclLOT,                                 /// <summary>SCLEX_LOT = 47
+    sclYAML,                                /// <summary>SCLEX_YAML = 48
+    sclTEX,                                 /// <summary>SCLEX_TEX = 49
+    sclMETAPOST,                            /// <summary>SCLEX_METAPOST = 50
+    sclPOWERBASIC,                          /// <summary>SCLEX_POWERBASIC = 51
+    sclFORTH,                               /// <summary>SCLEX_FORTH = 52
+    sclERLANG,                              /// <summary>SCLEX_ERLANG = 53
+    sclOCTAVE,                              /// <summary>SCLEX_OCTAVE = 54
+    sclMSSQL,                               /// <summary>SCLEX_MSSQL = 55
+    sclVERILOG,                             /// <summary>SCLEX_VERILOG = 56
+    sclKIX,                                 /// <summary>SCLEX_KIX = 57
+    sclGUI4CLI,                             /// <summary>SCLEX_GUI4CLI = 58
+    sclSPECMAN,                             /// <summary>SCLEX_SPECMAN = 59
+    sclAU3,                                 /// <summary>SCLEX_AU3 = 60
+    sclAPDL,                                /// <summary>SCLEX_APDL = 61
+    sclBASH,                                /// <summary>SCLEX_BASH = 62
+    sclASN1,                                /// <summary>SCLEX_ASN1 = 63
+    sclVHDL,                                /// <summary>SCLEX_VHDL = 64
+    sclCAML,                                /// <summary>SCLEX_CAML = 65
+    sclBLITZBASIC,                          /// <summary>SCLEX_BLITZBASIC = 66
+    sclPUREBASIC,                           /// <summary>SCLEX_PUREBASIC = 67
+    sclHASKELL,                             /// <summary>SCLEX_HASKELL = 68
+    sclPHPSCRIPT,                           /// <summary>SCLEX_PHPSCRIPT = 69
+    sclTADS3,                               /// <summary>SCLEX_TADS3 = 70
+    sclREBOL,                               /// <summary>SCLEX_REBOL = 71
+    sclSMALLTALK,                           /// <summary>SCLEX_SMALLTALK = 72
+    sclFLAGSHIP,                            /// <summary>SCLEX_FLAGSHIP = 73
+    sclCSOUND,                              /// <summary>SCLEX_CSOUND = 74
+    sclFREEBASIC,                           /// <summary>SCLEX_FREEBASIC = 75
+    sclINNOSETUP,                           /// <summary>SCLEX_INNOSETUP = 76
+    sclOPAL,                                /// <summary>SCLEX_OPAL = 77
+    sclSPICE,                               /// <summary>SCLEX_SPICE = 78
+    sclD,                                   /// <summary>SCLEX_D = 79
+    sclCMAKE,                               /// <summary>SCLEX_CMAKE = 80
+    sclGAP,                                 /// <summary>SCLEX_GAP = 81
+    sclPLM,                                 /// <summary>SCLEX_PLM = 82
+    sclPROGRESS,                            /// <summary>SCLEX_PROGRESS = 83
+    sclABAQUS,                              /// <summary>SCLEX_ABAQUS = 84
+    sclASYMPTOTE,                           /// <summary>SCLEX_ASYMPTOTE = 85
+    sclR,                                   /// <summary>SCLEX_R = 86
+    sclMAGIK,                               /// <summary>SCLEX_MAGIK = 87
+    sclPOWERSHELL,                          /// <summary>SCLEX_POWERSHELL = 88
+    sclMYSQL,                               /// <summary>SCLEX_MYSQL = 89
+    sclPO,                                  /// <summary>SCLEX_PO = 90
+    sclTAL,                                 /// <summary>SCLEX_TAL = 91
+    sclCOBOL,                               /// <summary>SCLEX_COBOL = 92
+    sclTACL,                                /// <summary>SCLEX_TACL = 93
+    sclSORCUS,                              /// <summary>SCLEX_SORCUS = 94
+    sclPOWERPRO,                            /// <summary>SCLEX_POWERPRO = 95
+    sclNIMROD,                              /// <summary>SCLEX_NIMROD = 96
+    sclSML,                                 /// <summary>SCLEX_SML = 97
+    sclMARKDOWN,                            /// <summary>SCLEX_MARKDOWN = 98
+    sclTXT2TAGS,                            /// <summary>SCLEX_TXT2TAGS = 99
+    sclA68K,                                /// <summary>SCLEX_A68K = 100
+    sclMODULA,                              /// <summary>SCLEX_MODULA = 101
+    sclCOFFEESCRIPT,                        /// <summary>SCLEX_COFFEESCRIPT = 102
+    sclTCMD,                                /// <summary>SCLEX_TCMD = 103
+    sclAVS,                                 /// <summary>SCLEX_AVS = 104
+    sclECL,                                 /// <summary>SCLEX_ECL = 105
+    sclOSCRIPT,                             /// <summary>SCLEX_OSCRIPT = 106
+    sclVISUALPROLOG,                        /// <summary>SCLEX_VISUALPROLOG = 107
+    sclLITERATEHASKELL,                     /// <summary>SCLEX_LITERATEHASKELL = 108
+    sclSTTXT,                               /// <summary>SCLEX_STTXT = 109
+    sclKVIRC,                               /// <summary>SCLEX_KVIRC = 110
+    sclRUST,                                /// <summary>SCLEX_RUST = 111
+    sclDMAP,                                /// <summary>SCLEX_DMAP = 112
+    sclAS,                                  /// <summary>SCLEX_AS = 113
+    sclDMIS,                                /// <summary>SCLEX_DMIS = 114
+    sclREGISTRY,                            /// <summary>SCLEX_REGISTRY = 115
+    sclBIBTEX,                              /// <summary>SCLEX_BIBTEX = 116
+    sclSREC,                                /// <summary>SCLEX_SREC = 117
+    sclIHEX,                                /// <summary>SCLEX_IHEX = 118
+    sclTEHEX,                               /// <summary>SCLEX_TEHEX = 119
+    sclJSON,                                /// <summary>SCLEX_JSON = 120
+    sclEDIFACT,                             /// <summary>SCLEX_EDIFACT = 121
+    sclINDENT,                              /// <summary>SCLEX_INDENT = 122
+    sclMAXIMA,                              /// <summary>SCLEX_MAXIMA = 123
+    sclSTATA,                               /// <summary>SCLEX_STATA = 124
+    sclSAS,                                 /// <summary>SCLEX_SAS = 125
+    sclNIM,                                 /// <summary>SCLEX_NIM = 126
+    sclCIL,                                 /// <summary>SCLEX_CIL = 127
+    sclX12,                                 /// <summary>SCLEX_X12 = 128
+    sclDATAFLEX,                            /// <summary>SCLEX_DATAFLEX = 129
+    sclHOLLYWOOD,                           /// <summary>SCLEX_HOLLYWOOD = 130
+    sclRAKU,                                /// <summary>SCLEX_RAKU = 131
+    sclFSHARP,                              /// <summary>SCLEX_FSHARP = 132
+    sclJULIA,                               /// <summary>SCLEX_JULIA = 133
+    sclASCIIDOC,                            /// <summary>SCLEX_ASCIIDOC = 134
+    sclGDSCRIPT,                            /// <summary>SCLEX_GDSCRIPT = 135
+    sclTOML,                                /// <summary>SCLEX_TOML = 136
+    sclTROFF,                               /// <summary>SCLEX_TROFF = 137
+    sclDART,                                /// <summary>SCLEX_DART = 138
+    sclZIG,                                 /// <summary>SCLEX_ZIG = 139
+    sclNIX,                                 /// <summary>SCLEX_NIX = 140
+    sclSINEX,                               /// <summary>SCLEX_SINEX = 141
+    sclESCSEQ,                              /// <summary>SCLEX_ESCSEQ = 142
+    sclAUTOMATIC                            /// <summary>SCLEX_AUTOMATIC = 1000
+  );
+
+
+// </scigen-types>
 
 const
 
 { Scintilla event codes }
 
-  SCN_STYLENEEDED         = 2000;
-  SCN_CHARADDED           = 2001;
-  SCN_SAVEPOINTREACHED    = 2002;
-  SCN_SAVEPOINTLEFT       = 2003;
-  SCN_MODIFYATTEMPTRO     = 2004;
+  SCN_STYLENEEDED           = 2000;
+  SCN_CHARADDED             = 2001;
+  SCN_SAVEPOINTREACHED      = 2002;
+  SCN_SAVEPOINTLEFT         = 2003;
+  SCN_MODIFYATTEMPTRO       = 2004;
   //# GTK+ Specific to work around focus and accelerator problems:
   //evt void Key           =2005(int ch, int modifiers)
   //evt void DoubleClick   =2006(void)
-  SCN_UPDATEUI            = 2007;
-  SCN_MODIFIED            = 2008;
-  SCN_MACRORECORD         = 2009;
-  SCN_MARGINCLICK         = 2010;
-  SCN_NEEDSHOWN           = 2011;
-  SCN_PAINTED             = 2013;
-  SCN_USERLISTSELECTION   = 2014;
+  SCN_UPDATEUI              = 2007;
+  SCN_MODIFIED              = 2008;
+  SCN_MACRORECORD           = 2009;
+  SCN_MARGINCLICK           = 2010;
+  SCN_NEEDSHOWN             = 2011;
+  SCN_PAINTED               = 2013;
+  SCN_USERLISTSELECTION     = 2014;
   // Only on the GTK+ version
   // SCN_URIDROPPED         = 2015;
-  SCN_DWELLSTART          = 2016;
-  SCN_DWELLEND            = 2017;
-  SCN_ZOOM                = 2018;
-  SCN_HOTSPOTCLICK        = 2019;
-  SCN_HOTSPOTDOUBLECLICK  = 2020;
-  SCN_CALLTIPCLICK        = 2021;
-  SCN_AUTOCSELECTION      = 2022;
-  SCN_INDICATORCLICK      = 2023;
-  SCN_INDICATORRELEASE    = 2024;
-  SCN_AUTOCCANCELLED      = 2025;
-  SCN_AUTOCCHARDELETED    = 2026;
-  SCN_HOTSPOTRELEASECLICK = 2027;
+  SCN_DWELLSTART            = 2016;
+  SCN_DWELLEND              = 2017;
+  SCN_ZOOM                  = 2018;
+  SCN_HOTSPOTCLICK          = 2019;
+  SCN_HOTSPOTDOUBLECLICK    = 2020;
+  SCN_CALLTIPCLICK          = 2021;
+  SCN_AUTOCSELECTION        = 2022;
+  SCN_INDICATORCLICK        = 2023;
+  SCN_INDICATORRELEASE      = 2024;
+  SCN_AUTOCCANCELLED        = 2025;
+  SCN_AUTOCCHARDELETED      = 2026;
+  SCN_HOTSPOTRELEASECLICK   = 2027;
+  SCN_FOCUSIN               = 2028;
+  SCN_FOCUSOUT              = 2029;
+  SCN_AUTOCCOMPLETED        = 2030;
+  SCN_MARGINRIGHTCLICK      = 2031;
+  SCN_AUTOCSELECTIONCHANGE  = 2032;
 
 const
 
@@ -237,9 +1098,6 @@ const
 
 // <scigen>
 
-
-  /// <summary>The INVALID_POSITION constant (-1)
-  /// represents an invalid position within the document.</summary>
   INVALID_POSITION = -1;
 
   /// <summary>Define start of Scintilla messages to be greater than all Windows edit (EM_*) messages
@@ -284,6 +1142,9 @@ const
   /// <summary>Returns the style byte at the position.</summary>
   SCI_GETSTYLEAT = 2010;
 
+  /// <summary>Returns the unsigned style byte at the position.</summary>
+  SCI_GETSTYLEINDEXAT = 2038;
+
   /// <summary>Redoes the next action on the undo history.</summary>
   SCI_REDO = 2011;
 
@@ -302,6 +1163,10 @@ const
   /// Returns the number of bytes in the buffer not including terminating NULs.</summary>
   SCI_GETSTYLEDTEXT = 2015;
 
+  /// <summary>Retrieve a buffer of cells that can be past 2GB.
+  /// Returns the number of bytes in the buffer not including terminating NULs.</summary>
+  SCI_GETSTYLEDTEXTFULL = 2778;
+
   /// <summary>Are there any redoable actions in the undo history?</summary>
   SCI_CANREDO = 2016;
 
@@ -311,12 +1176,19 @@ const
   /// <summary>Delete a marker.</summary>
   SCI_MARKERDELETEHANDLE = 2018;
 
+  /// <summary>Retrieve marker handles of a line</summary>
+  SCI_MARKERHANDLEFROMLINE = 2732;
+
+  /// <summary>Retrieve marker number of a marker handle</summary>
+  SCI_MARKERNUMBERFROMLINE = 2733;
+
   /// <summary>Is undo history being collected?</summary>
   SCI_GETUNDOCOLLECTION = 2019;
 
   SCWS_INVISIBLE = 0;
   SCWS_VISIBLEALWAYS = 1;
   SCWS_VISIBLEAFTERINDENT = 2;
+  SCWS_VISIBLEONLYININDENT = 3;
 
   /// <summary>Are white space characters currently visible?
   /// Returns one of SCWS_* constants.</summary>
@@ -324,6 +1196,17 @@ const
 
   /// <summary>Make white space characters invisible, always visible or visible outside indentation.</summary>
   SCI_SETVIEWWS = 2021;
+
+  SCTD_LONGARROW = 0;
+  SCTD_STRIKEOUT = 1;
+  SCTD_CONTROLCHAR = 2;
+
+  /// <summary>Retrieve the current tab draw mode.
+  /// Returns one of SCTD_* constants.</summary>
+  SCI_GETTABDRAWMODE = 2698;
+
+  /// <summary>Set how tabs are drawn when visible.</summary>
+  SCI_SETTABDRAWMODE = 2699;
 
   /// <summary>Find the position from a point within the window.</summary>
   SCI_POSITIONFROMPOINT = 2022;
@@ -343,7 +1226,8 @@ const
   SCI_SETANCHOR = 2026;
 
   /// <summary>Retrieve the text of the line containing the caret.
-  /// Returns the index of the caret on the line.</summary>
+  /// Returns the index of the caret on the line.
+  /// Result is NUL-terminated.</summary>
   SCI_GETCURLINE = 2027;
 
   /// <summary>Retrieve the position of the last correctly styled character.</summary>
@@ -362,8 +1246,8 @@ const
   /// <summary>Set the current end of line mode.</summary>
   SCI_SETEOLMODE = 2031;
 
-  /// <summary>Set the current styling position to pos and the styling mask to mask.
-  /// The styling mask can be used to protect some bits in each styling byte from modification.</summary>
+  /// <summary>Set the current styling position to start.
+  /// The unused parameter is no longer used and should be set to 0.</summary>
   SCI_STARTSTYLING = 2032;
 
   /// <summary>Change style from current styling position for length characters to a style
@@ -383,6 +1267,21 @@ const
   /// <summary>Retrieve the visible size of a tab.</summary>
   SCI_GETTABWIDTH = 2121;
 
+  /// <summary>Set the minimum visual width of a tab.</summary>
+  SCI_SETTABMINIMUMWIDTH = 2724;
+
+  /// <summary>Get the minimum visual width of a tab.</summary>
+  SCI_GETTABMINIMUMWIDTH = 2725;
+
+  /// <summary>Clear explicit tabstops on a line.</summary>
+  SCI_CLEARTABSTOPS = 2675;
+
+  /// <summary>Add an explicit tab stop for a line.</summary>
+  SCI_ADDTABSTOP = 2676;
+
+  /// <summary>Find the next explicit tab stop position on a line after a position.</summary>
+  SCI_GETNEXTTABSTOP = 2677;
+
   /// <summary>The SC_CP_UTF8 value can be used to enter Unicode mode.
   /// This is the same value as CP_UTF8 in Windows</summary>
   SC_CP_UTF8 = 65001;
@@ -390,6 +1289,30 @@ const
   /// <summary>Set the code page used to interpret the bytes of the document as characters.
   /// The SC_CP_UTF8 value can be used to enter Unicode mode.</summary>
   SCI_SETCODEPAGE = 2037;
+
+  /// <summary>Set the locale for displaying text.</summary>
+  SCI_SETFONTLOCALE = 2760;
+
+  /// <summary>Get the locale for displaying text.</summary>
+  SCI_GETFONTLOCALE = 2761;
+
+  SC_IME_WINDOWED = 0;
+  SC_IME_INLINE = 1;
+
+  /// <summary>Is the IME displayed in a window or inline?</summary>
+  SCI_GETIMEINTERACTION = 2678;
+
+  /// <summary>Choose to display the IME in a window or inline.</summary>
+  SCI_SETIMEINTERACTION = 2679;
+
+  SC_ALPHA_TRANSPARENT = 0;
+  SC_ALPHA_OPAQUE = 255;
+  SC_ALPHA_NOALPHA = 256;
+
+  SC_CURSORNORMAL = -1;
+  SC_CURSORARROW = 2;
+  SC_CURSORWAIT = 4;
+  SC_CURSORREVERSEARROW = 7;
 
   MARKER_MAX = 31;
   SC_MARK_CIRCLE = 0;
@@ -428,10 +1351,16 @@ const
   SC_MARK_UNDERLINE = 29;
   SC_MARK_RGBAIMAGE = 30;
   SC_MARK_BOOKMARK = 31;
+  SC_MARK_VERTICALBOOKMARK = 32;
+  SC_MARK_BAR = 33;
 
   SC_MARK_CHARACTER = 10000;
 
-  /// <summary>Markers used for outlining column.</summary>
+  /// <summary>Markers used for outlining and change history columns.</summary>
+  SC_MARKNUM_HISTORY_REVERTED_TO_ORIGIN = 21;
+  SC_MARKNUM_HISTORY_SAVED = 22;
+  SC_MARKNUM_HISTORY_MODIFIED = 23;
+  SC_MARKNUM_HISTORY_REVERTED_TO_MODIFIED = 24;
   SC_MARKNUM_FOLDEREND = 25;
   SC_MARKNUM_FOLDEROPENMID = 26;
   SC_MARKNUM_FOLDERMIDTAIL = 27;
@@ -440,6 +1369,9 @@ const
   SC_MARKNUM_FOLDER = 30;
   SC_MARKNUM_FOLDEROPEN = 31;
 
+  SC_MASK_HISTORY = $01E00000;
+
+  /// <summary>SC_MASK_FOLDERS doesn't go in an enumeration as larger than max 32-bit positive integer</summary>
   SC_MASK_FOLDERS = $FE000000;
 
   /// <summary>Set the symbol used for a particular marker number.</summary>
@@ -454,7 +1386,19 @@ const
   /// <summary>Set the background colour used for a particular marker number when its folding block is selected.</summary>
   SCI_MARKERSETBACKSELECTED = 2292;
 
-  /// <summary>Enable/disable highlight for current folding bloc (smallest one that contains the caret)</summary>
+  /// <summary>Set the foreground colour used for a particular marker number.</summary>
+  SCI_MARKERSETFORETRANSLUCENT = 2294;
+
+  /// <summary>Set the background colour used for a particular marker number.</summary>
+  SCI_MARKERSETBACKTRANSLUCENT = 2295;
+
+  /// <summary>Set the background colour used for a particular marker number when its folding block is selected.</summary>
+  SCI_MARKERSETBACKSELECTEDTRANSLUCENT = 2296;
+
+  /// <summary>Set the width of strokes used in .01 pixels so 50  = 1/2 pixel width.</summary>
+  SCI_MARKERSETSTROKEWIDTH = 2297;
+
+  /// <summary>Enable/disable highlight for current folding block (smallest one that contains the caret)</summary>
   SCI_MARKERENABLEHIGHLIGHT = 2293;
 
   /// <summary>Add a marker to a line, returning an ID which can be used to find or delete the marker.</summary>
@@ -485,6 +1429,12 @@ const
   /// <summary>Set the alpha used for a marker that is drawn in the text area, not the margin.</summary>
   SCI_MARKERSETALPHA = 2476;
 
+  /// <summary>Get the layer used for a marker that is drawn in the text area, not the margin.</summary>
+  SCI_MARKERGETLAYER = 2734;
+
+  /// <summary>Set the layer used for a marker that is drawn in the text area, not the margin.</summary>
+  SCI_MARKERSETLAYER = 2735;
+
   SC_MAX_MARGIN = 4;
 
   SC_MARGIN_SYMBOL = 0;
@@ -493,6 +1443,7 @@ const
   SC_MARGIN_FORE = 3;
   SC_MARGIN_TEXT = 4;
   SC_MARGIN_RTEXT = 5;
+  SC_MARGIN_COLOUR = 6;
 
   /// <summary>Set a margin to be either numeric or symbolic.</summary>
   SCI_SETMARGINTYPEN = 2240;
@@ -524,8 +1475,19 @@ const
   /// <summary>Retrieve the cursor shown in a margin.</summary>
   SCI_GETMARGINCURSORN = 2249;
 
-  /// <summary>Styles in range 32..38 are predefined for parts of the UI and are not used as normal styles.
-  /// Style 39 is for future use.</summary>
+  /// <summary>Set the background colour of a margin. Only visible for SC_MARGIN_COLOUR.</summary>
+  SCI_SETMARGINBACKN = 2250;
+
+  /// <summary>Retrieve the background colour of a margin</summary>
+  SCI_GETMARGINBACKN = 2251;
+
+  /// <summary>Allocate a non-standard number of margins.</summary>
+  SCI_SETMARGINS = 2252;
+
+  /// <summary>How many margins are there?.</summary>
+  SCI_GETMARGINS = 2253;
+
+  /// <summary>Styles in range 32..39 are predefined for parts of the UI and are not used as normal styles.</summary>
   STYLE_DEFAULT = 32;
   STYLE_LINENUMBER = 33;
   STYLE_BRACELIGHT = 34;
@@ -533,6 +1495,7 @@ const
   STYLE_CONTROLCHAR = 36;
   STYLE_INDENTGUIDE = 37;
   STYLE_CALLTIP = 38;
+  STYLE_FOLDDISPLAYTEXT = 39;
   STYLE_LASTPREDEFINED = 39;
   STYLE_MAX = 255;
 
@@ -549,6 +1512,7 @@ const
   SC_CHARSET_MAC = 77;
   SC_CHARSET_OEM = 255;
   SC_CHARSET_RUSSIAN = 204;
+  SC_CHARSET_OEM866 = 866;
   SC_CHARSET_CYRILLIC = 1251;
   SC_CHARSET_SHIFTJIS = 128;
   SC_CHARSET_SYMBOL = 2;
@@ -593,6 +1557,7 @@ const
   SC_CASE_MIXED = 0;
   SC_CASE_UPPER = 1;
   SC_CASE_LOWER = 2;
+  SC_CASE_CAMEL = 3;
 
   /// <summary>Get the foreground colour of a style.</summary>
   SCI_STYLEGETFORE = 2481;
@@ -610,7 +1575,8 @@ const
   SCI_STYLEGETSIZE = 2485;
 
   /// <summary>Get the font of a style.
-  /// Returns the length of the fontName</summary>
+  /// Returns the length of the fontName
+  /// Result is NUL-terminated.</summary>
   SCI_STYLEGETFONT = 2486;
 
   /// <summary>Get is a style to have its end of line filled or not.</summary>
@@ -662,6 +1628,78 @@ const
   /// <summary>Set a style to be a hotspot or not.</summary>
   SCI_STYLESETHOTSPOT = 2409;
 
+  /// <summary>Indicate that a style may be monospaced over ASCII graphics characters which enables optimizations.</summary>
+  SCI_STYLESETCHECKMONOSPACED = 2254;
+
+  /// <summary>Get whether a style may be monospaced.</summary>
+  SCI_STYLEGETCHECKMONOSPACED = 2255;
+
+  SC_STRETCH_ULTRA_CONDENSED = 1;
+  SC_STRETCH_EXTRA_CONDENSED = 2;
+  SC_STRETCH_CONDENSED = 3;
+  SC_STRETCH_SEMI_CONDENSED = 4;
+  SC_STRETCH_NORMAL = 5;
+  SC_STRETCH_SEMI_EXPANDED = 6;
+  SC_STRETCH_EXPANDED = 7;
+  SC_STRETCH_EXTRA_EXPANDED = 8;
+  SC_STRETCH_ULTRA_EXPANDED = 9;
+
+  /// <summary>Set the stretch of characters of a style.</summary>
+  SCI_STYLESETSTRETCH = 2258;
+
+  /// <summary>Get the stretch of characters of a style.</summary>
+  SCI_STYLEGETSTRETCH = 2259;
+
+  /// <summary>Set the invisible representation for a style.</summary>
+  SCI_STYLESETINVISIBLEREPRESENTATION = 2256;
+
+  /// <summary>Get the invisible representation for a style.</summary>
+  SCI_STYLEGETINVISIBLEREPRESENTATION = 2257;
+
+  SC_ELEMENT_LIST = 0;
+  SC_ELEMENT_LIST_BACK = 1;
+  SC_ELEMENT_LIST_SELECTED = 2;
+  SC_ELEMENT_LIST_SELECTED_BACK = 3;
+  SC_ELEMENT_SELECTION_TEXT = 10;
+  SC_ELEMENT_SELECTION_BACK = 11;
+  SC_ELEMENT_SELECTION_ADDITIONAL_TEXT = 12;
+  SC_ELEMENT_SELECTION_ADDITIONAL_BACK = 13;
+  SC_ELEMENT_SELECTION_SECONDARY_TEXT = 14;
+  SC_ELEMENT_SELECTION_SECONDARY_BACK = 15;
+  SC_ELEMENT_SELECTION_INACTIVE_TEXT = 16;
+  SC_ELEMENT_SELECTION_INACTIVE_BACK = 17;
+  SC_ELEMENT_SELECTION_INACTIVE_ADDITIONAL_TEXT = 18;
+  SC_ELEMENT_SELECTION_INACTIVE_ADDITIONAL_BACK = 19;
+  SC_ELEMENT_CARET = 40;
+  SC_ELEMENT_CARET_ADDITIONAL = 41;
+  SC_ELEMENT_CARET_LINE_BACK = 50;
+  SC_ELEMENT_WHITE_SPACE = 60;
+  SC_ELEMENT_WHITE_SPACE_BACK = 61;
+  SC_ELEMENT_HOT_SPOT_ACTIVE = 70;
+  SC_ELEMENT_HOT_SPOT_ACTIVE_BACK = 71;
+  SC_ELEMENT_FOLD_LINE = 80;
+  SC_ELEMENT_HIDDEN_LINE = 81;
+
+  /// <summary>Set the colour of an element. Translucency (alpha) may or may not be significant
+  /// and this may depend on the platform. The alpha byte should commonly be 0xff for opaque.</summary>
+  SCI_SETELEMENTCOLOUR = 2753;
+
+  /// <summary>Get the colour of an element.</summary>
+  SCI_GETELEMENTCOLOUR = 2754;
+
+  /// <summary>Use the default or platform-defined colour for an element.</summary>
+  SCI_RESETELEMENTCOLOUR = 2755;
+
+  /// <summary>Get whether an element has been set by SetElementColour.
+  /// When false, a platform-defined or default colour is used.</summary>
+  SCI_GETELEMENTISSET = 2756;
+
+  /// <summary>Get whether an element supports translucency.</summary>
+  SCI_GETELEMENTALLOWSTRANSLUCENT = 2757;
+
+  /// <summary>Get the colour of an element.</summary>
+  SCI_GETELEMENTBASECOLOUR = 2758;
+
   /// <summary>Set the foreground colour of the main and additional selections and whether to use this setting.</summary>
   SCI_SETSELFORE = 2067;
 
@@ -680,13 +1718,35 @@ const
   /// <summary>Set the selection to have its end of line filled or not.</summary>
   SCI_SETSELEOLFILLED = 2480;
 
+  SC_LAYER_BASE = 0;
+  SC_LAYER_UNDER_TEXT = 1;
+  SC_LAYER_OVER_TEXT = 2;
+
+  /// <summary>Get the layer for drawing selections</summary>
+  SCI_GETSELECTIONLAYER = 2762;
+
+  /// <summary>Set the layer for drawing selections: either opaquely on base layer or translucently over text</summary>
+  SCI_SETSELECTIONLAYER = 2763;
+
+  /// <summary>Get the layer of the background of the line containing the caret.</summary>
+  SCI_GETCARETLINELAYER = 2764;
+
+  /// <summary>Set the layer of the background of the line containing the caret.</summary>
+  SCI_SETCARETLINELAYER = 2765;
+
+  /// <summary>Get only highlighting subline instead of whole line.</summary>
+  SCI_GETCARETLINEHIGHLIGHTSUBLINE = 2773;
+
+  /// <summary>Set only highlighting subline instead of whole line.</summary>
+  SCI_SETCARETLINEHIGHLIGHTSUBLINE = 2774;
+
   /// <summary>Set the foreground colour of the caret.</summary>
   SCI_SETCARETFORE = 2069;
 
-  /// <summary>When key+modifier combination km is pressed perform msg.</summary>
+  /// <summary>When key+modifier combination keyDefinition is pressed perform sciCommand.</summary>
   SCI_ASSIGNCMDKEY = 2070;
 
-  /// <summary>When key+modifier combination km is pressed do nothing.</summary>
+  /// <summary>When key+modifier combination keyDefinition is pressed do nothing.</summary>
   SCI_CLEARCMDKEY = 2071;
 
   /// <summary>Drop all key mappings.</summary>
@@ -709,8 +1769,14 @@ const
   SCI_SETWORDCHARS = 2077;
 
   /// <summary>Get the set of characters making up words for when moving or selecting by word.
-  /// Retuns the number of characters</summary>
+  /// Returns the number of characters</summary>
   SCI_GETWORDCHARS = 2646;
+
+  /// <summary>Set the number of characters to have directly indexed categories</summary>
+  SCI_SETCHARACTERCATEGORYOPTIMIZATION = 2720;
+
+  /// <summary>Get the number of characters to have directly indexed categories</summary>
+  SCI_GETCHARACTERCATEGORYOPTIMIZATION = 2721;
 
   /// <summary>Start a sequence of actions that is undone and redone as a unit.
   /// May be nested.</summary>
@@ -718,6 +1784,51 @@ const
 
   /// <summary>End a sequence of actions that is undone and redone as a unit.</summary>
   SCI_ENDUNDOACTION = 2079;
+
+  /// <summary>Is an undo sequence active?</summary>
+  SCI_GETUNDOSEQUENCE = 2799;
+
+  /// <summary>How many undo actions are in the history?</summary>
+  SCI_GETUNDOACTIONS = 2790;
+
+  /// <summary>Set action as the save point</summary>
+  SCI_SETUNDOSAVEPOINT = 2791;
+
+  /// <summary>Which action is the save point?</summary>
+  SCI_GETUNDOSAVEPOINT = 2792;
+
+  /// <summary>Set action as the detach point</summary>
+  SCI_SETUNDODETACH = 2793;
+
+  /// <summary>Which action is the detach point?</summary>
+  SCI_GETUNDODETACH = 2794;
+
+  /// <summary>Set action as the tentative point</summary>
+  SCI_SETUNDOTENTATIVE = 2795;
+
+  /// <summary>Which action is the tentative point?</summary>
+  SCI_GETUNDOTENTATIVE = 2796;
+
+  /// <summary>Set action as the current point</summary>
+  SCI_SETUNDOCURRENT = 2797;
+
+  /// <summary>Which action is the current point?</summary>
+  SCI_GETUNDOCURRENT = 2798;
+
+  /// <summary>Push one action onto undo history with no text</summary>
+  SCI_PUSHUNDOACTIONTYPE = 2800;
+
+  /// <summary>Set the text and length of the most recently pushed action</summary>
+  SCI_CHANGELASTUNDOACTIONTEXT = 2801;
+
+  /// <summary>What is the type of an action?</summary>
+  SCI_GETUNDOACTIONTYPE = 2802;
+
+  /// <summary>What is the position of an action?</summary>
+  SCI_GETUNDOACTIONPOSITION = 2803;
+
+  /// <summary>What is the text of an action?</summary>
+  SCI_GETUNDOACTIONTEXT = 2804;
 
   /// <summary>Indicator style enumeration and some constants</summary>
   INDIC_PLAIN = 0;
@@ -735,12 +1846,35 @@ const
   INDIC_DOTBOX = 12;
   INDIC_SQUIGGLEPIXMAP = 13;
   INDIC_COMPOSITIONTHICK = 14;
-  INDIC_MAX = 31;
+  INDIC_COMPOSITIONTHIN = 15;
+  INDIC_FULLBOX = 16;
+  INDIC_TEXTFORE = 17;
+  INDIC_POINT = 18;
+  INDIC_POINTCHARACTER = 19;
+  INDIC_GRADIENT = 20;
+  INDIC_GRADIENTCENTRE = 21;
+  INDIC_POINT_TOP = 22;
+
+  /// <summary>INDIC_CONTAINER, INDIC_IME, INDIC_IME_MAX, and INDIC_MAX are indicator numbers,
+  /// not IndicatorStyles so should not really be in the INDIC_ enumeration.
+  /// They are redeclared in IndicatorNumbers INDICATOR_.</summary>
   INDIC_CONTAINER = 8;
-  INDIC0_MASK = $20;
-  INDIC1_MASK = $40;
-  INDIC2_MASK = $80;
-  INDICS_MASK = $E0;
+  INDIC_IME = 32;
+  INDIC_IME_MAX = 35;
+  INDIC_MAX = 35;
+
+  INDICATOR_CONTAINER = 8;
+  INDICATOR_IME = 32;
+  INDICATOR_IME_MAX = 35;
+  INDICATOR_HISTORY_REVERTED_TO_ORIGIN_INSERTION = 36;
+  INDICATOR_HISTORY_REVERTED_TO_ORIGIN_DELETION = 37;
+  INDICATOR_HISTORY_SAVED_INSERTION = 38;
+  INDICATOR_HISTORY_SAVED_DELETION = 39;
+  INDICATOR_HISTORY_MODIFIED_INSERTION = 40;
+  INDICATOR_HISTORY_MODIFIED_DELETION = 41;
+  INDICATOR_HISTORY_REVERTED_TO_MODIFIED_INSERTION = 42;
+  INDICATOR_HISTORY_REVERTED_TO_MODIFIED_DELETION = 43;
+  INDICATOR_MAX = 43;
 
   /// <summary>Set an indicator to plain, squiggle or TT.</summary>
   SCI_INDICSETSTYLE = 2080;
@@ -760,6 +1894,36 @@ const
   /// <summary>Retrieve whether indicator drawn under or over text.</summary>
   SCI_INDICGETUNDER = 2511;
 
+  /// <summary>Set a hover indicator to plain, squiggle or TT.</summary>
+  SCI_INDICSETHOVERSTYLE = 2680;
+
+  /// <summary>Retrieve the hover style of an indicator.</summary>
+  SCI_INDICGETHOVERSTYLE = 2681;
+
+  /// <summary>Set the foreground hover colour of an indicator.</summary>
+  SCI_INDICSETHOVERFORE = 2682;
+
+  /// <summary>Retrieve the foreground hover colour of an indicator.</summary>
+  SCI_INDICGETHOVERFORE = 2683;
+
+  SC_INDICVALUEBIT = $1000000;
+  SC_INDICVALUEMASK = $FFFFFF;
+
+  SC_INDICFLAG_NONE = 0;
+  SC_INDICFLAG_VALUEFORE = 1;
+
+  /// <summary>Set the attributes of an indicator.</summary>
+  SCI_INDICSETFLAGS = 2684;
+
+  /// <summary>Retrieve the attributes of an indicator.</summary>
+  SCI_INDICGETFLAGS = 2685;
+
+  /// <summary>Set the stroke width of an indicator in hundredths of a pixel.</summary>
+  SCI_INDICSETSTROKEWIDTH = 2751;
+
+  /// <summary>Retrieve the stroke width of an indicator.</summary>
+  SCI_INDICGETSTROKEWIDTH = 2752;
+
   /// <summary>Set the foreground colour of all whitespace and whether to use this setting.</summary>
   SCI_SETWHITESPACEFORE = 2084;
 
@@ -771,14 +1935,6 @@ const
 
   /// <summary>Get the size of the dots used to mark space characters.</summary>
   SCI_GETWHITESPACESIZE = 2087;
-
-  /// <summary>Divide each styling byte into lexical class bits (default: 5) and indicator
-  /// bits (default: 3). If a lexer requires more than 32 lexical states, then this
-  /// is used to expand the possible states.</summary>
-  SCI_SETSTYLEBITS = 2090;
-
-  /// <summary>Retrieve number of bits in style bytes used to hold the lexical state.</summary>
-  SCI_GETSTYLEBITS = 2091;
 
   /// <summary>Used to hold extra styling information for each line.</summary>
   SCI_SETLINESTATE = 2092;
@@ -801,12 +1957,20 @@ const
   /// <summary>Set the colour of the background of the line containing the caret.</summary>
   SCI_SETCARETLINEBACK = 2098;
 
+  /// <summary>Retrieve the caret line frame width.
+  /// Width = 0 means this option is disabled.</summary>
+  SCI_GETCARETLINEFRAME = 2704;
+
+  /// <summary>Display the caret line framed.
+  /// Set width != 0 to enable this option and width = 0 to disable it.</summary>
+  SCI_SETCARETLINEFRAME = 2705;
+
   /// <summary>Set a style to be changeable or not (read only).
   /// Experimental feature, currently buggy.</summary>
   SCI_STYLESETCHANGEABLE = 2099;
 
   /// <summary>Display a auto-completion list.
-  /// The lenEntered parameter indicates how many characters before
+  /// The lengthEntered parameter indicates how many characters before
   /// the caret should be used to provide context.</summary>
   SCI_AUTOCSHOW = 2100;
 
@@ -867,6 +2031,21 @@ const
   /// <summary>Retrieve whether or not autocompletion is hidden automatically when nothing matches.</summary>
   SCI_AUTOCGETAUTOHIDE = 2119;
 
+  /// <summary>Define option flags for autocompletion lists</summary>
+  SC_AUTOCOMPLETE_NORMAL = 0;
+
+  /// <summary>Win32 specific:</summary>
+  SC_AUTOCOMPLETE_FIXED_SIZE = 1;
+
+  /// <summary>Always select the first item in the autocompletion list:</summary>
+  SC_AUTOCOMPLETE_SELECT_FIRST_ITEM = 2;
+
+  /// <summary>Set autocompletion options.</summary>
+  SCI_AUTOCSETOPTIONS = 2638;
+
+  /// <summary>Retrieve autocompletion options.</summary>
+  SCI_AUTOCGETOPTIONS = 2639;
+
   /// <summary>Set whether or not autocompletion deletes any word characters
   /// after the inserted text upon completion.</summary>
   SCI_AUTOCSETDROPRESTOFWORD = 2270;
@@ -902,6 +2081,18 @@ const
   /// <summary>Set the maximum height, in rows, of auto-completion and user lists.</summary>
   SCI_AUTOCGETMAXHEIGHT = 2211;
 
+  /// <summary>Set the style number used for auto-completion and user lists fonts.</summary>
+  SCI_AUTOCSETSTYLE = 2109;
+
+  /// <summary>Get the style number used for auto-completion and user lists fonts.</summary>
+  SCI_AUTOCGETSTYLE = 2120;
+
+  /// <summary>Set the scale factor in percent for auto-completion list images.</summary>
+  SCI_AUTOCSETIMAGESCALE = 2815;
+
+  /// <summary>Get the scale factor in percent for auto-completion list images.</summary>
+  SCI_AUTOCGETIMAGESCALE = 2816;
+
   /// <summary>Set the number of spaces used for one level of indentation.</summary>
   SCI_SETINDENT = 2122;
 
@@ -929,6 +2120,9 @@ const
 
   /// <summary>Count characters between two positions.</summary>
   SCI_COUNTCHARACTERS = 2633;
+
+  /// <summary>Count code units between two positions.</summary>
+  SCI_COUNTCODEUNITS = 2715;
 
   /// <summary>Show or hide the horizontal scroll bar.</summary>
   SCI_SETHSCROLLBAR = 2130;
@@ -975,7 +2169,7 @@ const
   /// <summary>Returns the position at the start of the selection.</summary>
   SCI_GETSELECTIONSTART = 2143;
 
-  /// <summary>Sets the position that ends the selection - this becomes the currentPosition.</summary>
+  /// <summary>Sets the position that ends the selection - this becomes the caret.</summary>
   SCI_SETSELECTIONEND = 2144;
 
   /// <summary>Returns the position at the end of the selection.</summary>
@@ -990,7 +2184,8 @@ const
   /// <summary>Returns the print magnification.</summary>
   SCI_GETPRINTMAGNIFICATION = 2147;
 
-  /// <summary>PrintColourMode - use same colours as screen.</summary>
+  /// <summary>PrintColourMode - use same colours as screen.
+  /// with the exception of line number margins, which use a white background</summary>
   SC_PRINT_NORMAL = 0;
 
   /// <summary>PrintColourMode - invert the light value of each style for printing.</summary>
@@ -1005,23 +2200,61 @@ const
   /// <summary>PrintColourMode - only the default-background is forced to be white for printing.</summary>
   SC_PRINT_COLOURONWHITEDEFAULTBG = 4;
 
+  /// <summary>PrintColourMode - use same colours as screen, including line number margins.</summary>
+  SC_PRINT_SCREENCOLOURS = 5;
+
   /// <summary>Modify colours when printing for clearer printed text.</summary>
   SCI_SETPRINTCOLOURMODE = 2148;
 
   /// <summary>Returns the print colour mode.</summary>
   SCI_GETPRINTCOLOURMODE = 2149;
 
+  SCFIND_NONE = $0;
   SCFIND_WHOLEWORD = $2;
   SCFIND_MATCHCASE = $4;
   SCFIND_WORDSTART = $00100000;
   SCFIND_REGEXP = $00200000;
   SCFIND_POSIX = $00400000;
+  SCFIND_CXX11REGEX = $00800000;
 
   /// <summary>Find some text in the document.</summary>
   SCI_FINDTEXT = 2150;
 
-  /// <summary>On Windows, will draw the document into a display context such as a printer.</summary>
+  /// <summary>Find some text in the document.</summary>
+  SCI_FINDTEXTFULL = 2196;
+
+  /// <summary>Draw the document into a display context such as a printer.</summary>
   SCI_FORMATRANGE = 2151;
+
+  /// <summary>Draw the document into a display context such as a printer.</summary>
+  SCI_FORMATRANGEFULL = 2777;
+
+  SC_CHANGE_HISTORY_DISABLED = 0;
+  SC_CHANGE_HISTORY_ENABLED = 1;
+  SC_CHANGE_HISTORY_MARKERS = 2;
+  SC_CHANGE_HISTORY_INDICATORS = 4;
+
+  /// <summary>Enable or disable change history.</summary>
+  SCI_SETCHANGEHISTORY = 2780;
+
+  /// <summary>Report change history status.</summary>
+  SCI_GETCHANGEHISTORY = 2781;
+
+  SC_UNDO_SELECTION_HISTORY_DISABLED = 0;
+  SC_UNDO_SELECTION_HISTORY_ENABLED = 1;
+  SC_UNDO_SELECTION_HISTORY_SCROLL = 2;
+
+  /// <summary>Enable or disable undo selection history.</summary>
+  SCI_SETUNDOSELECTIONHISTORY = 2782;
+
+  /// <summary>Report undo selection history status.</summary>
+  SCI_GETUNDOSELECTIONHISTORY = 2783;
+
+  /// <summary>Set selection from serialized form.</summary>
+  SCI_SETSELECTIONSERIALIZED = 2784;
+
+  /// <summary>Retrieve serialized form of selection.</summary>
+  SCI_GETSELECTIONSERIALIZED = 2785;
 
   /// <summary>Retrieve the display line at the top of the display.</summary>
   SCI_GETFIRSTVISIBLELINE = 2152;
@@ -1032,6 +2265,9 @@ const
 
   /// <summary>Returns the number of lines in the document. There is always at least one.</summary>
   SCI_GETLINECOUNT = 2154;
+
+  /// <summary>Enlarge the number of lines allocated.</summary>
+  SCI_ALLOCATELINES = 2089;
 
   /// <summary>Sets the size in pixels of the left margin.</summary>
   SCI_SETMARGINLEFT = 2155;
@@ -1052,15 +2288,23 @@ const
   SCI_SETSEL = 2160;
 
   /// <summary>Retrieve the selected text.
-  /// Return the length of the text.</summary>
+  /// Return the length of the text.
+  /// Result is NUL-terminated.</summary>
   SCI_GETSELTEXT = 2161;
 
   /// <summary>Retrieve a range of text.
   /// Return the length of the text.</summary>
   SCI_GETTEXTRANGE = 2162;
 
-  /// <summary>Draw the selection in normal style or with selection highlighted.</summary>
+  /// <summary>Retrieve a range of text that can be past 2GB.
+  /// Return the length of the text.</summary>
+  SCI_GETTEXTRANGEFULL = 2039;
+
+  /// <summary>Draw the selection either highlighted or in normal (non-highlighted) style.</summary>
   SCI_HIDESELECTION = 2163;
+
+  /// <summary>Is the selection visible or hidden?</summary>
+  SCI_GETSELECTIONHIDDEN = 2088;
 
   /// <summary>Retrieve the x value of the point in the window where a position is displayed.</summary>
   SCI_POINTXFROMPOSITION = 2164;
@@ -1076,6 +2320,9 @@ const
 
   /// <summary>Scroll horizontally and vertically.</summary>
   SCI_LINESCROLL = 2168;
+
+  /// <summary>Scroll vertically with allowance for wrapping.</summary>
+  SCI_SCROLLVERTICAL = 2817;
 
   /// <summary>Ensure the caret is visible.</summary>
   SCI_SCROLLCARET = 2169;
@@ -1122,7 +2369,8 @@ const
   SCI_SETTEXT = 2181;
 
   /// <summary>Retrieve all the text in the document.
-  /// Returns number of characters retrieved.</summary>
+  /// Returns number of characters retrieved.
+  /// Result is NUL-terminated.</summary>
   SCI_GETTEXT = 2182;
 
   /// <summary>Retrieve the number of characters in the document.</summary>
@@ -1130,6 +2378,9 @@ const
 
   /// <summary>Retrieve a pointer to a function that processes messages for this Scintilla.</summary>
   SCI_GETDIRECTFUNCTION = 2184;
+
+  /// <summary>Retrieve a pointer to a function that processes messages for this Scintilla and returns status.</summary>
+  SCI_GETDIRECTSTATUSFUNCTION = 2772;
 
   /// <summary>Retrieve a pointer value to use as the first argument when calling
   /// the function returned by GetDirectFunction.</summary>
@@ -1154,12 +2405,36 @@ const
   /// <summary>Get the position that starts the target.</summary>
   SCI_GETTARGETSTART = 2191;
 
+  /// <summary>Sets the virtual space of the target start</summary>
+  SCI_SETTARGETSTARTVIRTUALSPACE = 2728;
+
+  /// <summary>Get the virtual space of the target start</summary>
+  SCI_GETTARGETSTARTVIRTUALSPACE = 2729;
+
   /// <summary>Sets the position that ends the target which is used for updating the
   /// document without affecting the scroll position.</summary>
   SCI_SETTARGETEND = 2192;
 
   /// <summary>Get the position that ends the target.</summary>
   SCI_GETTARGETEND = 2193;
+
+  /// <summary>Sets the virtual space of the target end</summary>
+  SCI_SETTARGETENDVIRTUALSPACE = 2730;
+
+  /// <summary>Get the virtual space of the target end</summary>
+  SCI_GETTARGETENDVIRTUALSPACE = 2731;
+
+  /// <summary>Sets both the start and end of the target in one call.</summary>
+  SCI_SETTARGETRANGE = 2686;
+
+  /// <summary>Retrieve the text in the target.</summary>
+  SCI_GETTARGETTEXT = 2687;
+
+  /// <summary>Make the target range start and end be the same as the selection range start and end.</summary>
+  SCI_TARGETFROMSELECTION = 2287;
+
+  /// <summary>Sets the target to the whole document.</summary>
+  SCI_TARGETWHOLEDOCUMENT = 2690;
 
   /// <summary>Replace the target text with the argument text.
   /// Text is counted so it can contain NULs.
@@ -1174,9 +2449,13 @@ const
   /// caused by processing the \d patterns.</summary>
   SCI_REPLACETARGETRE = 2195;
 
+  /// <summary>Replace the target text with the argument text but ignore prefix and suffix that
+  /// are the same as current.</summary>
+  SCI_REPLACETARGETMINIMAL = 2779;
+
   /// <summary>Search for a counted string in the target and set the target to the found
   /// range. Text is counted so it can contain NULs.
-  /// Returns length of range or -1 for failure in which case target is not moved.</summary>
+  /// Returns start of found range or -1 for failure in which case target is not moved.</summary>
   SCI_SEARCHINTARGET = 2197;
 
   /// <summary>Set the search flags used by SearchInTarget.</summary>
@@ -1227,6 +2506,7 @@ const
   /// <summary>The number of display lines needed to wrap a document line</summary>
   SCI_WRAPCOUNT = 2235;
 
+  SC_FOLDLEVELNONE = $0;
   SC_FOLDLEVELBASE = $400;
   SC_FOLDLEVELWHITEFLAG = $1000;
   SC_FOLDLEVELHEADERFLAG = $2000;
@@ -1267,9 +2547,29 @@ const
   /// <summary>Switch a header line between expanded and contracted.</summary>
   SCI_TOGGLEFOLD = 2231;
 
+  /// <summary>Switch a header line between expanded and contracted and show some text after the line.</summary>
+  SCI_TOGGLEFOLDSHOWTEXT = 2700;
+
+  SC_FOLDDISPLAYTEXT_HIDDEN = 0;
+  SC_FOLDDISPLAYTEXT_STANDARD = 1;
+  SC_FOLDDISPLAYTEXT_BOXED = 2;
+
+  /// <summary>Set the style of fold display text.</summary>
+  SCI_FOLDDISPLAYTEXTSETSTYLE = 2701;
+
+  /// <summary>Get the style of fold display text.</summary>
+  SCI_FOLDDISPLAYTEXTGETSTYLE = 2707;
+
+  /// <summary>Set the default fold display text.</summary>
+  SCI_SETDEFAULTFOLDDISPLAYTEXT = 2722;
+
+  /// <summary>Get the default fold display text.</summary>
+  SCI_GETDEFAULTFOLDDISPLAYTEXT = 2723;
+
   SC_FOLDACTION_CONTRACT = 0;
   SC_FOLDACTION_EXPAND = 1;
   SC_FOLDACTION_TOGGLE = 2;
+  SC_FOLDACTION_CONTRACT_EVERY_LEVEL = 4;
 
   /// <summary>Expand or contract a fold header.</summary>
   SCI_FOLDLINE = 2237;
@@ -1286,6 +2586,7 @@ const
   /// <summary>Ensure a particular line is visible by expanding any header line hiding it.</summary>
   SCI_ENSUREVISIBLE = 2232;
 
+  SC_AUTOMATICFOLD_NONE = $0000;
   SC_AUTOMATICFOLD_SHOW = $0001;
   SC_AUTOMATICFOLD_CLICK = $0002;
   SC_AUTOMATICFOLD_CHANGE = $0004;
@@ -1296,6 +2597,7 @@ const
   /// <summary>Get automatic folding behaviours.</summary>
   SCI_GETAUTOMATICFOLD = 2664;
 
+  SC_FOLDFLAG_NONE = $0000;
   SC_FOLDFLAG_LINEBEFORE_EXPANDED = $0002;
   SC_FOLDFLAG_LINEBEFORE_CONTRACTED = $0004;
   SC_FOLDFLAG_LINEAFTER_EXPANDED = $0008;
@@ -1335,6 +2637,20 @@ const
 
   /// <summary>Get position of end of word.</summary>
   SCI_WORDENDPOSITION = 2267;
+
+  /// <summary>Is the range start..end considered a word?</summary>
+  SCI_ISRANGEWORD = 2691;
+
+  SC_IDLESTYLING_NONE = 0;
+  SC_IDLESTYLING_TOVISIBLE = 1;
+  SC_IDLESTYLING_AFTERVISIBLE = 2;
+  SC_IDLESTYLING_ALL = 3;
+
+  /// <summary>Sets limits to idle styling.</summary>
+  SCI_SETIDLESTYLING = 2692;
+
+  /// <summary>Retrieve the limits to idle styling.</summary>
+  SCI_GETIDLESTYLING = 2693;
 
   SC_WRAP_NONE = 0;
   SC_WRAP_WORD = 1;
@@ -1377,6 +2693,7 @@ const
   SC_WRAPINDENT_FIXED = 0;
   SC_WRAPINDENT_SAME = 1;
   SC_WRAPINDENT_INDENT = 2;
+  SC_WRAPINDENT_DEEPINDENT = 3;
 
   /// <summary>Sets how wrapped sublines are placed. Default is fixed.</summary>
   SCI_SETWRAPINDENTMODE = 2472;
@@ -1433,12 +2750,18 @@ const
   /// <summary>Append a string to the end of the document without changing the selection.</summary>
   SCI_APPENDTEXT = 2282;
 
-  /// <summary>Is drawing done in two phases with backgrounds drawn before faoregrounds?</summary>
-  SCI_GETTWOPHASEDRAW = 2283;
+  SC_PHASES_ONE = 0;
+  SC_PHASES_TWO = 1;
+  SC_PHASES_MULTIPLE = 2;
 
-  /// <summary>In twoPhaseDraw mode, drawing is performed in two phases, first the background
-  /// and then the foreground. This avoids chopping off characters that overlap the next run.</summary>
-  SCI_SETTWOPHASEDRAW = 2284;
+  /// <summary>How many phases is drawing done in?</summary>
+  SCI_GETPHASESDRAW = 2673;
+
+  /// <summary>In one phase draw, text is drawn in a series of rectangular blocks with no overlap.
+  /// In two phase draw, text is drawn in a series of lines allowing runs to overlap horizontally.
+  /// In multiple phase draw, each element is drawn over the whole drawing area, allowing text
+  /// to overlap from one line to the next.</summary>
+  SCI_SETPHASESDRAW = 2674;
 
   SC_EFF_QUALITY_MASK = $F;
   SC_EFF_QUALITY_DEFAULT = 0;
@@ -1461,14 +2784,12 @@ const
   /// <summary>Change the effect of pasting when there are multiple selections.</summary>
   SCI_SETMULTIPASTE = 2614;
 
-  /// <summary>Retrieve the effect of pasting when there are multiple selections..</summary>
+  /// <summary>Retrieve the effect of pasting when there are multiple selections.</summary>
   SCI_GETMULTIPASTE = 2615;
 
-  /// <summary>Retrieve the value of a tag from a regular expression search.</summary>
+  /// <summary>Retrieve the value of a tag from a regular expression search.
+  /// Result is NUL-terminated.</summary>
   SCI_GETTAG = 2616;
-
-  /// <summary>Make the target range start and end be the same as the selection range start and end.</summary>
-  SCI_TARGETFROMSELECTION = 2287;
 
   /// <summary>Join the lines in the target.</summary>
   SCI_LINESJOIN = 2288;
@@ -1477,9 +2798,20 @@ const
   /// where possible.</summary>
   SCI_LINESSPLIT = 2289;
 
-  /// <summary>Set the colours used as a chequerboard pattern in the fold margin</summary>
+  /// <summary>Set one of the colours used as a chequerboard pattern in the fold margin</summary>
   SCI_SETFOLDMARGINCOLOUR = 2290;
+
+  /// <summary>Set the other colour used as a chequerboard pattern in the fold margin</summary>
   SCI_SETFOLDMARGINHICOLOUR = 2291;
+
+  SC_ACCESSIBILITY_DISABLED = 0;
+  SC_ACCESSIBILITY_ENABLED = 1;
+
+  /// <summary>Enable or disable accessibility.</summary>
+  SCI_SETACCESSIBILITY = 2702;
+
+  /// <summary>Report accessibility status.</summary>
+  SCI_GETACCESSIBILITY = 2703;
 
   /// <summary>Move caret down one line.</summary>
   SCI_LINEDOWN = 2300;
@@ -1566,8 +2898,15 @@ const
   /// If more than one line selected, indent the lines.</summary>
   SCI_TAB = 2327;
 
-  /// <summary>Dedent the selected lines.</summary>
+  /// <summary>Indent the current and selected lines.</summary>
+  SCI_LINEINDENT = 2813;
+
+  /// <summary>If selection is empty or all on one line dedent the line if caret is at start, else move caret.
+  /// If more than one line selected, dedent the lines.</summary>
   SCI_BACKTAB = 2328;
+
+  /// <summary>Dedent the current and selected lines.</summary>
+  SCI_LINEDEDENT = 2814;
 
   /// <summary>Insert a new line, may use a CRLF, CR or LF depending on EOL mode.</summary>
   SCI_NEWLINE = 2329;
@@ -1606,6 +2945,9 @@ const
   /// <summary>Switch the current line with the previous.</summary>
   SCI_LINETRANSPOSE = 2339;
 
+  /// <summary>Reverse order of selected lines.</summary>
+  SCI_LINEREVERSE = 2354;
+
   /// <summary>Duplicate the current line.</summary>
   SCI_LINEDUPLICATE = 2404;
 
@@ -1639,11 +2981,28 @@ const
   /// caret position.</summary>
   SCI_LINEENDDISPLAYEXTEND = 2348;
 
+  /// <summary>Like Home but when word-wrap is enabled goes first to start of display line
+  /// HomeDisplay, then to start of document line Home.</summary>
   SCI_HOMEWRAP = 2349;
+
+  /// <summary>Like HomeExtend but when word-wrap is enabled extends first to start of display line
+  /// HomeDisplayExtend, then to start of document line HomeExtend.</summary>
   SCI_HOMEWRAPEXTEND = 2450;
+
+  /// <summary>Like LineEnd but when word-wrap is enabled goes first to end of display line
+  /// LineEndDisplay, then to start of document line LineEnd.</summary>
   SCI_LINEENDWRAP = 2451;
+
+  /// <summary>Like LineEndExtend but when word-wrap is enabled extends first to end of display line
+  /// LineEndDisplayExtend, then to start of document line LineEndExtend.</summary>
   SCI_LINEENDWRAPEXTEND = 2452;
+
+  /// <summary>Like VCHome but when word-wrap is enabled goes first to start of display line
+  /// VCHomeDisplay, then behaves like VCHome.</summary>
   SCI_VCHOMEWRAP = 2453;
+
+  /// <summary>Like VCHomeExtend but when word-wrap is enabled extends first to start of display line
+  /// VCHomeDisplayExtend, then behaves like VCHomeExtend.</summary>
   SCI_VCHOMEWRAPEXTEND = 2454;
 
   /// <summary>Copy the line containing the caret.</summary>
@@ -1667,8 +3026,12 @@ const
   /// <summary>Use specified indicator to highlight non matching brace instead of changing its style.</summary>
   SCI_BRACEBADLIGHTINDICATOR = 2499;
 
-  /// <summary>Find the position of a matching brace or INVALID_POSITION if no match.</summary>
+  /// <summary>Find the position of a matching brace or INVALID_POSITION if no match.
+  /// The maxReStyle must be 0 for now. It may be defined in a future release.</summary>
   SCI_BRACEMATCH = 2353;
+
+  /// <summary>Similar to BraceMatch, but matching starts at the explicit start position.</summary>
+  SCI_BRACEMATCHNEXT = 2369;
 
   /// <summary>Are the end of line characters visible?</summary>
   SCI_GETVIEWEOL = 2355;
@@ -1688,6 +3051,7 @@ const
   EDGE_NONE = 0;
   EDGE_LINE = 1;
   EDGE_BACKGROUND = 2;
+  EDGE_MULTILINE = 3;
 
   /// <summary>Retrieve the column number which text should be kept within.</summary>
   SCI_GETEDGECOLUMN = 2360;
@@ -1699,7 +3063,7 @@ const
   /// <summary>Retrieve the edge highlight mode.</summary>
   SCI_GETEDGEMODE = 2362;
 
-  /// <summary>The edge may be displayed by a line (EDGE_LINE) or by highlighting text that
+  /// <summary>The edge may be displayed by a line (EDGE_LINE/EDGE_MULTILINE) or by highlighting text that
   /// goes beyond it (EDGE_BACKGROUND) or not displayed at all (EDGE_NONE).</summary>
   SCI_SETEDGEMODE = 2363;
 
@@ -1708,6 +3072,15 @@ const
 
   /// <summary>Change the colour used in edge indication.</summary>
   SCI_SETEDGECOLOUR = 2365;
+
+  /// <summary>Add a new vertical edge to the view.</summary>
+  SCI_MULTIEDGEADDLINE = 2694;
+
+  /// <summary>Clear all vertical edges.</summary>
+  SCI_MULTIEDGECLEARALL = 2695;
+
+  /// <summary>Get multi edge positions.</summary>
+  SCI_GETMULTIEDGECOLUMN = 2749;
 
   /// <summary>Sets the current caret position to be the search anchor.</summary>
   SCI_SEARCHANCHOR = 2366;
@@ -1723,8 +3096,12 @@ const
   /// <summary>Retrieves the number of lines completely visible.</summary>
   SCI_LINESONSCREEN = 2370;
 
+  SC_POPUP_NEVER = 0;
+  SC_POPUP_ALL = 1;
+  SC_POPUP_TEXT = 2;
+
   /// <summary>Set whether a pop up menu is displayed automatically when the user presses
-  /// the wrong mouse button.</summary>
+  /// the wrong mouse button on certain areas.</summary>
   SCI_USEPOPUP = 2371;
 
   /// <summary>Is the selection rectangular? The alternative is the more common stream selection.</summary>
@@ -1737,6 +3114,10 @@ const
   /// <summary>Retrieve the zoom level.</summary>
   SCI_GETZOOM = 2374;
 
+  SC_DOCUMENTOPTION_DEFAULT = 0;
+  SC_DOCUMENTOPTION_STYLES_NONE = $1;
+  SC_DOCUMENTOPTION_TEXT_LARGE = $100;
+
   /// <summary>Create a new document object.
   /// Starts with reference count of 1 and not selected into editor.</summary>
   SCI_CREATEDOCUMENT = 2375;
@@ -1747,8 +3128,17 @@ const
   /// <summary>Release a reference to the document, deleting document if it fades to black.</summary>
   SCI_RELEASEDOCUMENT = 2377;
 
+  /// <summary>Get which document options are set.</summary>
+  SCI_GETDOCUMENTOPTIONS = 2379;
+
   /// <summary>Get which document modification events are sent to the container.</summary>
   SCI_GETMODEVENTMASK = 2378;
+
+  /// <summary>Set whether command events are sent to the container.</summary>
+  SCI_SETCOMMANDEVENTS = 2717;
+
+  /// <summary>Get whether command events are sent to the container.</summary>
+  SCI_GETCOMMANDEVENTS = 2718;
 
   /// <summary>Change internal focus flag.</summary>
   SCI_SETFOCUS = 2380;
@@ -1759,6 +3149,8 @@ const
   SC_STATUS_OK = 0;
   SC_STATUS_FAILURE = 1;
   SC_STATUS_BADALLOC = 2;
+  SC_STATUS_WARN_START = 1000;
+  SC_STATUS_WARN_REGEX = 1001;
 
   /// <summary>Change error status - 0 = OK.</summary>
   SCI_SETSTATUS = 2382;
@@ -1772,10 +3164,11 @@ const
   /// <summary>Get whether mouse gets captured.</summary>
   SCI_GETMOUSEDOWNCAPTURES = 2385;
 
-  SC_CURSORNORMAL = -1;
-  SC_CURSORARROW = 2;
-  SC_CURSORWAIT = 4;
-  SC_CURSORREVERSEARROW = 7;
+  /// <summary>Set whether the mouse wheel can be active outside the window.</summary>
+  SCI_SETMOUSEWHEELCAPTURES = 2696;
+
+  /// <summary>Get whether mouse wheel can be active outside the window.</summary>
+  SCI_GETMOUSEWHEELCAPTURES = 2697;
 
   /// <summary>Sets the cursor to one of the SC_CURSOR* values.</summary>
   SCI_SETCURSOR = 2386;
@@ -1818,8 +3211,10 @@ const
   /// <summary>Delete forwards from the current position to the end of the line.</summary>
   SCI_DELLINERIGHT = 2396;
 
-  /// <summary>Get and Set the xOffset (ie, horizontal scroll position).</summary>
+  /// <summary>Set the xOffset (ie, horizontal scroll position).</summary>
   SCI_SETXOFFSET = 2397;
+
+  /// <summary>Get the xOffset (ie, horizontal scroll position).</summary>
   SCI_GETXOFFSET = 2398;
 
   /// <summary>Set the last x chosen value to be the caret x position.</summary>
@@ -1850,7 +3245,7 @@ const
 
   /// <summary>If CARET_EVEN is not set, instead of having symmetrical UZs,
   /// the left and bottom UZs are extended up to right and top UZs respectively.
-  /// This way, we favour the displaying of useful information: the begining of lines,
+  /// This way, we favour the displaying of useful information: the beginning of lines,
   /// where most code reside, and the lines after the caret, eg. the body of a function.</summary>
   CARET_EVEN = $08;
 
@@ -1892,10 +3287,16 @@ const
   /// <summary>Get the HotspotSingleLine property</summary>
   SCI_GETHOTSPOTSINGLELINE = 2497;
 
-  /// <summary>Move caret between paragraphs (delimited by empty lines).</summary>
+  /// <summary>Move caret down one paragraph (delimited by empty lines).</summary>
   SCI_PARADOWN = 2413;
+
+  /// <summary>Extend selection down one paragraph (delimited by empty lines).</summary>
   SCI_PARADOWNEXTEND = 2414;
+
+  /// <summary>Move caret up one paragraph (delimited by empty lines).</summary>
   SCI_PARAUP = 2415;
+
+  /// <summary>Extend selection up one paragraph (delimited by empty lines).</summary>
   SCI_PARAUPEXTEND = 2416;
 
   /// <summary>Given a valid document position, return the previous position taking code
@@ -1909,6 +3310,11 @@ const
   /// <summary>Given a valid document position, return a position that differs in a number
   /// of characters. Returned value is always between 0 and last position in document.</summary>
   SCI_POSITIONRELATIVE = 2670;
+
+  /// <summary>Given a valid document position, return a position that differs in a number
+  /// of UTF-16 code units. Returned value is always between 0 and last position in document.
+  /// The result may point half way (2 bytes) inside a non-BMP character.</summary>
+  SCI_POSITIONRELATIVECODEUNITS = 2716;
 
   /// <summary>Copy a range of text to the clipboard. Positions are clipped into the document.</summary>
   SCI_COPYRANGE = 2419;
@@ -1925,8 +3331,18 @@ const
   /// by lines (SC_SEL_LINES).</summary>
   SCI_SETSELECTIONMODE = 2422;
 
+  /// <summary>Set the selection mode to stream (SC_SEL_STREAM) or rectangular (SC_SEL_RECTANGLE/SC_SEL_THIN) or
+  /// by lines (SC_SEL_LINES) without changing MoveExtendsSelection.</summary>
+  SCI_CHANGESELECTIONMODE = 2659;
+
   /// <summary>Get the mode of the current selection.</summary>
   SCI_GETSELECTIONMODE = 2423;
+
+  /// <summary>Set whether or not regular caret moves will extend or reduce the selection.</summary>
+  SCI_SETMOVEEXTENDSSELECTION = 2719;
+
+  /// <summary>Get whether or not regular caret moves will extend or reduce the selection.</summary>
+  SCI_GETMOVEEXTENDSSELECTION = 2706;
 
   /// <summary>Retrieve the position of the start of the selection at the given line (INVALID_POSITION if no selection on this line).</summary>
   SCI_GETLINESELSTARTPOSITION = 2424;
@@ -2008,7 +3424,8 @@ const
   SCI_AUTOCGETCURRENT = 2445;
 
   /// <summary>Get currently selected item text in the auto-completion list
-  /// Returns the length of the item text</summary>
+  /// Returns the length of the item text
+  /// Result is NUL-terminated.</summary>
   SCI_AUTOCGETCURRENTTEXT = 2610;
 
   SC_CASEINSENSITIVEBEHAVIOUR_RESPECTCASE = 0;
@@ -2019,6 +3436,15 @@ const
 
   /// <summary>Get auto-completion case insensitive behaviour.</summary>
   SCI_AUTOCGETCASEINSENSITIVEBEHAVIOUR = 2635;
+
+  SC_MULTIAUTOC_ONCE = 0;
+  SC_MULTIAUTOC_EACH = 1;
+
+  /// <summary>Change the effect of autocompleting when there are multiple selections.</summary>
+  SCI_AUTOCSETMULTI = 2636;
+
+  /// <summary>Retrieve the effect of autocompleting when there are multiple selections.</summary>
+  SCI_AUTOCGETMULTI = 2637;
 
   SC_ORDER_PRESORTED = 0;
   SC_ORDER_PERFORMSORT = 1;
@@ -2050,15 +3476,15 @@ const
   /// multi-byte characters. If beyond end of line, return line end position.</summary>
   SCI_FINDCOLUMN = 2456;
 
+  SC_CARETSTICKY_OFF = 0;
+  SC_CARETSTICKY_ON = 1;
+  SC_CARETSTICKY_WHITESPACE = 2;
+
   /// <summary>Can the caret preferred x position only be changed by explicit movement commands?</summary>
   SCI_GETCARETSTICKY = 2457;
 
   /// <summary>Stop the caret preferred x position changing when the user types.</summary>
   SCI_SETCARETSTICKY = 2458;
-
-  SC_CARETSTICKY_OFF = 0;
-  SC_CARETSTICKY_ON = 1;
-  SC_CARETSTICKY_WHITESPACE = 2;
 
   /// <summary>Switch between sticky and non-sticky: meant to be bound to a key.</summary>
   SCI_TOGGLECARETSTICKY = 2459;
@@ -2069,12 +3495,11 @@ const
   /// <summary>Get convert-on-paste setting</summary>
   SCI_GETPASTECONVERTENDINGS = 2468;
 
+  /// <summary>Replace the selection with text like a rectangular paste.</summary>
+  SCI_REPLACERECTANGULAR = 2771;
+
   /// <summary>Duplicate the selection. If selection empty duplicate the line containing the caret.</summary>
   SCI_SELECTIONDUPLICATE = 2469;
-
-  SC_ALPHA_TRANSPARENT = 0;
-  SC_ALPHA_OPAQUE = 255;
-  SC_ALPHA_NOALPHA = 256;
 
   /// <summary>Set background alpha of the caret line.</summary>
   SCI_SETCARETLINEBACKALPHA = 2470;
@@ -2085,6 +3510,11 @@ const
   CARETSTYLE_INVISIBLE = 0;
   CARETSTYLE_LINE = 1;
   CARETSTYLE_BLOCK = 2;
+  CARETSTYLE_OVERSTRIKE_BAR = 0;
+  CARETSTYLE_OVERSTRIKE_BLOCK = $10;
+  CARETSTYLE_CURSES = $20;
+  CARETSTYLE_INS_MASK = $F;
+  CARETSTYLE_BLOCK_AFTER = $100;
 
   /// <summary>Set the style of the caret to be drawn.</summary>
   SCI_SETCARETSTYLE = 2512;
@@ -2110,10 +3540,10 @@ const
   /// <summary>Turn a indicator off over a range.</summary>
   SCI_INDICATORCLEARRANGE = 2505;
 
-  /// <summary>Are any indicators present at position?</summary>
+  /// <summary>Are any indicators present at pos?</summary>
   SCI_INDICATORALLONFOR = 2506;
 
-  /// <summary>What value does a particular indicator have at at a position?</summary>
+  /// <summary>What value does a particular indicator have at a position?</summary>
   SCI_INDICATORVALUEAT = 2507;
 
   /// <summary>Where does a particular indicator start?</summary>
@@ -2128,8 +3558,23 @@ const
   /// <summary>How many entries are allocated to the position cache?</summary>
   SCI_GETPOSITIONCACHE = 2515;
 
+  /// <summary>Set maximum number of threads used for layout</summary>
+  SCI_SETLAYOUTTHREADS = 2775;
+
+  /// <summary>Get maximum number of threads used for layout</summary>
+  SCI_GETLAYOUTTHREADS = 2776;
+
   /// <summary>Copy the selection, if selection empty copy the line with the caret</summary>
   SCI_COPYALLOWLINE = 2519;
+
+  /// <summary>Cut the selection, if selection empty cut the line with the caret</summary>
+  SCI_CUTALLOWLINE = 2810;
+
+  /// <summary>Set the string to separate parts when copying a multiple selection.</summary>
+  SCI_SETCOPYSEPARATOR = 2811;
+
+  /// <summary>Get the string to separate parts when copying a multiple selection.</summary>
+  SCI_GETCOPYSEPARATOR = 2812;
 
   /// <summary>Compact the document buffer and return a read-only pointer to the
   /// characters in the document.</summary>
@@ -2137,18 +3582,12 @@ const
 
   /// <summary>Return a read-only pointer to a range of characters in the document.
   /// May move the gap so that the range is contiguous, but will only move up
-  /// to rangeLength bytes.</summary>
+  /// to lengthRange bytes.</summary>
   SCI_GETRANGEPOINTER = 2643;
 
   /// <summary>Return a position which, to avoid performance costs, should not be within
   /// the range of a call to GetRangePointer.</summary>
   SCI_GETGAPPOSITION = 2644;
-
-  /// <summary>Always interpret keyboard input as Unicode</summary>
-  SCI_SETKEYSUNICODE = 2521;
-
-  /// <summary>Are keys always interpreted as Unicode?</summary>
-  SCI_GETKEYSUNICODE = 2522;
 
   /// <summary>Set the alpha fill colour of the given indicator.</summary>
   SCI_INDICSETALPHA = 2523;
@@ -2240,6 +3679,7 @@ const
   ANNOTATION_HIDDEN = 0;
   ANNOTATION_STANDARD = 1;
   ANNOTATION_BOXED = 2;
+  ANNOTATION_INDENTED = 3;
 
   /// <summary>Set the visibility for the annotations for a view</summary>
   SCI_ANNOTATIONSETVISIBLE = 2548;
@@ -2259,6 +3699,7 @@ const
   /// <summary>Allocate some extended (&gt;255) style numbers and return the start of the range</summary>
   SCI_ALLOCATEEXTENDEDSTYLES = 2553;
 
+  UNDO_NONE = 0;
   UNDO_MAY_COALESCE = 1;
 
   /// <summary>Add a container action to the undo stack</summary>
@@ -2316,6 +3757,9 @@ const
   /// <summary>Add a selection</summary>
   SCI_ADDSELECTION = 2573;
 
+  /// <summary>Find the selection index for a point. -1 when not at a selection.</summary>
+  SCI_SELECTIONFROMPOINT = 2474;
+
   /// <summary>Drop one selection</summary>
   SCI_DROPSELECTIONN = 2671;
 
@@ -2325,13 +3769,28 @@ const
   /// <summary>Which selection is the main selection</summary>
   SCI_GETMAINSELECTION = 2575;
 
+  /// <summary>Set the caret position of the nth selection.</summary>
   SCI_SETSELECTIONNCARET = 2576;
+
+  /// <summary>Return the caret position of the nth selection.</summary>
   SCI_GETSELECTIONNCARET = 2577;
+
+  /// <summary>Set the anchor position of the nth selection.</summary>
   SCI_SETSELECTIONNANCHOR = 2578;
+
+  /// <summary>Return the anchor position of the nth selection.</summary>
   SCI_GETSELECTIONNANCHOR = 2579;
+
+  /// <summary>Set the virtual space of the caret of the nth selection.</summary>
   SCI_SETSELECTIONNCARETVIRTUALSPACE = 2580;
+
+  /// <summary>Return the virtual space of the caret of the nth selection.</summary>
   SCI_GETSELECTIONNCARETVIRTUALSPACE = 2581;
+
+  /// <summary>Set the virtual space of the anchor of the nth selection.</summary>
   SCI_SETSELECTIONNANCHORVIRTUALSPACE = 2582;
+
+  /// <summary>Return the virtual space of the anchor of the nth selection.</summary>
   SCI_GETSELECTIONNANCHORVIRTUALSPACE = 2583;
 
   /// <summary>Sets the position that starts the selection - this becomes the anchor.</summary>
@@ -2340,26 +3799,51 @@ const
   /// <summary>Returns the position at the start of the selection.</summary>
   SCI_GETSELECTIONNSTART = 2585;
 
+  /// <summary>Returns the virtual space at the start of the selection.</summary>
+  SCI_GETSELECTIONNSTARTVIRTUALSPACE = 2726;
+
   /// <summary>Sets the position that ends the selection - this becomes the currentPosition.</summary>
   SCI_SETSELECTIONNEND = 2586;
+
+  /// <summary>Returns the virtual space at the end of the selection.</summary>
+  SCI_GETSELECTIONNENDVIRTUALSPACE = 2727;
 
   /// <summary>Returns the position at the end of the selection.</summary>
   SCI_GETSELECTIONNEND = 2587;
 
+  /// <summary>Set the caret position of the rectangular selection.</summary>
   SCI_SETRECTANGULARSELECTIONCARET = 2588;
+
+  /// <summary>Return the caret position of the rectangular selection.</summary>
   SCI_GETRECTANGULARSELECTIONCARET = 2589;
+
+  /// <summary>Set the anchor position of the rectangular selection.</summary>
   SCI_SETRECTANGULARSELECTIONANCHOR = 2590;
+
+  /// <summary>Return the anchor position of the rectangular selection.</summary>
   SCI_GETRECTANGULARSELECTIONANCHOR = 2591;
+
+  /// <summary>Set the virtual space of the caret of the rectangular selection.</summary>
   SCI_SETRECTANGULARSELECTIONCARETVIRTUALSPACE = 2592;
+
+  /// <summary>Return the virtual space of the caret of the rectangular selection.</summary>
   SCI_GETRECTANGULARSELECTIONCARETVIRTUALSPACE = 2593;
+
+  /// <summary>Set the virtual space of the anchor of the rectangular selection.</summary>
   SCI_SETRECTANGULARSELECTIONANCHORVIRTUALSPACE = 2594;
+
+  /// <summary>Return the virtual space of the anchor of the rectangular selection.</summary>
   SCI_GETRECTANGULARSELECTIONANCHORVIRTUALSPACE = 2595;
 
   SCVS_NONE = 0;
   SCVS_RECTANGULARSELECTION = 1;
   SCVS_USERACCESSIBLE = 2;
+  SCVS_NOWRAPLINESTART = 4;
 
+  /// <summary>Set options for virtual space behaviour.</summary>
   SCI_SETVIRTUALSPACEOPTIONS = 2596;
+
+  /// <summary>Return options for virtual space behaviour.</summary>
   SCI_GETVIRTUALSPACEOPTIONS = 2597;
 
   SCI_SETRECTANGULARSELECTIONMODIFIER = 2598;
@@ -2392,6 +3876,14 @@ const
 
   /// <summary>Swap that caret and anchor of the main selection.</summary>
   SCI_SWAPMAINANCHORCARET = 2607;
+
+  /// <summary>Add the next occurrence of the main selection to the set of selections as main.
+  /// If the current selection is empty then select word around caret.</summary>
+  SCI_MULTIPLESELECTADDNEXT = 2688;
+
+  /// <summary>Add each occurrence of the main selection in the target to the set of selections.
+  /// If the current selection is empty then select word around caret.</summary>
+  SCI_MULTIPLESELECTADDEACH = 2689;
 
   /// <summary>Indicate that the internal state of a lexer has changed over a range and therefore
   /// there may be a need to redraw.</summary>
@@ -2441,6 +3933,9 @@ const
 
   SC_TECHNOLOGY_DEFAULT = 0;
   SC_TECHNOLOGY_DIRECTWRITE = 1;
+  SC_TECHNOLOGY_DIRECTWRITERETAIN = 2;
+  SC_TECHNOLOGY_DIRECTWRITEDC = 3;
+  SC_TECHNOLOGY_DIRECT_WRITE_1 = 4;
 
   /// <summary>Set the technology used.</summary>
   SCI_SETTECHNOLOGY = 2630;
@@ -2451,13 +3946,13 @@ const
   /// <summary>Create an ILoader*.</summary>
   SCI_CREATELOADER = 2632;
 
-  /// <summary>On OS X, show a find indicator.</summary>
+  /// <summary>On macOS, show a find indicator.</summary>
   SCI_FINDINDICATORSHOW = 2640;
 
-  /// <summary>On OS X, flash a find indicator, then fade out.</summary>
+  /// <summary>On macOS, flash a find indicator, then fade out.</summary>
   SCI_FINDINDICATORFLASH = 2641;
 
-  /// <summary>On OS X, hide the find indicator.</summary>
+  /// <summary>On macOS, hide the find indicator.</summary>
   SCI_FINDINDICATORHIDE = 2642;
 
   /// <summary>Move caret to before first visible character on display line.
@@ -2491,20 +3986,113 @@ const
   /// <summary>Set the way a character is drawn.</summary>
   SCI_SETREPRESENTATION = 2665;
 
-  /// <summary>Set the way a character is drawn.</summary>
+  /// <summary>Get the way a character is drawn.
+  /// Result is NUL-terminated.</summary>
   SCI_GETREPRESENTATION = 2666;
 
   /// <summary>Remove a character representation.</summary>
   SCI_CLEARREPRESENTATION = 2667;
+
+  /// <summary>Clear representations to default.</summary>
+  SCI_CLEARALLREPRESENTATIONS = 2770;
+
+  /// <summary>Can draw representations in various ways</summary>
+  SC_REPRESENTATION_PLAIN = 0;
+  SC_REPRESENTATION_BLOB = 1;
+  SC_REPRESENTATION_COLOUR = $10;
+
+  /// <summary>Set the appearance of a representation.</summary>
+  SCI_SETREPRESENTATIONAPPEARANCE = 2766;
+
+  /// <summary>Get the appearance of a representation.</summary>
+  SCI_GETREPRESENTATIONAPPEARANCE = 2767;
+
+  /// <summary>Set the colour of a representation.</summary>
+  SCI_SETREPRESENTATIONCOLOUR = 2768;
+
+  /// <summary>Get the colour of a representation.</summary>
+  SCI_GETREPRESENTATIONCOLOUR = 2769;
+
+  /// <summary>Set the end of line annotation text for a line</summary>
+  SCI_EOLANNOTATIONSETTEXT = 2740;
+
+  /// <summary>Get the end of line annotation text for a line</summary>
+  SCI_EOLANNOTATIONGETTEXT = 2741;
+
+  /// <summary>Set the style number for the end of line annotations for a line</summary>
+  SCI_EOLANNOTATIONSETSTYLE = 2742;
+
+  /// <summary>Get the style number for the end of line annotations for a line</summary>
+  SCI_EOLANNOTATIONGETSTYLE = 2743;
+
+  /// <summary>Clear the end of annotations from all lines</summary>
+  SCI_EOLANNOTATIONCLEARALL = 2744;
+
+  EOLANNOTATION_HIDDEN = $0;
+  EOLANNOTATION_STANDARD = $1;
+  EOLANNOTATION_BOXED = $2;
+  EOLANNOTATION_STADIUM = $100;
+  EOLANNOTATION_FLAT_CIRCLE = $101;
+  EOLANNOTATION_ANGLE_CIRCLE = $102;
+  EOLANNOTATION_CIRCLE_FLAT = $110;
+  EOLANNOTATION_FLATS = $111;
+  EOLANNOTATION_ANGLE_FLAT = $112;
+  EOLANNOTATION_CIRCLE_ANGLE = $120;
+  EOLANNOTATION_FLAT_ANGLE = $121;
+  EOLANNOTATION_ANGLES = $122;
+
+  /// <summary>Set the visibility for the end of line annotations for a view</summary>
+  SCI_EOLANNOTATIONSETVISIBLE = 2745;
+
+  /// <summary>Get the visibility for the end of line annotations for a view</summary>
+  SCI_EOLANNOTATIONGETVISIBLE = 2746;
+
+  /// <summary>Get the start of the range of style numbers used for end of line annotations</summary>
+  SCI_EOLANNOTATIONSETSTYLEOFFSET = 2747;
+
+  /// <summary>Get the start of the range of style numbers used for end of line annotations</summary>
+  SCI_EOLANNOTATIONGETSTYLEOFFSET = 2748;
+
+  SC_SUPPORTS_LINE_DRAWS_FINAL = 0;
+  SC_SUPPORTS_PIXEL_DIVISIONS = 1;
+  SC_SUPPORTS_FRACTIONAL_STROKE_WIDTH = 2;
+  SC_SUPPORTS_TRANSLUCENT_STROKE = 3;
+  SC_SUPPORTS_PIXEL_MODIFICATION = 4;
+  SC_SUPPORTS_THREAD_SAFE_MEASURE_WIDTHS = 5;
+
+  /// <summary>Get whether a feature is supported</summary>
+  SCI_SUPPORTSFEATURE = 2750;
+
+  SC_LINECHARACTERINDEX_NONE = 0;
+  SC_LINECHARACTERINDEX_UTF32 = 1;
+  SC_LINECHARACTERINDEX_UTF16 = 2;
+
+  /// <summary>Retrieve line character index state.</summary>
+  SCI_GETLINECHARACTERINDEX = 2710;
+
+  /// <summary>Request line character index be created or its use count increased.</summary>
+  SCI_ALLOCATELINECHARACTERINDEX = 2711;
+
+  /// <summary>Decrease use count of line character index and remove if 0.</summary>
+  SCI_RELEASELINECHARACTERINDEX = 2712;
+
+  /// <summary>Retrieve the document line containing a position measured in index units.</summary>
+  SCI_LINEFROMINDEXPOSITION = 2713;
+
+  /// <summary>Retrieve the position measured in index units at the start of a document line.</summary>
+  SCI_INDEXPOSITIONFROMLINE = 2714;
+
+  /// <summary>Get whether drag-and-drop is enabled or disabled</summary>
+  SCI_GETDRAGDROPENABLED = 2818;
+
+  /// <summary>Enable or disable drag-and-drop</summary>
+  SCI_SETDRAGDROPENABLED = 2819;
 
   /// <summary>Start notifying the container of all key presses and commands.</summary>
   SCI_STARTRECORD = 3001;
 
   /// <summary>Stop notifying the container of all key presses and commands.</summary>
   SCI_STOPRECORD = 3002;
-
-  /// <summary>Set the lexing language of the document.</summary>
-  SCI_SETLEXER = 4001;
 
   /// <summary>Retrieve the lexing language of the document.</summary>
   SCI_GETLEXER = 4002;
@@ -2521,34 +4109,29 @@ const
   /// <summary>Set up the key words used by the lexer.</summary>
   SCI_SETKEYWORDS = 4005;
 
-  /// <summary>Set the lexing language of the document based on string name.</summary>
-  SCI_SETLEXERLANGUAGE = 4006;
-
-  /// <summary>Load a lexer library (dll / so).</summary>
-  SCI_LOADLEXERLIBRARY = 4007;
-
-  /// <summary>Retrieve a "property" value previously set with SetProperty.</summary>
+  /// <summary>Retrieve a "property" value previously set with SetProperty.
+  /// Result is NUL-terminated.</summary>
   SCI_GETPROPERTY = 4008;
 
   /// <summary>Retrieve a "property" value previously set with SetProperty,
-  /// with "$()" variable replacement on returned buffer.</summary>
+  /// with "$()" variable replacement on returned buffer.
+  /// Result is NUL-terminated.</summary>
   SCI_GETPROPERTYEXPANDED = 4009;
 
   /// <summary>Retrieve a "property" value previously set with SetProperty,
   /// interpreted as an int AFTER any "$()" variable replacement.</summary>
   SCI_GETPROPERTYINT = 4010;
 
-  /// <summary>Retrieve the number of bits the current lexer needs for styling.</summary>
-  SCI_GETSTYLEBITSNEEDED = 4011;
-
   /// <summary>Retrieve the name of the lexer.
-  /// Return the length of the text.</summary>
+  /// Return the length of the text.
+  /// Result is NUL-terminated.</summary>
   SCI_GETLEXERLANGUAGE = 4012;
 
   /// <summary>For private communication between an application and a known lexer.</summary>
   SCI_PRIVATELEXERCALL = 4013;
 
-  /// <summary>Retrieve a '\n' separated list of properties understood by the current lexer.</summary>
+  /// <summary>Retrieve a '\n' separated list of properties understood by the current lexer.
+  /// Result is NUL-terminated.</summary>
   SCI_PROPERTYNAMES = 4014;
 
   SC_TYPE_BOOLEAN = 0;
@@ -2558,10 +4141,12 @@ const
   /// <summary>Retrieve the type of a property.</summary>
   SCI_PROPERTYTYPE = 4015;
 
-  /// <summary>Describe a property.</summary>
+  /// <summary>Describe a property.
+  /// Result is NUL-terminated.</summary>
   SCI_DESCRIBEPROPERTY = 4016;
 
-  /// <summary>Retrieve a '\n' separated list of descriptions of the keyword sets understood by the current lexer.</summary>
+  /// <summary>Retrieve a '\n' separated list of descriptions of the keyword sets understood by the current lexer.
+  /// Result is NUL-terminated.</summary>
   SCI_DESCRIBEKEYWORDSETS = 4017;
 
   /// <summary>Bit set of LineEndType enumertion for which line ends beyond the standard
@@ -2593,13 +4178,33 @@ const
   /// return the distance between the two types.</summary>
   SCI_DISTANCETOSECONDARYSTYLES = 4025;
 
-  /// <summary>Get the set of base styles that can be extended with sub styles</summary>
+  /// <summary>Get the set of base styles that can be extended with sub styles
+  /// Result is NUL-terminated.</summary>
   SCI_GETSUBSTYLEBASES = 4026;
+
+  /// <summary>Retrieve the number of named styles for the lexer.</summary>
+  SCI_GETNAMEDSTYLES = 4029;
+
+  /// <summary>Retrieve the name of a style.
+  /// Result is NUL-terminated.</summary>
+  SCI_NAMEOFSTYLE = 4030;
+
+  /// <summary>Retrieve a ' ' separated list of style tags like "literal quoted string".
+  /// Result is NUL-terminated.</summary>
+  SCI_TAGSOFSTYLE = 4031;
+
+  /// <summary>Retrieve a description of a style.
+  /// Result is NUL-terminated.</summary>
+  SCI_DESCRIPTIONOFSTYLE = 4032;
+
+  /// <summary>Set the lexer from an ILexer*.</summary>
+  SCI_SETILEXER = 4033;
 
   /// <summary>Notifications
   /// Type of modification and the action which caused the modification.
   /// These are defined as a bit mask to make it easy to specify which notifications are wanted.
   /// One bit is set from each of SC_MOD_* and SC_PERFORMED_*.</summary>
+  SC_MOD_NONE = $0;
   SC_MOD_INSERTTEXT = $1;
   SC_MOD_DELETETEXT = $2;
   SC_MOD_CHANGESTYLE = $4;
@@ -2621,8 +4226,11 @@ const
   SC_MOD_CONTAINER = $40000;
   SC_MOD_LEXERSTATE = $80000;
   SC_MOD_INSERTCHECK = $100000;
-  SC_MODEVENTMASKALL = $1FFFFF;
+  SC_MOD_CHANGETABSTOPS = $200000;
+  SC_MOD_CHANGEEOLANNOTATION = $400000;
+  SC_MODEVENTMASKALL = $7FFFFF;
 
+  SC_UPDATE_NONE = $0;
   SC_UPDATE_CONTENT = $1;
   SC_UPDATE_SELECTION = $2;
   SC_UPDATE_V_SCROLL = $4;
@@ -2664,6 +4272,61 @@ const
   SCMOD_SUPER = 8;
   SCMOD_META = 16;
 
+  SC_AC_FILLUP = 1;
+  SC_AC_DOUBLECLICK = 2;
+  SC_AC_TAB = 3;
+  SC_AC_NEWLINE = 4;
+  SC_AC_COMMAND = 5;
+  SC_AC_SINGLE_CHOICE = 6;
+
+  /// <summary>characterSource for SCN_CHARADDED
+  /// Direct input characters.</summary>
+  SC_CHARACTERSOURCE_DIRECT_INPUT = 0;
+
+  /// <summary>IME (inline mode) or dead key tentative input characters.</summary>
+  SC_CHARACTERSOURCE_TENTATIVE_INPUT = 1;
+
+  /// <summary>IME (either inline or windowed mode) full composited string.</summary>
+  SC_CHARACTERSOURCE_IME_RESULT = 2;
+
+  SC_BIDIRECTIONAL_DISABLED = 0;
+  SC_BIDIRECTIONAL_L2R = 1;
+  SC_BIDIRECTIONAL_R2L = 2;
+
+  /// <summary>Retrieve bidirectional text display state.</summary>
+  SCI_GETBIDIRECTIONAL = 2708;
+
+  /// <summary>Set bidirectional text display state.</summary>
+  SCI_SETBIDIRECTIONAL = 2709;
+
+  /// <summary>Divide each styling byte into lexical class bits (default: 5) and indicator
+  /// bits (default: 3). If a lexer requires more than 32 lexical states, then this
+  /// is used to expand the possible states.</summary>
+  SCI_SETSTYLEBITS = 2090;
+
+  /// <summary>Retrieve number of bits in style bytes used to hold the lexical state.</summary>
+  SCI_GETSTYLEBITS = 2091;
+
+  /// <summary>Retrieve the number of bits the current lexer needs for styling.</summary>
+  SCI_GETSTYLEBITSNEEDED = 4011;
+
+  /// <summary>Always interpret keyboard input as Unicode</summary>
+  SCI_SETKEYSUNICODE = 2521;
+
+  /// <summary>Are keys always interpreted as Unicode?</summary>
+  SCI_GETKEYSUNICODE = 2522;
+
+  /// <summary>Is drawing done in two phases with backgrounds drawn before foregrounds?</summary>
+  SCI_GETTWOPHASEDRAW = 2283;
+
+  /// <summary>In twoPhaseDraw mode, drawing is performed in two phases, first the background
+  /// and then the foreground. This avoids chopping off characters that overlap the next run.</summary>
+  SCI_SETTWOPHASEDRAW = 2284;
+
+  INDIC0_MASK = $20;
+  INDIC1_MASK = $40;
+  INDIC2_MASK = $80;
+  INDICS_MASK = $E0;
   /// <summary>For SciLexer.h</summary>
   SCLEX_CONTAINER = 0;
   SCLEX_NULL = 1;
@@ -2778,6 +4441,34 @@ const
   SCLEX_DMAP = 112;
   SCLEX_AS = 113;
   SCLEX_DMIS = 114;
+  SCLEX_REGISTRY = 115;
+  SCLEX_BIBTEX = 116;
+  SCLEX_SREC = 117;
+  SCLEX_IHEX = 118;
+  SCLEX_TEHEX = 119;
+  SCLEX_JSON = 120;
+  SCLEX_EDIFACT = 121;
+  SCLEX_INDENT = 122;
+  SCLEX_MAXIMA = 123;
+  SCLEX_STATA = 124;
+  SCLEX_SAS = 125;
+  SCLEX_NIM = 126;
+  SCLEX_CIL = 127;
+  SCLEX_X12 = 128;
+  SCLEX_DATAFLEX = 129;
+  SCLEX_HOLLYWOOD = 130;
+  SCLEX_RAKU = 131;
+  SCLEX_FSHARP = 132;
+  SCLEX_JULIA = 133;
+  SCLEX_ASCIIDOC = 134;
+  SCLEX_GDSCRIPT = 135;
+  SCLEX_TOML = 136;
+  SCLEX_TROFF = 137;
+  SCLEX_DART = 138;
+  SCLEX_ZIG = 139;
+  SCLEX_NIX = 140;
+  SCLEX_SINEX = 141;
+  SCLEX_ESCSEQ = 142;
 
   /// <summary>When a lexer specifies its language as SCLEX_AUTOMATIC it receives a
   /// value assigned in sequence from SCLEX_AUTOMATIC+1.</summary>
@@ -2800,8 +4491,16 @@ const
   SCE_P_STRINGEOL = 13;
   SCE_P_WORD2 = 14;
   SCE_P_DECORATOR = 15;
+  SCE_P_FSTRING = 16;
+  SCE_P_FCHARACTER = 17;
+  SCE_P_FTRIPLE = 18;
+  SCE_P_FTRIPLEDOUBLE = 19;
+  SCE_P_ATTRIBUTE = 20;
 
-  /// <summary>Lexical states for SCLEX_CPP</summary>
+  /// <summary>Lexical states for SCLEX_CPP
+  /// Lexical states for SCLEX_BULLANT
+  /// Lexical states for SCLEX_TACL
+  /// Lexical states for SCLEX_TAL</summary>
   SCE_C_DEFAULT = 0;
   SCE_C_COMMENT = 1;
   SCE_C_COMMENTLINE = 2;
@@ -2830,6 +4529,21 @@ const
   SCE_C_USERLITERAL = 25;
   SCE_C_TASKMARKER = 26;
   SCE_C_ESCAPESEQUENCE = 27;
+
+  /// <summary>Lexical states for SCLEX_COBOL</summary>
+  SCE_COBOL_DEFAULT = 0;
+  SCE_COBOL_COMMENT = 1;
+  SCE_COBOL_COMMENTLINE = 2;
+  SCE_COBOL_COMMENTDOC = 3;
+  SCE_COBOL_NUMBER = 4;
+  SCE_COBOL_WORD = 5;
+  SCE_COBOL_STRING = 6;
+  SCE_COBOL_CHARACTER = 7;
+  SCE_COBOL_WORD3 = 8;
+  SCE_COBOL_PREPROCESSOR = 9;
+  SCE_COBOL_OPERATOR = 10;
+  SCE_COBOL_IDENTIFIER = 11;
+  SCE_COBOL_WORD2 = 16;
 
   /// <summary>Lexical states for SCLEX_D</summary>
   SCE_D_DEFAULT = 0;
@@ -2906,7 +4620,7 @@ const
   /// <summary>More HTML</summary>
   SCE_H_VALUE = 19;
 
-  /// <summary>X-Code</summary>
+  /// <summary>X-Code, ASP.NET, JSP</summary>
   SCE_H_XCCOMMENT = 20;
 
   /// <summary>SGML</summary>
@@ -2936,6 +4650,7 @@ const
   SCE_HJ_SYMBOLS = 50;
   SCE_HJ_STRINGEOL = 51;
   SCE_HJ_REGEX = 52;
+  SCE_HJ_TEMPLATELITERAL = 53;
 
   /// <summary>ASP Javascript</summary>
   SCE_HJA_START = 55;
@@ -2951,6 +4666,7 @@ const
   SCE_HJA_SYMBOLS = 65;
   SCE_HJA_STRINGEOL = 66;
   SCE_HJA_REGEX = 67;
+  SCE_HJA_TEMPLATELITERAL = 68;
 
   /// <summary>Embedded VBScript</summary>
   SCE_HB_START = 70;
@@ -3098,9 +4814,13 @@ const
   SCE_RB_STDIN = 30;
   SCE_RB_STDOUT = 31;
   SCE_RB_STDERR = 40;
-  SCE_RB_UPPER_BOUND = 41;
+  SCE_RB_STRING_W = 41;
+  SCE_RB_STRING_I = 42;
+  SCE_RB_STRING_QI = 43;
+  SCE_RB_STRING_QS = 44;
+  SCE_RB_UPPER_BOUND = 45;
 
-  /// <summary>Lexical states for SCLEX_VB, SCLEX_VBSCRIPT, SCLEX_POWERBASIC</summary>
+  /// <summary>Lexical states for SCLEX_VB, SCLEX_VBSCRIPT, SCLEX_POWERBASIC, SCLEX_BLITZBASIC, SCLEX_PUREBASIC, SCLEX_FREEBASIC</summary>
   SCE_B_DEFAULT = 0;
   SCE_B_COMMENT = 1;
   SCE_B_NUMBER = 2;
@@ -3195,6 +4915,26 @@ const
   SCE_ERR_JAVA_STACK = 20;
   SCE_ERR_VALUE = 21;
   SCE_ERR_GCC_INCLUDED_FROM = 22;
+  SCE_ERR_ESCSEQ = 23;
+  SCE_ERR_ESCSEQ_UNKNOWN = 24;
+  SCE_ERR_GCC_EXCERPT = 25;
+  SCE_ERR_BASH = 26;
+  SCE_ERR_ES_BLACK = 40;
+  SCE_ERR_ES_RED = 41;
+  SCE_ERR_ES_GREEN = 42;
+  SCE_ERR_ES_BROWN = 43;
+  SCE_ERR_ES_BLUE = 44;
+  SCE_ERR_ES_MAGENTA = 45;
+  SCE_ERR_ES_CYAN = 46;
+  SCE_ERR_ES_GRAY = 47;
+  SCE_ERR_ES_DARK_GRAY = 48;
+  SCE_ERR_ES_BRIGHT_RED = 49;
+  SCE_ERR_ES_BRIGHT_GREEN = 50;
+  SCE_ERR_ES_YELLOW = 51;
+  SCE_ERR_ES_BRIGHT_BLUE = 52;
+  SCE_ERR_ES_BRIGHT_MAGENTA = 53;
+  SCE_ERR_ES_BRIGHT_CYAN = 54;
+  SCE_ERR_ES_WHITE = 55;
 
   /// <summary>Lexical states for SCLEX_BATCH</summary>
   SCE_BAT_DEFAULT = 0;
@@ -3205,6 +4945,7 @@ const
   SCE_BAT_COMMAND = 5;
   SCE_BAT_IDENTIFIER = 6;
   SCE_BAT_OPERATOR = 7;
+  SCE_BAT_AFTER_LABEL = 8;
 
   /// <summary>Lexical states for SCLEX_TCMD</summary>
   SCE_TCMD_DEFAULT = 0;
@@ -3237,6 +4978,10 @@ const
   SCE_DIFF_DELETED = 5;
   SCE_DIFF_ADDED = 6;
   SCE_DIFF_CHANGED = 7;
+  SCE_DIFF_PATCH_ADD = 8;
+  SCE_DIFF_PATCH_DELETE = 9;
+  SCE_DIFF_REMOVED_PATCH_ADD = 10;
+  SCE_DIFF_REMOVED_PATCH_DELETE = 11;
 
   /// <summary>Lexical states for SCLEX_CONF (Apache Configuration Files Lexer)</summary>
   SCE_CONF_DEFAULT = 0;
@@ -3293,6 +5038,20 @@ const
   SCE_BAAN_IDENTIFIER = 8;
   SCE_BAAN_STRINGEOL = 9;
   SCE_BAAN_WORD2 = 10;
+  SCE_BAAN_WORD3 = 11;
+  SCE_BAAN_WORD4 = 12;
+  SCE_BAAN_WORD5 = 13;
+  SCE_BAAN_WORD6 = 14;
+  SCE_BAAN_WORD7 = 15;
+  SCE_BAAN_WORD8 = 16;
+  SCE_BAAN_WORD9 = 17;
+  SCE_BAAN_TABLEDEF = 18;
+  SCE_BAAN_TABLESQL = 19;
+  SCE_BAAN_FUNCTION = 20;
+  SCE_BAAN_DOMDEF = 21;
+  SCE_BAAN_FUNCDEF = 22;
+  SCE_BAAN_OBJECTDEF = 23;
+  SCE_BAAN_DEFINEDEF = 24;
 
   /// <summary>Lexical states for SCLEX_LISP</summary>
   SCE_LISP_DEFAULT = 0;
@@ -3358,6 +5117,16 @@ const
   SCE_MATLAB_OPERATOR = 6;
   SCE_MATLAB_IDENTIFIER = 7;
   SCE_MATLAB_DOUBLEQUOTESTRING = 8;
+
+  /// <summary>Lexical states for SCLEX_MAXIMA</summary>
+  SCE_MAXIMA_OPERATOR = 0;
+  SCE_MAXIMA_COMMANDENDING = 1;
+  SCE_MAXIMA_COMMENT = 2;
+  SCE_MAXIMA_NUMBER = 3;
+  SCE_MAXIMA_STRING = 4;
+  SCE_MAXIMA_COMMAND = 5;
+  SCE_MAXIMA_VARIABLE = 6;
+  SCE_MAXIMA_UNKNOWN = 7;
 
   /// <summary>Lexical states for SCLEX_SCRIPTOL</summary>
   SCE_SCRIPTOL_DEFAULT = 0;
@@ -3435,7 +5204,7 @@ const
   SCE_CSS_EXTENDED_IDENTIFIER = 19;
   SCE_CSS_EXTENDED_PSEUDOCLASS = 20;
   SCE_CSS_EXTENDED_PSEUDOELEMENT = 21;
-  SCE_CSS_MEDIA = 22;
+  SCE_CSS_GROUP_RULE = 22;
   SCE_CSS_VARIABLE = 23;
 
   /// <summary>Lexical states for SCLEX_POV</summary>
@@ -3627,7 +5396,31 @@ const
   SCE_ERLANG_UNKNOWN = 31;
 
   /// <summary>Lexical states for SCLEX_OCTAVE are identical to MatLab
-  /// Lexical states for SCLEX_MSSQL</summary>
+  /// Lexical states for SCLEX_JULIA</summary>
+  SCE_JULIA_DEFAULT = 0;
+  SCE_JULIA_COMMENT = 1;
+  SCE_JULIA_NUMBER = 2;
+  SCE_JULIA_KEYWORD1 = 3;
+  SCE_JULIA_KEYWORD2 = 4;
+  SCE_JULIA_KEYWORD3 = 5;
+  SCE_JULIA_CHAR = 6;
+  SCE_JULIA_OPERATOR = 7;
+  SCE_JULIA_BRACKET = 8;
+  SCE_JULIA_IDENTIFIER = 9;
+  SCE_JULIA_STRING = 10;
+  SCE_JULIA_SYMBOL = 11;
+  SCE_JULIA_MACRO = 12;
+  SCE_JULIA_STRINGINTERP = 13;
+  SCE_JULIA_DOCSTRING = 14;
+  SCE_JULIA_STRINGLITERAL = 15;
+  SCE_JULIA_COMMAND = 16;
+  SCE_JULIA_COMMANDLITERAL = 17;
+  SCE_JULIA_TYPEANNOT = 18;
+  SCE_JULIA_LEXERROR = 19;
+  SCE_JULIA_KEYWORD4 = 20;
+  SCE_JULIA_TYPEOPERATOR = 21;
+
+  /// <summary>Lexical states for SCLEX_MSSQL</summary>
   SCE_MSSQL_DEFAULT = 0;
   SCE_MSSQL_COMMENT = 1;
   SCE_MSSQL_LINE_COMMENT = 2;
@@ -3661,6 +5454,11 @@ const
   SCE_V_IDENTIFIER = 11;
   SCE_V_STRINGEOL = 12;
   SCE_V_USER = 19;
+  SCE_V_COMMENT_WORD = 20;
+  SCE_V_INPUT = 21;
+  SCE_V_OUTPUT = 22;
+  SCE_V_INOUT = 23;
+  SCE_V_PORT_CONNECT = 24;
 
   /// <summary>Lexical states for SCLEX_KIX</summary>
   SCE_KIX_DEFAULT = 0;
@@ -3673,6 +5471,7 @@ const
   SCE_KIX_KEYWORD = 7;
   SCE_KIX_FUNCTIONS = 8;
   SCE_KIX_OPERATOR = 9;
+  SCE_KIX_COMMENTSTREAM = 10;
   SCE_KIX_IDENTIFIER = 31;
 
   /// <summary>Lexical states for SCLEX_GUI4CLI</summary>
@@ -3783,6 +5582,7 @@ const
   SCE_VHDL_STDPACKAGE = 12;
   SCE_VHDL_STDTYPE = 13;
   SCE_VHDL_USERWORD = 14;
+  SCE_VHDL_BLOCK_COMMENT = 15;
 
   /// <summary>Lexical states for SCLEX_CAML</summary>
   SCE_CAML_DEFAULT = 0;
@@ -3904,6 +5704,7 @@ const
   SCE_SQL_USER3 = 21;
   SCE_SQL_USER4 = 22;
   SCE_SQL_QUOTEDIDENTIFIER = 23;
+  SCE_SQL_QOPERATOR = 24;
 
   /// <summary>Lexical states for SCLEX_SMALLTALK</summary>
   SCE_ST_DEFAULT = 0;
@@ -4056,38 +5857,21 @@ const
   SCE_PLM_KEYWORD = 7;
 
   /// <summary>Lexical state for SCLEX_PROGRESS</summary>
-  SCE_4GL_DEFAULT = 0;
-  SCE_4GL_NUMBER = 1;
-  SCE_4GL_WORD = 2;
-  SCE_4GL_STRING = 3;
-  SCE_4GL_CHARACTER = 4;
-  SCE_4GL_PREPROCESSOR = 5;
-  SCE_4GL_OPERATOR = 6;
-  SCE_4GL_IDENTIFIER = 7;
-  SCE_4GL_BLOCK = 8;
-  SCE_4GL_END = 9;
-  SCE_4GL_COMMENT1 = 10;
-  SCE_4GL_COMMENT2 = 11;
-  SCE_4GL_COMMENT3 = 12;
-  SCE_4GL_COMMENT4 = 13;
-  SCE_4GL_COMMENT5 = 14;
-  SCE_4GL_COMMENT6 = 15;
-  SCE_4GL_DEFAULT_ = 16;
-  SCE_4GL_NUMBER_ = 17;
-  SCE_4GL_WORD_ = 18;
-  SCE_4GL_STRING_ = 19;
-  SCE_4GL_CHARACTER_ = 20;
-  SCE_4GL_PREPROCESSOR_ = 21;
-  SCE_4GL_OPERATOR_ = 22;
-  SCE_4GL_IDENTIFIER_ = 23;
-  SCE_4GL_BLOCK_ = 24;
-  SCE_4GL_END_ = 25;
-  SCE_4GL_COMMENT1_ = 26;
-  SCE_4GL_COMMENT2_ = 27;
-  SCE_4GL_COMMENT3_ = 28;
-  SCE_4GL_COMMENT4_ = 29;
-  SCE_4GL_COMMENT5_ = 30;
-  SCE_4GL_COMMENT6_ = 31;
+  SCE_ABL_DEFAULT = 0;
+  SCE_ABL_NUMBER = 1;
+  SCE_ABL_WORD = 2;
+  SCE_ABL_STRING = 3;
+  SCE_ABL_CHARACTER = 4;
+  SCE_ABL_PREPROCESSOR = 5;
+  SCE_ABL_OPERATOR = 6;
+  SCE_ABL_IDENTIFIER = 7;
+  SCE_ABL_BLOCK = 8;
+  SCE_ABL_END = 9;
+  SCE_ABL_COMMENT = 10;
+  SCE_ABL_TASKMARKER = 11;
+  SCE_ABL_LINECOMMENT = 12;
+  SCE_ABL_ANNOTATION = 13;
+  SCE_ABL_TYPEDANNOTATION = 14;
 
   /// <summary>Lexical states for SCLEX_ABAQUS</summary>
   SCE_ABAQUS_DEFAULT = 0;
@@ -4131,6 +5915,10 @@ const
   SCE_R_IDENTIFIER = 9;
   SCE_R_INFIX = 10;
   SCE_R_INFIXEOL = 11;
+  SCE_R_BACKTICKS = 12;
+  SCE_R_RAWSTRING = 13;
+  SCE_R_RAWSTRING2 = 14;
+  SCE_R_ESCAPESEQUENCE = 15;
 
   /// <summary>Lexical state for SCLEX_MAGIK</summary>
   SCE_MAGIK_DEFAULT = 0;
@@ -4397,6 +6185,7 @@ const
   SCE_COFFEESCRIPT_COMMENTBLOCK = 22;
   SCE_COFFEESCRIPT_VERBOSE_REGEX = 23;
   SCE_COFFEESCRIPT_VERBOSE_REGEX_COMMENT = 24;
+  SCE_COFFEESCRIPT_INSTANCEPROPERTY = 25;
 
   /// <summary>Lexical states for SCLEX_AVS</summary>
   SCE_AVS_DEFAULT = 0;
@@ -4480,16 +6269,18 @@ const
   SCE_VISUALPROLOG_ANONYMOUS = 10;
   SCE_VISUALPROLOG_NUMBER = 11;
   SCE_VISUALPROLOG_OPERATOR = 12;
-  SCE_VISUALPROLOG_CHARACTER = 13;
-  SCE_VISUALPROLOG_CHARACTER_TOO_MANY = 14;
-  SCE_VISUALPROLOG_CHARACTER_ESCAPE_ERROR = 15;
-  SCE_VISUALPROLOG_STRING = 16;
+  SCE_VISUALPROLOG_UNUSED1 = 13;
+  SCE_VISUALPROLOG_UNUSED2 = 14;
+  SCE_VISUALPROLOG_UNUSED3 = 15;
+  SCE_VISUALPROLOG_STRING_QUOTE = 16;
   SCE_VISUALPROLOG_STRING_ESCAPE = 17;
   SCE_VISUALPROLOG_STRING_ESCAPE_ERROR = 18;
-  SCE_VISUALPROLOG_STRING_EOL_OPEN = 19;
-  SCE_VISUALPROLOG_STRING_VERBATIM = 20;
-  SCE_VISUALPROLOG_STRING_VERBATIM_SPECIAL = 21;
-  SCE_VISUALPROLOG_STRING_VERBATIM_EOL = 22;
+  SCE_VISUALPROLOG_UNUSED4 = 19;
+  SCE_VISUALPROLOG_STRING = 20;
+  SCE_VISUALPROLOG_UNUSED5 = 21;
+  SCE_VISUALPROLOG_STRING_EOL = 22;
+  SCE_VISUALPROLOG_EMBEDDED = 23;
+  SCE_VISUALPROLOG_PLACEHOLDER = 24;
 
   /// <summary>Lexical states for SCLEX_STTXT</summary>
   SCE_STTXT_DEFAULT = 0;
@@ -4549,6 +6340,11 @@ const
   SCE_RUST_LIFETIME = 18;
   SCE_RUST_MACRO = 19;
   SCE_RUST_LEXERROR = 20;
+  SCE_RUST_BYTESTRING = 21;
+  SCE_RUST_BYTESTRINGR = 22;
+  SCE_RUST_BYTECHARACTER = 23;
+  SCE_RUST_CSTRING = 24;
+  SCE_RUST_CSTRINGR = 25;
 
   /// <summary>Lexical states for SCLEX_DMAP</summary>
   SCE_DMAP_DEFAULT = 0;
@@ -4575,22 +6371,4489 @@ const
   SCE_DMIS_UNSUPPORTED_MINOR = 8;
   SCE_DMIS_LABEL = 9;
 
-  /// <summary>Deprecated in 2.21
-  /// The SC_CP_DBCS value can be used to indicate a DBCS mode for GTK+.</summary>
-  SC_CP_DBCS = 1;
+  /// <summary>Lexical states for SCLEX_REGISTRY</summary>
+  SCE_REG_DEFAULT = 0;
+  SCE_REG_COMMENT = 1;
+  SCE_REG_VALUENAME = 2;
+  SCE_REG_STRING = 3;
+  SCE_REG_HEXDIGIT = 4;
+  SCE_REG_VALUETYPE = 5;
+  SCE_REG_ADDEDKEY = 6;
+  SCE_REG_DELETEDKEY = 7;
+  SCE_REG_ESCAPED = 8;
+  SCE_REG_KEYPATH_GUID = 9;
+  SCE_REG_STRING_GUID = 10;
+  SCE_REG_PARAMETER = 11;
+  SCE_REG_OPERATOR = 12;
 
-  /// <summary>Deprecated in 2.30
-  /// In palette mode?</summary>
-  SCI_GETUSEPALETTE = 2139;
+  /// <summary>Lexical state for SCLEX_BIBTEX</summary>
+  SCE_BIBTEX_DEFAULT = 0;
+  SCE_BIBTEX_ENTRY = 1;
+  SCE_BIBTEX_UNKNOWN_ENTRY = 2;
+  SCE_BIBTEX_KEY = 3;
+  SCE_BIBTEX_PARAMETER = 4;
+  SCE_BIBTEX_VALUE = 5;
+  SCE_BIBTEX_COMMENT = 6;
 
-  /// <summary>Deprecated in 2.30
-  /// In palette mode, Scintilla uses the environment's palette calls to display
-  /// more colours. This may lead to ugly displays.</summary>
-  SCI_SETUSEPALETTE = 2039;
+  /// <summary>Lexical state for SCLEX_SREC</summary>
+  SCE_HEX_DEFAULT = 0;
+  SCE_HEX_RECSTART = 1;
+  SCE_HEX_RECTYPE = 2;
+  SCE_HEX_RECTYPE_UNKNOWN = 3;
+  SCE_HEX_BYTECOUNT = 4;
+  SCE_HEX_BYTECOUNT_WRONG = 5;
+  SCE_HEX_NOADDRESS = 6;
+  SCE_HEX_DATAADDRESS = 7;
+  SCE_HEX_RECCOUNT = 8;
+  SCE_HEX_STARTADDRESS = 9;
+  SCE_HEX_ADDRESSFIELD_UNKNOWN = 10;
+  SCE_HEX_EXTENDEDADDRESS = 11;
+  SCE_HEX_DATA_ODD = 12;
+  SCE_HEX_DATA_EVEN = 13;
+  SCE_HEX_DATA_UNKNOWN = 14;
+  SCE_HEX_DATA_EMPTY = 15;
+  SCE_HEX_CHECKSUM = 16;
+  SCE_HEX_CHECKSUM_WRONG = 17;
+  SCE_HEX_GARBAGE = 18;
+
+  /// <summary>Lexical state for SCLEX_IHEX (shared with Srec)
+  /// Lexical state for SCLEX_TEHEX (shared with Srec)
+  /// Lexical states for SCLEX_JSON</summary>
+  SCE_JSON_DEFAULT = 0;
+  SCE_JSON_NUMBER = 1;
+  SCE_JSON_STRING = 2;
+  SCE_JSON_STRINGEOL = 3;
+  SCE_JSON_PROPERTYNAME = 4;
+  SCE_JSON_ESCAPESEQUENCE = 5;
+  SCE_JSON_LINECOMMENT = 6;
+  SCE_JSON_BLOCKCOMMENT = 7;
+  SCE_JSON_OPERATOR = 8;
+  SCE_JSON_URI = 9;
+  SCE_JSON_COMPACTIRI = 10;
+  SCE_JSON_KEYWORD = 11;
+  SCE_JSON_LDKEYWORD = 12;
+  SCE_JSON_ERROR = 13;
+  SCE_EDI_DEFAULT = 0;
+  SCE_EDI_SEGMENTSTART = 1;
+  SCE_EDI_SEGMENTEND = 2;
+  SCE_EDI_SEP_ELEMENT = 3;
+  SCE_EDI_SEP_COMPOSITE = 4;
+  SCE_EDI_SEP_RELEASE = 5;
+  SCE_EDI_UNA = 6;
+  SCE_EDI_UNH = 7;
+  SCE_EDI_BADSEGMENT = 8;
+
+  /// <summary>Lexical states for SCLEX_STATA</summary>
+  SCE_STATA_DEFAULT = 0;
+  SCE_STATA_COMMENT = 1;
+  SCE_STATA_COMMENTLINE = 2;
+  SCE_STATA_COMMENTBLOCK = 3;
+  SCE_STATA_NUMBER = 4;
+  SCE_STATA_OPERATOR = 5;
+  SCE_STATA_IDENTIFIER = 6;
+  SCE_STATA_STRING = 7;
+  SCE_STATA_TYPE = 8;
+  SCE_STATA_WORD = 9;
+  SCE_STATA_GLOBAL_MACRO = 10;
+  SCE_STATA_MACRO = 11;
+
+  /// <summary>Lexical states for SCLEX_SAS</summary>
+  SCE_SAS_DEFAULT = 0;
+  SCE_SAS_COMMENT = 1;
+  SCE_SAS_COMMENTLINE = 2;
+  SCE_SAS_COMMENTBLOCK = 3;
+  SCE_SAS_NUMBER = 4;
+  SCE_SAS_OPERATOR = 5;
+  SCE_SAS_IDENTIFIER = 6;
+  SCE_SAS_STRING = 7;
+  SCE_SAS_TYPE = 8;
+  SCE_SAS_WORD = 9;
+  SCE_SAS_GLOBAL_MACRO = 10;
+  SCE_SAS_MACRO = 11;
+  SCE_SAS_MACRO_KEYWORD = 12;
+  SCE_SAS_BLOCK_KEYWORD = 13;
+  SCE_SAS_MACRO_FUNCTION = 14;
+  SCE_SAS_STATEMENT = 15;
+
+  /// <summary>Lexical states for SCLEX_NIM</summary>
+  SCE_NIM_DEFAULT = 0;
+  SCE_NIM_COMMENT = 1;
+  SCE_NIM_COMMENTDOC = 2;
+  SCE_NIM_COMMENTLINE = 3;
+  SCE_NIM_COMMENTLINEDOC = 4;
+  SCE_NIM_NUMBER = 5;
+  SCE_NIM_STRING = 6;
+  SCE_NIM_CHARACTER = 7;
+  SCE_NIM_WORD = 8;
+  SCE_NIM_TRIPLE = 9;
+  SCE_NIM_TRIPLEDOUBLE = 10;
+  SCE_NIM_BACKTICKS = 11;
+  SCE_NIM_FUNCNAME = 12;
+  SCE_NIM_STRINGEOL = 13;
+  SCE_NIM_NUMERROR = 14;
+  SCE_NIM_OPERATOR = 15;
+  SCE_NIM_IDENTIFIER = 16;
+
+  /// <summary>Lexical states for SCLEX_CIL</summary>
+  SCE_CIL_DEFAULT = 0;
+  SCE_CIL_COMMENT = 1;
+  SCE_CIL_COMMENTLINE = 2;
+  SCE_CIL_WORD = 3;
+  SCE_CIL_WORD2 = 4;
+  SCE_CIL_WORD3 = 5;
+  SCE_CIL_STRING = 6;
+  SCE_CIL_LABEL = 7;
+  SCE_CIL_OPERATOR = 8;
+  SCE_CIL_IDENTIFIER = 9;
+  SCE_CIL_STRINGEOL = 10;
+
+  /// <summary>Lexical states for SCLEX_X12</summary>
+  SCE_X12_DEFAULT = 0;
+  SCE_X12_BAD = 1;
+  SCE_X12_ENVELOPE = 2;
+  SCE_X12_FUNCTIONGROUP = 3;
+  SCE_X12_TRANSACTIONSET = 4;
+  SCE_X12_SEGMENTHEADER = 5;
+  SCE_X12_SEGMENTEND = 6;
+  SCE_X12_SEP_ELEMENT = 7;
+  SCE_X12_SEP_SUBELEMENT = 8;
+
+  /// <summary>Lexical states for SCLEX_DATAFLEX</summary>
+  SCE_DF_DEFAULT = 0;
+  SCE_DF_IDENTIFIER = 1;
+  SCE_DF_METATAG = 2;
+  SCE_DF_IMAGE = 3;
+  SCE_DF_COMMENTLINE = 4;
+  SCE_DF_PREPROCESSOR = 5;
+  SCE_DF_PREPROCESSOR2 = 6;
+  SCE_DF_NUMBER = 7;
+  SCE_DF_HEXNUMBER = 8;
+  SCE_DF_WORD = 9;
+  SCE_DF_STRING = 10;
+  SCE_DF_STRINGEOL = 11;
+  SCE_DF_SCOPEWORD = 12;
+  SCE_DF_OPERATOR = 13;
+  SCE_DF_ICODE = 14;
+
+  /// <summary>Lexical states for SCLEX_HOLLYWOOD</summary>
+  SCE_HOLLYWOOD_DEFAULT = 0;
+  SCE_HOLLYWOOD_COMMENT = 1;
+  SCE_HOLLYWOOD_COMMENTBLOCK = 2;
+  SCE_HOLLYWOOD_NUMBER = 3;
+  SCE_HOLLYWOOD_KEYWORD = 4;
+  SCE_HOLLYWOOD_STDAPI = 5;
+  SCE_HOLLYWOOD_PLUGINAPI = 6;
+  SCE_HOLLYWOOD_PLUGINMETHOD = 7;
+  SCE_HOLLYWOOD_STRING = 8;
+  SCE_HOLLYWOOD_STRINGBLOCK = 9;
+  SCE_HOLLYWOOD_PREPROCESSOR = 10;
+  SCE_HOLLYWOOD_OPERATOR = 11;
+  SCE_HOLLYWOOD_IDENTIFIER = 12;
+  SCE_HOLLYWOOD_CONSTANT = 13;
+  SCE_HOLLYWOOD_HEXNUMBER = 14;
+
+  /// <summary>Lexical states for SCLEX_RAKU</summary>
+  SCE_RAKU_DEFAULT = 0;
+  SCE_RAKU_ERROR = 1;
+  SCE_RAKU_COMMENTLINE = 2;
+  SCE_RAKU_COMMENTEMBED = 3;
+  SCE_RAKU_POD = 4;
+  SCE_RAKU_CHARACTER = 5;
+  SCE_RAKU_HEREDOC_Q = 6;
+  SCE_RAKU_HEREDOC_QQ = 7;
+  SCE_RAKU_STRING = 8;
+  SCE_RAKU_STRING_Q = 9;
+  SCE_RAKU_STRING_QQ = 10;
+  SCE_RAKU_STRING_Q_LANG = 11;
+  SCE_RAKU_STRING_VAR = 12;
+  SCE_RAKU_REGEX = 13;
+  SCE_RAKU_REGEX_VAR = 14;
+  SCE_RAKU_ADVERB = 15;
+  SCE_RAKU_NUMBER = 16;
+  SCE_RAKU_PREPROCESSOR = 17;
+  SCE_RAKU_OPERATOR = 18;
+  SCE_RAKU_WORD = 19;
+  SCE_RAKU_FUNCTION = 20;
+  SCE_RAKU_IDENTIFIER = 21;
+  SCE_RAKU_TYPEDEF = 22;
+  SCE_RAKU_MU = 23;
+  SCE_RAKU_POSITIONAL = 24;
+  SCE_RAKU_ASSOCIATIVE = 25;
+  SCE_RAKU_CALLABLE = 26;
+  SCE_RAKU_GRAMMAR = 27;
+  SCE_RAKU_CLASS = 28;
+
+  /// <summary>Lexical states for SCLEX_FSHARP</summary>
+  SCE_FSHARP_DEFAULT = 0;
+  SCE_FSHARP_KEYWORD = 1;
+  SCE_FSHARP_KEYWORD2 = 2;
+  SCE_FSHARP_KEYWORD3 = 3;
+  SCE_FSHARP_KEYWORD4 = 4;
+  SCE_FSHARP_KEYWORD5 = 5;
+  SCE_FSHARP_IDENTIFIER = 6;
+  SCE_FSHARP_QUOT_IDENTIFIER = 7;
+  SCE_FSHARP_COMMENT = 8;
+  SCE_FSHARP_COMMENTLINE = 9;
+  SCE_FSHARP_PREPROCESSOR = 10;
+  SCE_FSHARP_LINENUM = 11;
+  SCE_FSHARP_OPERATOR = 12;
+  SCE_FSHARP_NUMBER = 13;
+  SCE_FSHARP_CHARACTER = 14;
+  SCE_FSHARP_STRING = 15;
+  SCE_FSHARP_VERBATIM = 16;
+  SCE_FSHARP_QUOTATION = 17;
+  SCE_FSHARP_ATTRIBUTE = 18;
+  SCE_FSHARP_FORMAT_SPEC = 19;
+
+  /// <summary>Lexical states for SCLEX_ASCIIDOC</summary>
+  SCE_ASCIIDOC_DEFAULT = 0;
+  SCE_ASCIIDOC_STRONG1 = 1;
+  SCE_ASCIIDOC_STRONG2 = 2;
+  SCE_ASCIIDOC_EM1 = 3;
+  SCE_ASCIIDOC_EM2 = 4;
+  SCE_ASCIIDOC_HEADER1 = 5;
+  SCE_ASCIIDOC_HEADER2 = 6;
+  SCE_ASCIIDOC_HEADER3 = 7;
+  SCE_ASCIIDOC_HEADER4 = 8;
+  SCE_ASCIIDOC_HEADER5 = 9;
+  SCE_ASCIIDOC_HEADER6 = 10;
+  SCE_ASCIIDOC_ULIST_ITEM = 11;
+  SCE_ASCIIDOC_OLIST_ITEM = 12;
+  SCE_ASCIIDOC_BLOCKQUOTE = 13;
+  SCE_ASCIIDOC_LINK = 14;
+  SCE_ASCIIDOC_CODEBK = 15;
+  SCE_ASCIIDOC_PASSBK = 16;
+  SCE_ASCIIDOC_COMMENT = 17;
+  SCE_ASCIIDOC_COMMENTBK = 18;
+  SCE_ASCIIDOC_LITERAL = 19;
+  SCE_ASCIIDOC_LITERALBK = 20;
+  SCE_ASCIIDOC_ATTRIB = 21;
+  SCE_ASCIIDOC_ATTRIBVAL = 22;
+  SCE_ASCIIDOC_MACRO = 23;
+
+  /// <summary>Lexical states for SCLEX_GDSCRIPT</summary>
+  SCE_GD_DEFAULT = 0;
+  SCE_GD_COMMENTLINE = 1;
+  SCE_GD_NUMBER = 2;
+  SCE_GD_STRING = 3;
+  SCE_GD_CHARACTER = 4;
+  SCE_GD_WORD = 5;
+  SCE_GD_TRIPLE = 6;
+  SCE_GD_TRIPLEDOUBLE = 7;
+  SCE_GD_CLASSNAME = 8;
+  SCE_GD_FUNCNAME = 9;
+  SCE_GD_OPERATOR = 10;
+  SCE_GD_IDENTIFIER = 11;
+  SCE_GD_COMMENTBLOCK = 12;
+  SCE_GD_STRINGEOL = 13;
+  SCE_GD_WORD2 = 14;
+  SCE_GD_ANNOTATION = 15;
+  SCE_GD_NODEPATH = 16;
+
+  /// <summary>Lexical states for SCLEX_TOML</summary>
+  SCE_TOML_DEFAULT = 0;
+  SCE_TOML_COMMENT = 1;
+  SCE_TOML_IDENTIFIER = 2;
+  SCE_TOML_KEYWORD = 3;
+  SCE_TOML_NUMBER = 4;
+  SCE_TOML_TABLE = 5;
+  SCE_TOML_KEY = 6;
+  SCE_TOML_ERROR = 7;
+  SCE_TOML_OPERATOR = 8;
+  SCE_TOML_STRING_SQ = 9;
+  SCE_TOML_STRING_DQ = 10;
+  SCE_TOML_TRIPLE_STRING_SQ = 11;
+  SCE_TOML_TRIPLE_STRING_DQ = 12;
+  SCE_TOML_ESCAPECHAR = 13;
+  SCE_TOML_DATETIME = 14;
+  SCE_TOML_STRINGEOL = 15;
+
+  /// <summary>Lexical states for SCLEX_TROFF</summary>
+  SCE_TROFF_DEFAULT = 0;
+  SCE_TROFF_REQUEST = 1;
+  SCE_TROFF_COMMAND = 2;
+  SCE_TROFF_NUMBER = 3;
+  SCE_TROFF_OPERATOR = 4;
+  SCE_TROFF_STRING = 5;
+  SCE_TROFF_COMMENT = 6;
+  SCE_TROFF_IGNORE = 7;
+  SCE_TROFF_ESCAPE_STRING = 8;
+  SCE_TROFF_ESCAPE_MACRO = 9;
+  SCE_TROFF_ESCAPE_FONT = 10;
+  SCE_TROFF_ESCAPE_NUMBER = 11;
+  SCE_TROFF_ESCAPE_COLOUR = 12;
+  SCE_TROFF_ESCAPE_GLYPH = 13;
+  SCE_TROFF_ESCAPE_ENV = 14;
+  SCE_TROFF_ESCAPE_SUPPRESSION = 15;
+  SCE_TROFF_ESCAPE_SIZE = 16;
+  SCE_TROFF_ESCAPE_TRANSPARENT = 17;
+  SCE_TROFF_ESCAPE_ISVALID = 18;
+  SCE_TROFF_ESCAPE_DRAW = 19;
+  SCE_TROFF_ESCAPE_MOVE = 20;
+  SCE_TROFF_ESCAPE_HEIGHT = 21;
+  SCE_TROFF_ESCAPE_OVERSTRIKE = 22;
+  SCE_TROFF_ESCAPE_SLANT = 23;
+  SCE_TROFF_ESCAPE_WIDTH = 24;
+  SCE_TROFF_ESCAPE_VSPACING = 25;
+  SCE_TROFF_ESCAPE_DEVICE = 26;
+  SCE_TROFF_ESCAPE_NOMOVE = 27;
+
+  /// <summary>Lexical states for SCLEX_DART</summary>
+  SCE_DART_DEFAULT = 0;
+  SCE_DART_COMMENTLINE = 1;
+  SCE_DART_COMMENTLINEDOC = 2;
+  SCE_DART_COMMENTBLOCK = 3;
+  SCE_DART_COMMENTBLOCKDOC = 4;
+  SCE_DART_STRING_SQ = 5;
+  SCE_DART_STRING_DQ = 6;
+  SCE_DART_TRIPLE_STRING_SQ = 7;
+  SCE_DART_TRIPLE_STRING_DQ = 8;
+  SCE_DART_RAWSTRING_SQ = 9;
+  SCE_DART_RAWSTRING_DQ = 10;
+  SCE_DART_TRIPLE_RAWSTRING_SQ = 11;
+  SCE_DART_TRIPLE_RAWSTRING_DQ = 12;
+  SCE_DART_ESCAPECHAR = 13;
+  SCE_DART_IDENTIFIER = 14;
+  SCE_DART_IDENTIFIER_STRING = 15;
+  SCE_DART_OPERATOR = 16;
+  SCE_DART_OPERATOR_STRING = 17;
+  SCE_DART_SYMBOL_IDENTIFIER = 18;
+  SCE_DART_SYMBOL_OPERATOR = 19;
+  SCE_DART_NUMBER = 20;
+  SCE_DART_KEY = 21;
+  SCE_DART_METADATA = 22;
+  SCE_DART_KW_PRIMARY = 23;
+  SCE_DART_KW_SECONDARY = 24;
+  SCE_DART_KW_TERTIARY = 25;
+  SCE_DART_KW_TYPE = 26;
+  SCE_DART_STRINGEOL = 27;
+
+  /// <summary>Lexical states for SCLEX_ZIG</summary>
+  SCE_ZIG_DEFAULT = 0;
+  SCE_ZIG_COMMENTLINE = 1;
+  SCE_ZIG_COMMENTLINEDOC = 2;
+  SCE_ZIG_COMMENTLINETOP = 3;
+  SCE_ZIG_NUMBER = 4;
+  SCE_ZIG_OPERATOR = 5;
+  SCE_ZIG_CHARACTER = 6;
+  SCE_ZIG_STRING = 7;
+  SCE_ZIG_MULTISTRING = 8;
+  SCE_ZIG_ESCAPECHAR = 9;
+  SCE_ZIG_IDENTIFIER = 10;
+  SCE_ZIG_FUNCTION = 11;
+  SCE_ZIG_BUILTIN_FUNCTION = 12;
+  SCE_ZIG_KW_PRIMARY = 13;
+  SCE_ZIG_KW_SECONDARY = 14;
+  SCE_ZIG_KW_TERTIARY = 15;
+  SCE_ZIG_KW_TYPE = 16;
+  SCE_ZIG_IDENTIFIER_STRING = 17;
+  SCE_ZIG_STRINGEOL = 18;
+
+  /// <summary>Lexical states for SCLEX_NIX</summary>
+  SCE_NIX_DEFAULT = 0;
+  SCE_NIX_COMMENTLINE = 1;
+  SCE_NIX_COMMENTBLOCK = 2;
+  SCE_NIX_STRING = 3;
+  SCE_NIX_STRING_MULTILINE = 4;
+  SCE_NIX_ESCAPECHAR = 5;
+  SCE_NIX_IDENTIFIER = 6;
+  SCE_NIX_OPERATOR = 7;
+  SCE_NIX_OPERATOR_STRING = 8;
+  SCE_NIX_NUMBER = 9;
+  SCE_NIX_KEY = 10;
+  SCE_NIX_PATH = 11;
+  SCE_NIX_KEYWORD1 = 12;
+  SCE_NIX_KEYWORD2 = 13;
+  SCE_NIX_KEYWORD3 = 14;
+  SCE_NIX_KEYWORD4 = 15;
+  SCE_NIX_STRINGEOL = 16;
+
+  /// <summary>Lexical states for SCLEX_SINEX</summary>
+  SCE_SINEX_DEFAULT = 0;
+  SCE_SINEX_COMMENTLINE = 1;
+  SCE_SINEX_BLOCK_START = 2;
+  SCE_SINEX_BLOCK_END = 3;
+  SCE_SINEX_DATE = 4;
+  SCE_SINEX_NUMBER = 5;
+
+  /// <summary>Lexical states for SCLEX_ESCSEQ</summary>
+  SCE_ESCSEQ_DEFAULT = 0;
+  SCE_ESCSEQ_BLACK_DEFAULT = 1;
+  SCE_ESCSEQ_RED_DEFAULT = 2;
+  SCE_ESCSEQ_GREEN_DEFAULT = 3;
+  SCE_ESCSEQ_YELLOW_DEFAULT = 4;
+  SCE_ESCSEQ_BLUE_DEFAULT = 5;
+  SCE_ESCSEQ_MAGENTA_DEFAULT = 6;
+  SCE_ESCSEQ_CYAN_DEFAULT = 7;
+  SCE_ESCSEQ_WHITE_DEFAULT = 8;
+  SCE_ESCSEQ_DEFAULT_BLACK = 9;
+  SCE_ESCSEQ_BLACK_BLACK = 10;
+  SCE_ESCSEQ_RED_BLACK = 11;
+  SCE_ESCSEQ_GREEN_BLACK = 12;
+  SCE_ESCSEQ_YELLOW_BLACK = 13;
+  SCE_ESCSEQ_BLUE_BLACK = 14;
+  SCE_ESCSEQ_MAGENTA_BLACK = 15;
+  SCE_ESCSEQ_CYAN_BLACK = 16;
+  SCE_ESCSEQ_WHITE_BLACK = 17;
+  SCE_ESCSEQ_DEFAULT_RED = 18;
+  SCE_ESCSEQ_BLACK_RED = 19;
+  SCE_ESCSEQ_RED_RED = 20;
+  SCE_ESCSEQ_GREEN_RED = 21;
+  SCE_ESCSEQ_YELLOW_RED = 22;
+  SCE_ESCSEQ_BLUE_RED = 23;
+  SCE_ESCSEQ_MAGENTA_RED = 24;
+  SCE_ESCSEQ_CYAN_RED = 25;
+  SCE_ESCSEQ_WHITE_RED = 26;
+  SCE_ESCSEQ_DEFAULT_GREEN = 27;
+  SCE_ESCSEQ_BLACK_GREEN = 28;
+  SCE_ESCSEQ_RED_GREEN = 29;
+  SCE_ESCSEQ_GREEN_GREEN = 30;
+  SCE_ESCSEQ_YELLOW_GREEN = 40;
+  SCE_ESCSEQ_BLUE_GREEN = 41;
+  SCE_ESCSEQ_MAGENTA_GREEN = 42;
+  SCE_ESCSEQ_CYAN_GREEN = 43;
+  SCE_ESCSEQ_WHITE_GREEN = 44;
+  SCE_ESCSEQ_DEFAULT_YELLOW = 45;
+  SCE_ESCSEQ_BLACK_YELLOW = 46;
+  SCE_ESCSEQ_RED_YELLOW = 47;
+  SCE_ESCSEQ_GREEN_YELLOW = 48;
+  SCE_ESCSEQ_YELLOW_YELLOW = 49;
+  SCE_ESCSEQ_BLUE_YELLOW = 50;
+  SCE_ESCSEQ_MAGENTA_YELLOW = 51;
+  SCE_ESCSEQ_CYAN_YELLOW = 52;
+  SCE_ESCSEQ_WHITE_YELLOW = 53;
+  SCE_ESCSEQ_DEFAULT_BLUE = 54;
+  SCE_ESCSEQ_BLACK_BLUE = 55;
+  SCE_ESCSEQ_RED_BLUE = 56;
+  SCE_ESCSEQ_GREEN_BLUE = 57;
+  SCE_ESCSEQ_YELLOW_BLUE = 58;
+  SCE_ESCSEQ_BLUE_BLUE = 59;
+  SCE_ESCSEQ_MAGENTA_BLUE = 60;
+  SCE_ESCSEQ_CYAN_BLUE = 61;
+  SCE_ESCSEQ_WHITE_BLUE = 62;
+  SCE_ESCSEQ_DEFAULT_MAGENTA = 63;
+  SCE_ESCSEQ_BLACK_MAGENTA = 64;
+  SCE_ESCSEQ_RED_MAGENTA = 65;
+  SCE_ESCSEQ_GREEN_MAGENTA = 66;
+  SCE_ESCSEQ_YELLOW_MAGENTA = 67;
+  SCE_ESCSEQ_BLUE_MAGENTA = 68;
+  SCE_ESCSEQ_MAGENTA_MAGENTA = 69;
+  SCE_ESCSEQ_CYAN_MAGENTA = 70;
+  SCE_ESCSEQ_WHITE_MAGENTA = 71;
+  SCE_ESCSEQ_DEFAULT_CYAN = 72;
+  SCE_ESCSEQ_BLACK_CYAN = 73;
+  SCE_ESCSEQ_RED_CYAN = 74;
+  SCE_ESCSEQ_GREEN_CYAN = 75;
+  SCE_ESCSEQ_YELLOW_CYAN = 76;
+  SCE_ESCSEQ_BLUE_CYAN = 77;
+  SCE_ESCSEQ_MAGENTA_CYAN = 78;
+  SCE_ESCSEQ_CYAN_CYAN = 79;
+  SCE_ESCSEQ_WHITE_CYAN = 80;
+  SCE_ESCSEQ_DEFAULT_WHITE = 81;
+  SCE_ESCSEQ_BLACK_WHITE = 82;
+  SCE_ESCSEQ_RED_WHITE = 83;
+  SCE_ESCSEQ_GREEN_WHITE = 84;
+  SCE_ESCSEQ_YELLOW_WHITE = 85;
+  SCE_ESCSEQ_BLUE_WHITE = 86;
+  SCE_ESCSEQ_MAGENTA_WHITE = 87;
+  SCE_ESCSEQ_CYAN_WHITE = 88;
+  SCE_ESCSEQ_WHITE_WHITE = 89;
+  SCE_ESCSEQ_BOLD_DEFAULT = 90;
+  SCE_ESCSEQ_BOLD_BLACK_DEFAULT = 91;
+  SCE_ESCSEQ_BOLD_RED_DEFAULT = 92;
+  SCE_ESCSEQ_BOLD_GREEN_DEFAULT = 93;
+  SCE_ESCSEQ_BOLD_YELLOW_DEFAULT = 94;
+  SCE_ESCSEQ_BOLD_BLUE_DEFAULT = 95;
+  SCE_ESCSEQ_BOLD_MAGENTA_DEFAULT = 96;
+  SCE_ESCSEQ_BOLD_CYAN_DEFAULT = 97;
+  SCE_ESCSEQ_BOLD_WHITE_DEFAULT = 98;
+  SCE_ESCSEQ_BOLD_DEFAULT_BLACK = 99;
+  SCE_ESCSEQ_BOLD_BLACK_BLACK = 100;
+  SCE_ESCSEQ_BOLD_RED_BLACK = 101;
+  SCE_ESCSEQ_BOLD_GREEN_BLACK = 102;
+  SCE_ESCSEQ_BOLD_YELLOW_BLACK = 103;
+  SCE_ESCSEQ_BOLD_BLUE_BLACK = 104;
+  SCE_ESCSEQ_BOLD_MAGENTA_BLACK = 105;
+  SCE_ESCSEQ_BOLD_CYAN_BLACK = 106;
+  SCE_ESCSEQ_BOLD_WHITE_BLACK = 107;
+  SCE_ESCSEQ_BOLD_DEFAULT_RED = 108;
+  SCE_ESCSEQ_BOLD_BLACK_RED = 109;
+  SCE_ESCSEQ_BOLD_RED_RED = 110;
+  SCE_ESCSEQ_BOLD_GREEN_RED = 111;
+  SCE_ESCSEQ_BOLD_YELLOW_RED = 112;
+  SCE_ESCSEQ_BOLD_BLUE_RED = 113;
+  SCE_ESCSEQ_BOLD_MAGENTA_RED = 114;
+  SCE_ESCSEQ_BOLD_CYAN_RED = 115;
+  SCE_ESCSEQ_BOLD_WHITE_RED = 116;
+  SCE_ESCSEQ_BOLD_DEFAULT_GREEN = 117;
+  SCE_ESCSEQ_BOLD_BLACK_GREEN = 118;
+  SCE_ESCSEQ_BOLD_RED_GREEN = 119;
+  SCE_ESCSEQ_BOLD_GREEN_GREEN = 120;
+  SCE_ESCSEQ_BOLD_YELLOW_GREEN = 121;
+  SCE_ESCSEQ_BOLD_BLUE_GREEN = 122;
+  SCE_ESCSEQ_BOLD_MAGENTA_GREEN = 123;
+  SCE_ESCSEQ_BOLD_CYAN_GREEN = 124;
+  SCE_ESCSEQ_BOLD_WHITE_GREEN = 125;
+  SCE_ESCSEQ_BOLD_DEFAULT_YELLOW = 126;
+  SCE_ESCSEQ_BOLD_BLACK_YELLOW = 127;
+  SCE_ESCSEQ_BOLD_RED_YELLOW = 128;
+  SCE_ESCSEQ_BOLD_GREEN_YELLOW = 129;
+  SCE_ESCSEQ_BOLD_YELLOW_YELLOW = 130;
+  SCE_ESCSEQ_BOLD_BLUE_YELLOW = 131;
+  SCE_ESCSEQ_BOLD_MAGENTA_YELLOW = 132;
+  SCE_ESCSEQ_BOLD_CYAN_YELLOW = 133;
+  SCE_ESCSEQ_BOLD_WHITE_YELLOW = 134;
+  SCE_ESCSEQ_BOLD_DEFAULT_BLUE = 135;
+  SCE_ESCSEQ_BOLD_BLACK_BLUE = 136;
+  SCE_ESCSEQ_BOLD_RED_BLUE = 137;
+  SCE_ESCSEQ_BOLD_GREEN_BLUE = 138;
+  SCE_ESCSEQ_BOLD_YELLOW_BLUE = 139;
+  SCE_ESCSEQ_BOLD_BLUE_BLUE = 140;
+  SCE_ESCSEQ_BOLD_MAGENTA_BLUE = 141;
+  SCE_ESCSEQ_BOLD_CYAN_BLUE = 142;
+  SCE_ESCSEQ_BOLD_WHITE_BLUE = 143;
+  SCE_ESCSEQ_BOLD_DEFAULT_MAGENTA = 144;
+  SCE_ESCSEQ_BOLD_BLACK_MAGENTA = 145;
+  SCE_ESCSEQ_BOLD_RED_MAGENTA = 146;
+  SCE_ESCSEQ_BOLD_GREEN_MAGENTA = 147;
+  SCE_ESCSEQ_BOLD_YELLOW_MAGENTA = 148;
+  SCE_ESCSEQ_BOLD_BLUE_MAGENTA = 149;
+  SCE_ESCSEQ_BOLD_MAGENTA_MAGENTA = 150;
+  SCE_ESCSEQ_BOLD_CYAN_MAGENTA = 151;
+  SCE_ESCSEQ_BOLD_WHITE_MAGENTA = 152;
+  SCE_ESCSEQ_BOLD_DEFAULT_CYAN = 153;
+  SCE_ESCSEQ_BOLD_BLACK_CYAN = 154;
+  SCE_ESCSEQ_BOLD_RED_CYAN = 155;
+  SCE_ESCSEQ_BOLD_GREEN_CYAN = 156;
+  SCE_ESCSEQ_BOLD_YELLOW_CYAN = 157;
+  SCE_ESCSEQ_BOLD_BLUE_CYAN = 158;
+  SCE_ESCSEQ_BOLD_MAGENTA_CYAN = 159;
+  SCE_ESCSEQ_BOLD_CYAN_CYAN = 160;
+  SCE_ESCSEQ_BOLD_WHITE_CYAN = 161;
+  SCE_ESCSEQ_BOLD_DEFAULT_WHITE = 162;
+  SCE_ESCSEQ_BOLD_BLACK_WHITE = 163;
+  SCE_ESCSEQ_BOLD_RED_WHITE = 164;
+  SCE_ESCSEQ_BOLD_GREEN_WHITE = 165;
+  SCE_ESCSEQ_BOLD_YELLOW_WHITE = 166;
+  SCE_ESCSEQ_BOLD_BLUE_WHITE = 167;
+  SCE_ESCSEQ_BOLD_MAGENTA_WHITE = 168;
+  SCE_ESCSEQ_BOLD_CYAN_WHITE = 169;
+  SCE_ESCSEQ_BOLD_WHITE_WHITE = 170;
+  SCE_ESCSEQ_IDENTIFIER = 171;
+  SCE_ESCSEQ_UNKNOWN = 172;
+  /// <summary>Set the lexing language of the document.</summary>
+  SCI_SETLEXERLANGUAGE = 4006;
+
+  /// <summary>Load an external lexer library.</summary>
+  SCI_LOADLEXERLIBRARY = 4007;
 
 // </scigen>
 
+type
+  TDSciUpdateFlagsSet = set of TDSciUpdate;
+
+// <scigen-enum-func-decl>
+
+function TDSciWhiteSpaceToInt(AEnum: TDSciWhiteSpace): Integer;
+function TDSciWhiteSpaceFromInt(AEnum: Integer): TDSciWhiteSpace;
+function TDSciTabDrawModeToInt(AEnum: TDSciTabDrawMode): Integer;
+function TDSciTabDrawModeFromInt(AEnum: Integer): TDSciTabDrawMode;
+function TDSciEndOfLineToInt(AEnum: TDSciEndOfLine): Integer;
+function TDSciEndOfLineFromInt(AEnum: Integer): TDSciEndOfLine;
+function TDSciIMEInteractionToInt(AEnum: TDSciIMEInteraction): Integer;
+function TDSciIMEInteractionFromInt(AEnum: Integer): TDSciIMEInteraction;
+function TDSciAlphaToInt(AEnum: TDSciAlpha): Integer;
+function TDSciAlphaFromInt(AEnum: Integer): TDSciAlpha;
+function TDSciCursorShapeToInt(AEnum: TDSciCursorShape): Integer;
+function TDSciCursorShapeFromInt(AEnum: Integer): TDSciCursorShape;
+function TDSciMarkerSymbolToInt(AEnum: TDSciMarkerSymbol): Integer;
+function TDSciMarkerSymbolFromInt(AEnum: Integer): TDSciMarkerSymbol;
+function TDSciMarkerOutlineToInt(AEnum: TDSciMarkerOutline): Integer;
+function TDSciMarkerOutlineFromInt(AEnum: Integer): TDSciMarkerOutline;
+function TDSciMarginTypeToInt(AEnum: TDSciMarginType): Integer;
+function TDSciMarginTypeFromInt(AEnum: Integer): TDSciMarginType;
+function TDSciStylesCommonToInt(AEnum: TDSciStylesCommon): Integer;
+function TDSciStylesCommonFromInt(AEnum: Integer): TDSciStylesCommon;
+function TDSciCharacterSetToInt(AEnum: TDSciCharacterSet): Integer;
+function TDSciCharacterSetFromInt(AEnum: Integer): TDSciCharacterSet;
+function TDSciCaseVisibleToInt(AEnum: TDSciCaseVisible): Integer;
+function TDSciCaseVisibleFromInt(AEnum: Integer): TDSciCaseVisible;
+function TDSciFontWeightToInt(AEnum: TDSciFontWeight): Integer;
+function TDSciFontWeightFromInt(AEnum: Integer): TDSciFontWeight;
+function TDSciFontStretchToInt(AEnum: TDSciFontStretch): Integer;
+function TDSciFontStretchFromInt(AEnum: Integer): TDSciFontStretch;
+function TDSciElementToInt(AEnum: TDSciElement): Integer;
+function TDSciElementFromInt(AEnum: Integer): TDSciElement;
+function TDSciLayerToInt(AEnum: TDSciLayer): Integer;
+function TDSciLayerFromInt(AEnum: Integer): TDSciLayer;
+function TDSciIndicatorStyleToInt(AEnum: TDSciIndicatorStyle): Integer;
+function TDSciIndicatorStyleFromInt(AEnum: Integer): TDSciIndicatorStyle;
+function TDSciIndicatorNumbersToInt(AEnum: TDSciIndicatorNumbers): Integer;
+function TDSciIndicatorNumbersFromInt(AEnum: Integer): TDSciIndicatorNumbers;
+function TDSciIndicValueToInt(AEnum: TDSciIndicValue): Integer;
+function TDSciIndicValueFromInt(AEnum: Integer): TDSciIndicValue;
+function TDSciIndicFlagToInt(AEnum: TDSciIndicFlag): Integer;
+function TDSciIndicFlagFromInt(AEnum: Integer): TDSciIndicFlag;
+function TDSciAutoCompleteOptionToInt(AEnum: TDSciAutoCompleteOption): Integer;
+function TDSciAutoCompleteOptionFromInt(AEnum: Integer): TDSciAutoCompleteOption;
+function TDSciIndentViewToInt(AEnum: TDSciIndentView): Integer;
+function TDSciIndentViewFromInt(AEnum: Integer): TDSciIndentView;
+function TDSciPrintOptionToInt(AEnum: TDSciPrintOption): Integer;
+function TDSciPrintOptionFromInt(AEnum: Integer): TDSciPrintOption;
+function TDSciFindOptionToInt(AEnum: TDSciFindOption): Integer;
+function TDSciFindOptionFromInt(AEnum: Integer): TDSciFindOption;
+function TDSciFindOptionSetToInt(AEnum: TDSciFindOptionSet): Integer;
+function TDSciFindOptionSetFromInt(AEnum: Integer): TDSciFindOptionSet;
+function TDSciChangeHistoryOptionToInt(AEnum: TDSciChangeHistoryOption): Integer;
+function TDSciChangeHistoryOptionFromInt(AEnum: Integer): TDSciChangeHistoryOption;
+function TDSciUndoSelectionHistoryOptionToInt(AEnum: TDSciUndoSelectionHistoryOption): Integer;
+function TDSciUndoSelectionHistoryOptionFromInt(AEnum: Integer): TDSciUndoSelectionHistoryOption;
+function TDSciFoldLevelToInt(AEnum: TDSciFoldLevel): Integer;
+function TDSciFoldLevelFromInt(AEnum: Integer): TDSciFoldLevel;
+function TDSciFoldLevelSetToInt(AEnum: TDSciFoldLevelSet): Integer;
+function TDSciFoldLevelSetFromInt(AEnum: Integer): TDSciFoldLevelSet;
+function TDSciFoldDisplayTextStyleToInt(AEnum: TDSciFoldDisplayTextStyle): Integer;
+function TDSciFoldDisplayTextStyleFromInt(AEnum: Integer): TDSciFoldDisplayTextStyle;
+function TDSciFoldActionToInt(AEnum: TDSciFoldAction): Integer;
+function TDSciFoldActionFromInt(AEnum: Integer): TDSciFoldAction;
+function TDSciAutomaticFoldToInt(AEnum: TDSciAutomaticFold): Integer;
+function TDSciAutomaticFoldFromInt(AEnum: Integer): TDSciAutomaticFold;
+function TDSciFoldFlagToInt(AEnum: TDSciFoldFlag): Integer;
+function TDSciFoldFlagFromInt(AEnum: Integer): TDSciFoldFlag;
+function TDSciFoldFlagSetToInt(AEnum: TDSciFoldFlagSet): Integer;
+function TDSciFoldFlagSetFromInt(AEnum: Integer): TDSciFoldFlagSet;
+function TDSciIdleStylingToInt(AEnum: TDSciIdleStyling): Integer;
+function TDSciIdleStylingFromInt(AEnum: Integer): TDSciIdleStyling;
+function TDSciWrapToInt(AEnum: TDSciWrap): Integer;
+function TDSciWrapFromInt(AEnum: Integer): TDSciWrap;
+function TDSciWrapVisualFlagToInt(AEnum: TDSciWrapVisualFlag): Integer;
+function TDSciWrapVisualFlagFromInt(AEnum: Integer): TDSciWrapVisualFlag;
+function TDSciWrapVisualFlagSetToInt(AEnum: TDSciWrapVisualFlagSet): Integer;
+function TDSciWrapVisualFlagSetFromInt(AEnum: Integer): TDSciWrapVisualFlagSet;
+function TDSciWrapVisualLocationToInt(AEnum: TDSciWrapVisualLocation): Integer;
+function TDSciWrapVisualLocationFromInt(AEnum: Integer): TDSciWrapVisualLocation;
+function TDSciWrapVisualLocationSetToInt(AEnum: TDSciWrapVisualLocationSet): Integer;
+function TDSciWrapVisualLocationSetFromInt(AEnum: Integer): TDSciWrapVisualLocationSet;
+function TDSciWrapIndentModeToInt(AEnum: TDSciWrapIndentMode): Integer;
+function TDSciWrapIndentModeFromInt(AEnum: Integer): TDSciWrapIndentMode;
+function TDSciLineCacheToInt(AEnum: TDSciLineCache): Integer;
+function TDSciLineCacheFromInt(AEnum: Integer): TDSciLineCache;
+function TDSciPhasesDrawToInt(AEnum: TDSciPhasesDraw): Integer;
+function TDSciPhasesDrawFromInt(AEnum: Integer): TDSciPhasesDraw;
+function TDSciFontQualityToInt(AEnum: TDSciFontQuality): Integer;
+function TDSciFontQualityFromInt(AEnum: Integer): TDSciFontQuality;
+function TDSciMultiPasteToInt(AEnum: TDSciMultiPaste): Integer;
+function TDSciMultiPasteFromInt(AEnum: Integer): TDSciMultiPaste;
+function TDSciAccessibilityToInt(AEnum: TDSciAccessibility): Integer;
+function TDSciAccessibilityFromInt(AEnum: Integer): TDSciAccessibility;
+function TDSciEdgeVisualStyleToInt(AEnum: TDSciEdgeVisualStyle): Integer;
+function TDSciEdgeVisualStyleFromInt(AEnum: Integer): TDSciEdgeVisualStyle;
+function TDSciPopUpToInt(AEnum: TDSciPopUp): Integer;
+function TDSciPopUpFromInt(AEnum: Integer): TDSciPopUp;
+function TDSciDocumentOptionToInt(AEnum: TDSciDocumentOption): Integer;
+function TDSciDocumentOptionFromInt(AEnum: Integer): TDSciDocumentOption;
+function TDSciStatusToInt(AEnum: TDSciStatus): Integer;
+function TDSciStatusFromInt(AEnum: Integer): TDSciStatus;
+function TDSciVisiblePolicyToInt(AEnum: TDSciVisiblePolicy): Integer;
+function TDSciVisiblePolicyFromInt(AEnum: Integer): TDSciVisiblePolicy;
+function TDSciVisiblePolicySetToInt(AEnum: TDSciVisiblePolicySet): Integer;
+function TDSciVisiblePolicySetFromInt(AEnum: Integer): TDSciVisiblePolicySet;
+function TDSciCaretPolicyToInt(AEnum: TDSciCaretPolicy): Integer;
+function TDSciCaretPolicyFromInt(AEnum: Integer): TDSciCaretPolicy;
+function TDSciCaretPolicySetToInt(AEnum: TDSciCaretPolicySet): Integer;
+function TDSciCaretPolicySetFromInt(AEnum: Integer): TDSciCaretPolicySet;
+function TDSciSelectionModeToInt(AEnum: TDSciSelectionMode): Integer;
+function TDSciSelectionModeFromInt(AEnum: Integer): TDSciSelectionMode;
+function TDSciCaseInsensitiveBehaviourToInt(AEnum: TDSciCaseInsensitiveBehaviour): Integer;
+function TDSciCaseInsensitiveBehaviourFromInt(AEnum: Integer): TDSciCaseInsensitiveBehaviour;
+function TDSciMultiAutoCompleteToInt(AEnum: TDSciMultiAutoComplete): Integer;
+function TDSciMultiAutoCompleteFromInt(AEnum: Integer): TDSciMultiAutoComplete;
+function TDSciOrderingToInt(AEnum: TDSciOrdering): Integer;
+function TDSciOrderingFromInt(AEnum: Integer): TDSciOrdering;
+function TDSciCaretStickyToInt(AEnum: TDSciCaretSticky): Integer;
+function TDSciCaretStickyFromInt(AEnum: Integer): TDSciCaretSticky;
+function TDSciCaretStyleToInt(AEnum: TDSciCaretStyle): Integer;
+function TDSciCaretStyleFromInt(AEnum: Integer): TDSciCaretStyle;
+function TDSciMarginOptionToInt(AEnum: TDSciMarginOption): Integer;
+function TDSciMarginOptionFromInt(AEnum: Integer): TDSciMarginOption;
+function TDSciAnnotationVisibleToInt(AEnum: TDSciAnnotationVisible): Integer;
+function TDSciAnnotationVisibleFromInt(AEnum: Integer): TDSciAnnotationVisible;
+function TDSciUndoFlagsToInt(AEnum: TDSciUndoFlags): Integer;
+function TDSciUndoFlagsFromInt(AEnum: Integer): TDSciUndoFlags;
+function TDSciUndoFlagsSetToInt(AEnum: TDSciUndoFlagsSet): Integer;
+function TDSciUndoFlagsSetFromInt(AEnum: Integer): TDSciUndoFlagsSet;
+function TDSciVirtualSpaceToInt(AEnum: TDSciVirtualSpace): Integer;
+function TDSciVirtualSpaceFromInt(AEnum: Integer): TDSciVirtualSpace;
+function TDSciVirtualSpaceSetToInt(AEnum: TDSciVirtualSpaceSet): Integer;
+function TDSciVirtualSpaceSetFromInt(AEnum: Integer): TDSciVirtualSpaceSet;
+function TDSciTechnologyToInt(AEnum: TDSciTechnology): Integer;
+function TDSciTechnologyFromInt(AEnum: Integer): TDSciTechnology;
+function TDSciLineEndTypeToInt(AEnum: TDSciLineEndType): Integer;
+function TDSciLineEndTypeFromInt(AEnum: Integer): TDSciLineEndType;
+function TDSciRepresentationAppearanceToInt(AEnum: TDSciRepresentationAppearance): Integer;
+function TDSciRepresentationAppearanceFromInt(AEnum: Integer): TDSciRepresentationAppearance;
+function TDSciEOLAnnotationVisibleToInt(AEnum: TDSciEOLAnnotationVisible): Integer;
+function TDSciEOLAnnotationVisibleFromInt(AEnum: Integer): TDSciEOLAnnotationVisible;
+function TDSciSupportsToInt(AEnum: TDSciSupports): Integer;
+function TDSciSupportsFromInt(AEnum: Integer): TDSciSupports;
+function TDSciLineCharacterIndexTypeToInt(AEnum: TDSciLineCharacterIndexType): Integer;
+function TDSciLineCharacterIndexTypeFromInt(AEnum: Integer): TDSciLineCharacterIndexType;
+function TDSciTypePropertyToInt(AEnum: TDSciTypeProperty): Integer;
+function TDSciTypePropertyFromInt(AEnum: Integer): TDSciTypeProperty;
+function TDSciModificationFlagsToInt(AEnum: TDSciModificationFlags): Integer;
+function TDSciModificationFlagsFromInt(AEnum: Integer): TDSciModificationFlags;
+function TDSciModificationFlagsSetToInt(AEnum: TDSciModificationFlagsSet): Integer;
+function TDSciModificationFlagsSetFromInt(AEnum: Integer): TDSciModificationFlagsSet;
+function TDSciUpdateToInt(AEnum: TDSciUpdate): Integer;
+function TDSciUpdateFromInt(AEnum: Integer): TDSciUpdate;
+function TDSciUpdateFlagsSetToInt(AEnum: TDSciUpdateFlagsSet): Integer;
+function TDSciUpdateFlagsSetFromInt(AEnum: Integer): TDSciUpdateFlagsSet;
+function TDSciFocusChangeToInt(AEnum: TDSciFocusChange): Integer;
+function TDSciFocusChangeFromInt(AEnum: Integer): TDSciFocusChange;
+function TDSciKeysToInt(AEnum: TDSciKeys): Integer;
+function TDSciKeysFromInt(AEnum: Integer): TDSciKeys;
+function TDSciKeyModToInt(AEnum: TDSciKeyMod): Integer;
+function TDSciKeyModFromInt(AEnum: Integer): TDSciKeyMod;
+function TDSciKeyModSetToInt(AEnum: TDSciKeyModSet): Integer;
+function TDSciKeyModSetFromInt(AEnum: Integer): TDSciKeyModSet;
+function TDSciCompletionMethodsToInt(AEnum: TDSciCompletionMethods): Integer;
+function TDSciCompletionMethodsFromInt(AEnum: Integer): TDSciCompletionMethods;
+function TDSciCharacterSourceToInt(AEnum: TDSciCharacterSource): Integer;
+function TDSciCharacterSourceFromInt(AEnum: Integer): TDSciCharacterSource;
+function TDSciBidirectionalToInt(AEnum: TDSciBidirectional): Integer;
+function TDSciBidirectionalFromInt(AEnum: Integer): TDSciBidirectional;
+function TDSciLexerIdToInt(AEnum: TDSciLexerId): Integer;
+function TDSciLexerIdFromInt(AEnum: Integer): TDSciLexerId;
+
+// </scigen-enum-func-decl>
+
+type
+{ TDScintilla events - http://www.scintilla.org/ScintillaDoc.html#Notifications }
+
+  TDSciNotificationEvent = procedure(ASender: TObject; const ASCN: TDSciSCNotification; var AHandled: Boolean) of object;
+
+  TDSciStyleNeededEvent = procedure(ASender: TObject; APosition: NativeInt) of object;
+  TDSciCharAddedEvent = procedure(ASender: TObject; ACh: Integer) of object;
+  TDSciSavePointReachedEvent = procedure(ASender: TObject) of object;
+  TDSciSavePointLeftEvent = procedure(ASender: TObject) of object;
+  TDSciModifyAttemptROEvent = procedure(ASender: TObject) of object;
+  // # GTK+ Specific to work around focus and accelerator problems:
+  // evt  Key=2005(Integer ch; Integer modifiers)
+  // evt  DoubleClick=2006()
+  TDSciUpdateUIEvent = procedure(ASender: TObject; AUpdated: TDSciUpdateFlagsSet) of object;
+  TDSciModifiedEvent = procedure(ASender: TObject; APosition: NativeInt; AModificationType: Integer;
+    AText: UnicodeString; ALength: NativeInt; ALinesAdded: NativeInt; ALine: NativeInt;
+    AFoldLevelNow: Integer; AFoldLevelPrev: Integer) of object;
+  TDSciModified2Event = procedure(ASender: TObject; APosition: NativeInt; AModificationType: Integer;
+    AText: UnicodeString; ALength: NativeInt; ALinesAdded: NativeInt; ALine: NativeInt;
+    AFoldLevelNow: Integer; AFoldLevelPrev: Integer;
+    AToken: Integer; AAnnotationLinesAdded: NativeInt) of object;
+  TDSciMacroRecordEvent = procedure(ASender: TObject; AMessage: Integer; AWParam: NativeInt; ALParam: NativeUInt) of object;
+  TDSciMarginClickEvent = procedure(ASender: TObject; AModifiers: Integer; APosition: NativeInt; AMargin: Integer) of object;
+  TDSciNeedShownEvent = procedure(ASender: TObject; APosition: NativeInt; ALength: NativeInt) of object;
+  TDSciPaintedEvent = procedure(ASender: TObject) of object;
+  TDSciUserListSelectionEvent = procedure(ASender: TObject; AListType: Integer; AText: UnicodeString) of object;
+  TDSciUserListSelection2Event = procedure(ASender: TObject; AListType: Integer; AText: UnicodeString; APosition: NativeInt) of object;
+  TDSciDwellStartEvent = procedure(ASender: TObject; APosition, X, Y: Integer) of object;
+  TDSciDwellEndEvent = procedure(ASender: TObject; APosition, X, Y: Integer) of object;
+  TDSciZoomEvent = procedure(ASender: TObject) of object;
+  TDSciHotSpotClickEvent = procedure(ASender: TObject; AModifiers: Integer; APosition: NativeInt) of object;
+  TDSciHotSpotDoubleClickEvent = procedure(ASender: TObject; AModifiers: Integer; APosition: NativeInt) of object;
+  TDSciHotSpotReleaseClickEvent = procedure(ASender: TObject; AModifiers: Integer; APosition: NativeInt) of object;
+  TDSciCallTipClickEvent = procedure(ASender: TObject; APosition: NativeInt) of object;
+  TDSciAutoCSelectionEvent = procedure(ASender: TObject; AText: UnicodeString; APosition: NativeInt) of object;
+  TDSciIndicatorClickEvent = procedure(ASender: TObject; AModifiers: Integer; APosition: NativeInt) of object;
+  TDSciIndicatorReleaseEvent = procedure(ASender: TObject; AModifiers: Integer; APosition: NativeInt) of object;
+  TDSciAutoCCancelledEvent = procedure(ASender: TObject) of object;
+  TDSciAutoCCharDeletedEvent = procedure(ASender: TObject) of object;
+
 implementation
 
+// <scigen-enum-func-code>
+
+function TDSciWhiteSpaceToInt(AEnum: TDSciWhiteSpace): Integer;
+begin
+  case AEnum of
+  scwsINVISIBLE:                          /// <summary>SCWS_INVISIBLE = 0
+    Result := 0;
+  scwsVISIBLE_ALWAYS:                     /// <summary>SCWS_VISIBLEALWAYS = 1
+    Result := 1;
+  scwsVISIBLE_AFTER_INDENT:               /// <summary>SCWS_VISIBLEAFTERINDENT = 2
+    Result := 2;
+  scwsVISIBLE_ONLY_IN_INDENT:             /// <summary>SCWS_VISIBLEONLYININDENT = 3
+    Result := 3;
+  else
+    Result := 0;
+  end;
+end;
+
+function TDSciWhiteSpaceFromInt(AEnum: Integer): TDSciWhiteSpace;
+begin
+  case AEnum of
+  0:
+    Result := scwsINVISIBLE;                          /// <summary>SCWS_INVISIBLE = 0
+  1:
+    Result := scwsVISIBLE_ALWAYS;                     /// <summary>SCWS_VISIBLEALWAYS = 1
+  2:
+    Result := scwsVISIBLE_AFTER_INDENT;               /// <summary>SCWS_VISIBLEAFTERINDENT = 2
+  3:
+    Result := scwsVISIBLE_ONLY_IN_INDENT;             /// <summary>SCWS_VISIBLEONLYININDENT = 3
+  else
+    Result := scwsINVISIBLE;                          /// <summary>SCWS_INVISIBLE = 0;
+  end;
+end;
+
+function TDSciTabDrawModeToInt(AEnum: TDSciTabDrawMode): Integer;
+begin
+  case AEnum of
+  sctdmLONG_ARROW:                        /// <summary>SCTD_LONGARROW = 0
+    Result := 0;
+  sctdmSTRIKE_OUT:                        /// <summary>SCTD_STRIKEOUT = 1
+    Result := 1;
+  sctdmCONTROL_CHAR:                      /// <summary>SCTD_CONTROLCHAR = 2
+    Result := 2;
+  else
+    Result := 0;
+  end;
+end;
+
+function TDSciTabDrawModeFromInt(AEnum: Integer): TDSciTabDrawMode;
+begin
+  case AEnum of
+  0:
+    Result := sctdmLONG_ARROW;                        /// <summary>SCTD_LONGARROW = 0
+  1:
+    Result := sctdmSTRIKE_OUT;                        /// <summary>SCTD_STRIKEOUT = 1
+  2:
+    Result := sctdmCONTROL_CHAR;                      /// <summary>SCTD_CONTROLCHAR = 2
+  else
+    Result := sctdmLONG_ARROW;                        /// <summary>SCTD_LONGARROW = 0;
+  end;
+end;
+
+function TDSciEndOfLineToInt(AEnum: TDSciEndOfLine): Integer;
+begin
+  case AEnum of
+  sceolCR_LF:                             /// <summary>SC_EOL_CRLF = 0
+    Result := 0;
+  sceolCR:                                /// <summary>SC_EOL_CR = 1
+    Result := 1;
+  sceolLF:                                /// <summary>SC_EOL_LF = 2
+    Result := 2;
+  else
+    Result := 0;
+  end;
+end;
+
+function TDSciEndOfLineFromInt(AEnum: Integer): TDSciEndOfLine;
+begin
+  case AEnum of
+  0:
+    Result := sceolCR_LF;                             /// <summary>SC_EOL_CRLF = 0
+  1:
+    Result := sceolCR;                                /// <summary>SC_EOL_CR = 1
+  2:
+    Result := sceolLF;                                /// <summary>SC_EOL_LF = 2
+  else
+    Result := sceolCR_LF;                             /// <summary>SC_EOL_CRLF = 0;
+  end;
+end;
+
+function TDSciIMEInteractionToInt(AEnum: TDSciIMEInteraction): Integer;
+begin
+  case AEnum of
+  scimeiWINDOWED:                         /// <summary>SC_IME_WINDOWED = 0
+    Result := 0;
+  scimeiINLINE:                           /// <summary>SC_IME_INLINE = 1
+    Result := 1;
+  else
+    Result := 0;
+  end;
+end;
+
+function TDSciIMEInteractionFromInt(AEnum: Integer): TDSciIMEInteraction;
+begin
+  case AEnum of
+  0:
+    Result := scimeiWINDOWED;                         /// <summary>SC_IME_WINDOWED = 0
+  1:
+    Result := scimeiINLINE;                           /// <summary>SC_IME_INLINE = 1
+  else
+    Result := scimeiWINDOWED;                         /// <summary>SC_IME_WINDOWED = 0;
+  end;
+end;
+
+function TDSciAlphaToInt(AEnum: TDSciAlpha): Integer;
+begin
+  case AEnum of
+  scaTRANSPARENT:                         /// <summary>SC_ALPHA_TRANSPARENT = 0
+    Result := 0;
+  scaOPAQUE:                              /// <summary>SC_ALPHA_OPAQUE = 255
+    Result := 255;
+  scaNO_ALPHA:                            /// <summary>SC_ALPHA_NOALPHA = 256
+    Result := 256;
+  else
+    Result := 0;
+  end;
+end;
+
+function TDSciAlphaFromInt(AEnum: Integer): TDSciAlpha;
+begin
+  case AEnum of
+  0:
+    Result := scaTRANSPARENT;                         /// <summary>SC_ALPHA_TRANSPARENT = 0
+  255:
+    Result := scaOPAQUE;                              /// <summary>SC_ALPHA_OPAQUE = 255
+  256:
+    Result := scaNO_ALPHA;                            /// <summary>SC_ALPHA_NOALPHA = 256
+  else
+    Result := scaTRANSPARENT;                         /// <summary>SC_ALPHA_TRANSPARENT = 0;
+  end;
+end;
+
+function TDSciCursorShapeToInt(AEnum: TDSciCursorShape): Integer;
+begin
+  case AEnum of
+  sccsNORMAL:                             /// <summary>SC_CURSORNORMAL = -1
+    Result := -1;
+  sccsARROW:                              /// <summary>SC_CURSORARROW = 2
+    Result := 2;
+  sccsWAIT:                               /// <summary>SC_CURSORWAIT = 4
+    Result := 4;
+  sccsREVERSE_ARROW:                      /// <summary>SC_CURSORREVERSEARROW = 7
+    Result := 7;
+  else
+    Result := -1;
+  end;
+end;
+
+function TDSciCursorShapeFromInt(AEnum: Integer): TDSciCursorShape;
+begin
+  case AEnum of
+  -1:
+    Result := sccsNORMAL;                             /// <summary>SC_CURSORNORMAL = -1
+  2:
+    Result := sccsARROW;                              /// <summary>SC_CURSORARROW = 2
+  4:
+    Result := sccsWAIT;                               /// <summary>SC_CURSORWAIT = 4
+  7:
+    Result := sccsREVERSE_ARROW;                      /// <summary>SC_CURSORREVERSEARROW = 7
+  else
+    Result := sccsNORMAL;                             /// <summary>SC_CURSORNORMAL = -1;
+  end;
+end;
+
+function TDSciMarkerSymbolToInt(AEnum: TDSciMarkerSymbol): Integer;
+begin
+  case AEnum of
+  scmsCIRCLE:                             /// <summary>SC_MARK_CIRCLE = 0
+    Result := 0;
+  scmsROUND_RECT:                         /// <summary>SC_MARK_ROUNDRECT = 1
+    Result := 1;
+  scmsARROW:                              /// <summary>SC_MARK_ARROW = 2
+    Result := 2;
+  scmsSMALL_RECT:                         /// <summary>SC_MARK_SMALLRECT = 3
+    Result := 3;
+  scmsSHORT_ARROW:                        /// <summary>SC_MARK_SHORTARROW = 4
+    Result := 4;
+  scmsEMPTY:                              /// <summary>SC_MARK_EMPTY = 5
+    Result := 5;
+  scmsARROW_DOWN:                         /// <summary>SC_MARK_ARROWDOWN = 6
+    Result := 6;
+  scmsMINUS:                              /// <summary>SC_MARK_MINUS = 7
+    Result := 7;
+  scmsPLUS:                               /// <summary>SC_MARK_PLUS = 8
+    Result := 8;
+  scmsV_LINE:                             /// <summary>SC_MARK_VLINE = 9
+    Result := 9;
+  scmsL_CORNER:                           /// <summary>SC_MARK_LCORNER = 10
+    Result := 10;
+  scmsT_CORNER:                           /// <summary>SC_MARK_TCORNER = 11
+    Result := 11;
+  scmsBOX_PLUS:                           /// <summary>SC_MARK_BOXPLUS = 12
+    Result := 12;
+  scmsBOX_PLUS_CONNECTED:                 /// <summary>SC_MARK_BOXPLUSCONNECTED = 13
+    Result := 13;
+  scmsBOX_MINUS:                          /// <summary>SC_MARK_BOXMINUS = 14
+    Result := 14;
+  scmsBOX_MINUS_CONNECTED:                /// <summary>SC_MARK_BOXMINUSCONNECTED = 15
+    Result := 15;
+  scmsL_CORNER_CURVE:                     /// <summary>SC_MARK_LCORNERCURVE = 16
+    Result := 16;
+  scmsT_CORNER_CURVE:                     /// <summary>SC_MARK_TCORNERCURVE = 17
+    Result := 17;
+  scmsCIRCLE_PLUS:                        /// <summary>SC_MARK_CIRCLEPLUS = 18
+    Result := 18;
+  scmsCIRCLE_PLUS_CONNECTED:              /// <summary>SC_MARK_CIRCLEPLUSCONNECTED = 19
+    Result := 19;
+  scmsCIRCLE_MINUS:                       /// <summary>SC_MARK_CIRCLEMINUS = 20
+    Result := 20;
+  scmsCIRCLE_MINUS_CONNECTED:             /// <summary>SC_MARK_CIRCLEMINUSCONNECTED = 21
+    Result := 21;
+  scmsBACKGROUND:                         /// <summary>SC_MARK_BACKGROUND = 22
+    Result := 22;
+  scmsDOT_DOT_DOT:                        /// <summary>SC_MARK_DOTDOTDOT = 23
+    Result := 23;
+  scmsARROWS:                             /// <summary>SC_MARK_ARROWS = 24
+    Result := 24;
+  scmsPIXMAP:                             /// <summary>SC_MARK_PIXMAP = 25
+    Result := 25;
+  scmsFULL_RECT:                          /// <summary>SC_MARK_FULLRECT = 26
+    Result := 26;
+  scmsLEFT_RECT:                          /// <summary>SC_MARK_LEFTRECT = 27
+    Result := 27;
+  scmsAVAILABLE:                          /// <summary>SC_MARK_AVAILABLE = 28
+    Result := 28;
+  scmsUNDERLINE:                          /// <summary>SC_MARK_UNDERLINE = 29
+    Result := 29;
+  scmsRGBA_IMAGE:                         /// <summary>SC_MARK_RGBAIMAGE = 30
+    Result := 30;
+  scmsBOOKMARK:                           /// <summary>SC_MARK_BOOKMARK = 31
+    Result := 31;
+  scmsVERTICAL_BOOKMARK:                  /// <summary>SC_MARK_VERTICALBOOKMARK = 32
+    Result := 32;
+  scmsBAR:                                /// <summary>SC_MARK_BAR = 33
+    Result := 33;
+  scmsCHARACTER:                          /// <summary>SC_MARK_CHARACTER = 10000
+    Result := 10000;
+  else
+    Result := 0;
+  end;
+end;
+
+function TDSciMarkerSymbolFromInt(AEnum: Integer): TDSciMarkerSymbol;
+begin
+  case AEnum of
+  0:
+    Result := scmsCIRCLE;                             /// <summary>SC_MARK_CIRCLE = 0
+  1:
+    Result := scmsROUND_RECT;                         /// <summary>SC_MARK_ROUNDRECT = 1
+  2:
+    Result := scmsARROW;                              /// <summary>SC_MARK_ARROW = 2
+  3:
+    Result := scmsSMALL_RECT;                         /// <summary>SC_MARK_SMALLRECT = 3
+  4:
+    Result := scmsSHORT_ARROW;                        /// <summary>SC_MARK_SHORTARROW = 4
+  5:
+    Result := scmsEMPTY;                              /// <summary>SC_MARK_EMPTY = 5
+  6:
+    Result := scmsARROW_DOWN;                         /// <summary>SC_MARK_ARROWDOWN = 6
+  7:
+    Result := scmsMINUS;                              /// <summary>SC_MARK_MINUS = 7
+  8:
+    Result := scmsPLUS;                               /// <summary>SC_MARK_PLUS = 8
+  9:
+    Result := scmsV_LINE;                             /// <summary>SC_MARK_VLINE = 9
+  10:
+    Result := scmsL_CORNER;                           /// <summary>SC_MARK_LCORNER = 10
+  11:
+    Result := scmsT_CORNER;                           /// <summary>SC_MARK_TCORNER = 11
+  12:
+    Result := scmsBOX_PLUS;                           /// <summary>SC_MARK_BOXPLUS = 12
+  13:
+    Result := scmsBOX_PLUS_CONNECTED;                 /// <summary>SC_MARK_BOXPLUSCONNECTED = 13
+  14:
+    Result := scmsBOX_MINUS;                          /// <summary>SC_MARK_BOXMINUS = 14
+  15:
+    Result := scmsBOX_MINUS_CONNECTED;                /// <summary>SC_MARK_BOXMINUSCONNECTED = 15
+  16:
+    Result := scmsL_CORNER_CURVE;                     /// <summary>SC_MARK_LCORNERCURVE = 16
+  17:
+    Result := scmsT_CORNER_CURVE;                     /// <summary>SC_MARK_TCORNERCURVE = 17
+  18:
+    Result := scmsCIRCLE_PLUS;                        /// <summary>SC_MARK_CIRCLEPLUS = 18
+  19:
+    Result := scmsCIRCLE_PLUS_CONNECTED;              /// <summary>SC_MARK_CIRCLEPLUSCONNECTED = 19
+  20:
+    Result := scmsCIRCLE_MINUS;                       /// <summary>SC_MARK_CIRCLEMINUS = 20
+  21:
+    Result := scmsCIRCLE_MINUS_CONNECTED;             /// <summary>SC_MARK_CIRCLEMINUSCONNECTED = 21
+  22:
+    Result := scmsBACKGROUND;                         /// <summary>SC_MARK_BACKGROUND = 22
+  23:
+    Result := scmsDOT_DOT_DOT;                        /// <summary>SC_MARK_DOTDOTDOT = 23
+  24:
+    Result := scmsARROWS;                             /// <summary>SC_MARK_ARROWS = 24
+  25:
+    Result := scmsPIXMAP;                             /// <summary>SC_MARK_PIXMAP = 25
+  26:
+    Result := scmsFULL_RECT;                          /// <summary>SC_MARK_FULLRECT = 26
+  27:
+    Result := scmsLEFT_RECT;                          /// <summary>SC_MARK_LEFTRECT = 27
+  28:
+    Result := scmsAVAILABLE;                          /// <summary>SC_MARK_AVAILABLE = 28
+  29:
+    Result := scmsUNDERLINE;                          /// <summary>SC_MARK_UNDERLINE = 29
+  30:
+    Result := scmsRGBA_IMAGE;                         /// <summary>SC_MARK_RGBAIMAGE = 30
+  31:
+    Result := scmsBOOKMARK;                           /// <summary>SC_MARK_BOOKMARK = 31
+  32:
+    Result := scmsVERTICAL_BOOKMARK;                  /// <summary>SC_MARK_VERTICALBOOKMARK = 32
+  33:
+    Result := scmsBAR;                                /// <summary>SC_MARK_BAR = 33
+  10000:
+    Result := scmsCHARACTER;                          /// <summary>SC_MARK_CHARACTER = 10000
+  else
+    Result := scmsCIRCLE;                             /// <summary>SC_MARK_CIRCLE = 0;
+  end;
+end;
+
+function TDSciMarkerOutlineToInt(AEnum: TDSciMarkerOutline): Integer;
+begin
+  case AEnum of
+  scmoHISTORY_REVERTED_TO_ORIGIN:         /// <summary>SC_MARKNUM_HISTORY_REVERTED_TO_ORIGIN = 21
+    Result := 21;
+  scmoHISTORY_SAVED:                      /// <summary>SC_MARKNUM_HISTORY_SAVED = 22
+    Result := 22;
+  scmoHISTORY_MODIFIED:                   /// <summary>SC_MARKNUM_HISTORY_MODIFIED = 23
+    Result := 23;
+  scmoHISTORY_REVERTED_TO_MODIFIED:       /// <summary>SC_MARKNUM_HISTORY_REVERTED_TO_MODIFIED = 24
+    Result := 24;
+  scmoFOLDER_END:                         /// <summary>SC_MARKNUM_FOLDEREND = 25
+    Result := 25;
+  scmoFOLDER_OPEN_MID:                    /// <summary>SC_MARKNUM_FOLDEROPENMID = 26
+    Result := 26;
+  scmoFOLDER_MID_TAIL:                    /// <summary>SC_MARKNUM_FOLDERMIDTAIL = 27
+    Result := 27;
+  scmoFOLDER_TAIL:                        /// <summary>SC_MARKNUM_FOLDERTAIL = 28
+    Result := 28;
+  scmoFOLDER_SUB:                         /// <summary>SC_MARKNUM_FOLDERSUB = 29
+    Result := 29;
+  scmoFOLDER:                             /// <summary>SC_MARKNUM_FOLDER = 30
+    Result := 30;
+  scmoFOLDER_OPEN:                        /// <summary>SC_MARKNUM_FOLDEROPEN = 31
+    Result := 31;
+  else
+    Result := 21;
+  end;
+end;
+
+function TDSciMarkerOutlineFromInt(AEnum: Integer): TDSciMarkerOutline;
+begin
+  case AEnum of
+  21:
+    Result := scmoHISTORY_REVERTED_TO_ORIGIN;         /// <summary>SC_MARKNUM_HISTORY_REVERTED_TO_ORIGIN = 21
+  22:
+    Result := scmoHISTORY_SAVED;                      /// <summary>SC_MARKNUM_HISTORY_SAVED = 22
+  23:
+    Result := scmoHISTORY_MODIFIED;                   /// <summary>SC_MARKNUM_HISTORY_MODIFIED = 23
+  24:
+    Result := scmoHISTORY_REVERTED_TO_MODIFIED;       /// <summary>SC_MARKNUM_HISTORY_REVERTED_TO_MODIFIED = 24
+  25:
+    Result := scmoFOLDER_END;                         /// <summary>SC_MARKNUM_FOLDEREND = 25
+  26:
+    Result := scmoFOLDER_OPEN_MID;                    /// <summary>SC_MARKNUM_FOLDEROPENMID = 26
+  27:
+    Result := scmoFOLDER_MID_TAIL;                    /// <summary>SC_MARKNUM_FOLDERMIDTAIL = 27
+  28:
+    Result := scmoFOLDER_TAIL;                        /// <summary>SC_MARKNUM_FOLDERTAIL = 28
+  29:
+    Result := scmoFOLDER_SUB;                         /// <summary>SC_MARKNUM_FOLDERSUB = 29
+  30:
+    Result := scmoFOLDER;                             /// <summary>SC_MARKNUM_FOLDER = 30
+  31:
+    Result := scmoFOLDER_OPEN;                        /// <summary>SC_MARKNUM_FOLDEROPEN = 31
+  else
+    Result := scmoHISTORY_REVERTED_TO_ORIGIN;         /// <summary>SC_MARKNUM_HISTORY_REVERTED_TO_ORIGIN = 21;
+  end;
+end;
+
+function TDSciMarginTypeToInt(AEnum: TDSciMarginType): Integer;
+begin
+  case AEnum of
+  scmtSYMBOL:                             /// <summary>SC_MARGIN_SYMBOL = 0
+    Result := 0;
+  scmtNUMBER:                             /// <summary>SC_MARGIN_NUMBER = 1
+    Result := 1;
+  scmtBACK:                               /// <summary>SC_MARGIN_BACK = 2
+    Result := 2;
+  scmtFORE:                               /// <summary>SC_MARGIN_FORE = 3
+    Result := 3;
+  scmtTEXT:                               /// <summary>SC_MARGIN_TEXT = 4
+    Result := 4;
+  scmtR_TEXT:                             /// <summary>SC_MARGIN_RTEXT = 5
+    Result := 5;
+  scmtCOLOUR:                             /// <summary>SC_MARGIN_COLOUR = 6
+    Result := 6;
+  else
+    Result := 0;
+  end;
+end;
+
+function TDSciMarginTypeFromInt(AEnum: Integer): TDSciMarginType;
+begin
+  case AEnum of
+  0:
+    Result := scmtSYMBOL;                             /// <summary>SC_MARGIN_SYMBOL = 0
+  1:
+    Result := scmtNUMBER;                             /// <summary>SC_MARGIN_NUMBER = 1
+  2:
+    Result := scmtBACK;                               /// <summary>SC_MARGIN_BACK = 2
+  3:
+    Result := scmtFORE;                               /// <summary>SC_MARGIN_FORE = 3
+  4:
+    Result := scmtTEXT;                               /// <summary>SC_MARGIN_TEXT = 4
+  5:
+    Result := scmtR_TEXT;                             /// <summary>SC_MARGIN_RTEXT = 5
+  6:
+    Result := scmtCOLOUR;                             /// <summary>SC_MARGIN_COLOUR = 6
+  else
+    Result := scmtSYMBOL;                             /// <summary>SC_MARGIN_SYMBOL = 0;
+  end;
+end;
+
+function TDSciStylesCommonToInt(AEnum: TDSciStylesCommon): Integer;
+begin
+  case AEnum of
+  scscDEFAULT:                            /// <summary>STYLE_DEFAULT = 32
+    Result := 32;
+  scscLINE_NUMBER:                        /// <summary>STYLE_LINENUMBER = 33
+    Result := 33;
+  scscBRACE_LIGHT:                        /// <summary>STYLE_BRACELIGHT = 34
+    Result := 34;
+  scscBRACE_BAD:                          /// <summary>STYLE_BRACEBAD = 35
+    Result := 35;
+  scscCONTROL_CHAR:                       /// <summary>STYLE_CONTROLCHAR = 36
+    Result := 36;
+  scscINDENT_GUIDE:                       /// <summary>STYLE_INDENTGUIDE = 37
+    Result := 37;
+  scscCALL_TIP:                           /// <summary>STYLE_CALLTIP = 38
+    Result := 38;
+  scscFOLD_DISPLAY_TEXT:                  /// <summary>STYLE_FOLDDISPLAYTEXT = 39
+    Result := 39;
+  scscLAST_PREDEFINED:                    /// <summary>STYLE_LASTPREDEFINED = 39
+    Result := 39;
+  scscMAX:                                /// <summary>STYLE_MAX = 255
+    Result := 255;
+  else
+    Result := 32;
+  end;
+end;
+
+function TDSciStylesCommonFromInt(AEnum: Integer): TDSciStylesCommon;
+begin
+  case AEnum of
+  32:
+    Result := scscDEFAULT;                            /// <summary>STYLE_DEFAULT = 32
+  33:
+    Result := scscLINE_NUMBER;                        /// <summary>STYLE_LINENUMBER = 33
+  34:
+    Result := scscBRACE_LIGHT;                        /// <summary>STYLE_BRACELIGHT = 34
+  35:
+    Result := scscBRACE_BAD;                          /// <summary>STYLE_BRACEBAD = 35
+  36:
+    Result := scscCONTROL_CHAR;                       /// <summary>STYLE_CONTROLCHAR = 36
+  37:
+    Result := scscINDENT_GUIDE;                       /// <summary>STYLE_INDENTGUIDE = 37
+  38:
+    Result := scscCALL_TIP;                           /// <summary>STYLE_CALLTIP = 38
+  39:
+    Result := scscFOLD_DISPLAY_TEXT;                  /// <summary>STYLE_FOLDDISPLAYTEXT = 39
+  255:
+    Result := scscMAX;                                /// <summary>STYLE_MAX = 255
+  else
+    Result := scscDEFAULT;                            /// <summary>STYLE_DEFAULT = 32;
+  end;
+end;
+
+function TDSciCharacterSetToInt(AEnum: TDSciCharacterSet): Integer;
+begin
+  case AEnum of
+  sccsANSI:                               /// <summary>SC_CHARSET_ANSI = 0
+    Result := 0;
+  sccsDEFAULT:                            /// <summary>SC_CHARSET_DEFAULT = 1
+    Result := 1;
+  sccsBALTIC:                             /// <summary>SC_CHARSET_BALTIC = 186
+    Result := 186;
+  sccsCHINESE_BIG5:                       /// <summary>SC_CHARSET_CHINESEBIG5 = 136
+    Result := 136;
+  sccsEAST_EUROPE:                        /// <summary>SC_CHARSET_EASTEUROPE = 238
+    Result := 238;
+  sccsG_B_2312:                           /// <summary>SC_CHARSET_GB2312 = 134
+    Result := 134;
+  sccsGREEK:                              /// <summary>SC_CHARSET_GREEK = 161
+    Result := 161;
+  sccsHANGUL:                             /// <summary>SC_CHARSET_HANGUL = 129
+    Result := 129;
+  sccsMAC:                                /// <summary>SC_CHARSET_MAC = 77
+    Result := 77;
+  sccsOEM:                                /// <summary>SC_CHARSET_OEM = 255
+    Result := 255;
+  sccsRUSSIAN:                            /// <summary>SC_CHARSET_RUSSIAN = 204
+    Result := 204;
+  sccsOEM_866:                            /// <summary>SC_CHARSET_OEM866 = 866
+    Result := 866;
+  sccsCYRILLIC:                           /// <summary>SC_CHARSET_CYRILLIC = 1251
+    Result := 1251;
+  sccsSHIFT_JIS:                          /// <summary>SC_CHARSET_SHIFTJIS = 128
+    Result := 128;
+  sccsSYMBOL:                             /// <summary>SC_CHARSET_SYMBOL = 2
+    Result := 2;
+  sccsTURKISH:                            /// <summary>SC_CHARSET_TURKISH = 162
+    Result := 162;
+  sccsJOHAB:                              /// <summary>SC_CHARSET_JOHAB = 130
+    Result := 130;
+  sccsHEBREW:                             /// <summary>SC_CHARSET_HEBREW = 177
+    Result := 177;
+  sccsARABIC:                             /// <summary>SC_CHARSET_ARABIC = 178
+    Result := 178;
+  sccsVIETNAMESE:                         /// <summary>SC_CHARSET_VIETNAMESE = 163
+    Result := 163;
+  sccsTHAI:                               /// <summary>SC_CHARSET_THAI = 222
+    Result := 222;
+  sccsISO_8859_15:                        /// <summary>SC_CHARSET_8859_15 = 1000
+    Result := 1000;
+  else
+    Result := 0;
+  end;
+end;
+
+function TDSciCharacterSetFromInt(AEnum: Integer): TDSciCharacterSet;
+begin
+  case AEnum of
+  0:
+    Result := sccsANSI;                               /// <summary>SC_CHARSET_ANSI = 0
+  1:
+    Result := sccsDEFAULT;                            /// <summary>SC_CHARSET_DEFAULT = 1
+  186:
+    Result := sccsBALTIC;                             /// <summary>SC_CHARSET_BALTIC = 186
+  136:
+    Result := sccsCHINESE_BIG5;                       /// <summary>SC_CHARSET_CHINESEBIG5 = 136
+  238:
+    Result := sccsEAST_EUROPE;                        /// <summary>SC_CHARSET_EASTEUROPE = 238
+  134:
+    Result := sccsG_B_2312;                           /// <summary>SC_CHARSET_GB2312 = 134
+  161:
+    Result := sccsGREEK;                              /// <summary>SC_CHARSET_GREEK = 161
+  129:
+    Result := sccsHANGUL;                             /// <summary>SC_CHARSET_HANGUL = 129
+  77:
+    Result := sccsMAC;                                /// <summary>SC_CHARSET_MAC = 77
+  255:
+    Result := sccsOEM;                                /// <summary>SC_CHARSET_OEM = 255
+  204:
+    Result := sccsRUSSIAN;                            /// <summary>SC_CHARSET_RUSSIAN = 204
+  866:
+    Result := sccsOEM_866;                            /// <summary>SC_CHARSET_OEM866 = 866
+  1251:
+    Result := sccsCYRILLIC;                           /// <summary>SC_CHARSET_CYRILLIC = 1251
+  128:
+    Result := sccsSHIFT_JIS;                          /// <summary>SC_CHARSET_SHIFTJIS = 128
+  2:
+    Result := sccsSYMBOL;                             /// <summary>SC_CHARSET_SYMBOL = 2
+  162:
+    Result := sccsTURKISH;                            /// <summary>SC_CHARSET_TURKISH = 162
+  130:
+    Result := sccsJOHAB;                              /// <summary>SC_CHARSET_JOHAB = 130
+  177:
+    Result := sccsHEBREW;                             /// <summary>SC_CHARSET_HEBREW = 177
+  178:
+    Result := sccsARABIC;                             /// <summary>SC_CHARSET_ARABIC = 178
+  163:
+    Result := sccsVIETNAMESE;                         /// <summary>SC_CHARSET_VIETNAMESE = 163
+  222:
+    Result := sccsTHAI;                               /// <summary>SC_CHARSET_THAI = 222
+  1000:
+    Result := sccsISO_8859_15;                        /// <summary>SC_CHARSET_8859_15 = 1000
+  else
+    Result := sccsANSI;                               /// <summary>SC_CHARSET_ANSI = 0;
+  end;
+end;
+
+function TDSciCaseVisibleToInt(AEnum: TDSciCaseVisible): Integer;
+begin
+  case AEnum of
+  sccvMIXED:                              /// <summary>SC_CASE_MIXED = 0
+    Result := 0;
+  sccvUPPER:                              /// <summary>SC_CASE_UPPER = 1
+    Result := 1;
+  sccvLOWER:                              /// <summary>SC_CASE_LOWER = 2
+    Result := 2;
+  sccvCAMEL:                              /// <summary>SC_CASE_CAMEL = 3
+    Result := 3;
+  else
+    Result := 0;
+  end;
+end;
+
+function TDSciCaseVisibleFromInt(AEnum: Integer): TDSciCaseVisible;
+begin
+  case AEnum of
+  0:
+    Result := sccvMIXED;                              /// <summary>SC_CASE_MIXED = 0
+  1:
+    Result := sccvUPPER;                              /// <summary>SC_CASE_UPPER = 1
+  2:
+    Result := sccvLOWER;                              /// <summary>SC_CASE_LOWER = 2
+  3:
+    Result := sccvCAMEL;                              /// <summary>SC_CASE_CAMEL = 3
+  else
+    Result := sccvMIXED;                              /// <summary>SC_CASE_MIXED = 0;
+  end;
+end;
+
+function TDSciFontWeightToInt(AEnum: TDSciFontWeight): Integer;
+begin
+  case AEnum of
+  scfwNORMAL:                             /// <summary>SC_WEIGHT_NORMAL = 400
+    Result := 400;
+  scfwSEMI_BOLD:                          /// <summary>SC_WEIGHT_SEMIBOLD = 600
+    Result := 600;
+  scfwBOLD:                               /// <summary>SC_WEIGHT_BOLD = 700
+    Result := 700;
+  else
+    Result := 400;
+  end;
+end;
+
+function TDSciFontWeightFromInt(AEnum: Integer): TDSciFontWeight;
+begin
+  case AEnum of
+  400:
+    Result := scfwNORMAL;                             /// <summary>SC_WEIGHT_NORMAL = 400
+  600:
+    Result := scfwSEMI_BOLD;                          /// <summary>SC_WEIGHT_SEMIBOLD = 600
+  700:
+    Result := scfwBOLD;                               /// <summary>SC_WEIGHT_BOLD = 700
+  else
+    Result := scfwNORMAL;                             /// <summary>SC_WEIGHT_NORMAL = 400;
+  end;
+end;
+
+function TDSciFontStretchToInt(AEnum: TDSciFontStretch): Integer;
+begin
+  case AEnum of
+  scfsULTRA_CONDENSED:                    /// <summary>SC_STRETCH_ULTRA_CONDENSED = 1
+    Result := 1;
+  scfsEXTRA_CONDENSED:                    /// <summary>SC_STRETCH_EXTRA_CONDENSED = 2
+    Result := 2;
+  scfsCONDENSED:                          /// <summary>SC_STRETCH_CONDENSED = 3
+    Result := 3;
+  scfsSEMI_CONDENSED:                     /// <summary>SC_STRETCH_SEMI_CONDENSED = 4
+    Result := 4;
+  scfsNORMAL:                             /// <summary>SC_STRETCH_NORMAL = 5
+    Result := 5;
+  scfsSEMI_EXPANDED:                      /// <summary>SC_STRETCH_SEMI_EXPANDED = 6
+    Result := 6;
+  scfsEXPANDED:                           /// <summary>SC_STRETCH_EXPANDED = 7
+    Result := 7;
+  scfsEXTRA_EXPANDED:                     /// <summary>SC_STRETCH_EXTRA_EXPANDED = 8
+    Result := 8;
+  scfsULTRA_EXPANDED:                     /// <summary>SC_STRETCH_ULTRA_EXPANDED = 9
+    Result := 9;
+  else
+    Result := 1;
+  end;
+end;
+
+function TDSciFontStretchFromInt(AEnum: Integer): TDSciFontStretch;
+begin
+  case AEnum of
+  1:
+    Result := scfsULTRA_CONDENSED;                    /// <summary>SC_STRETCH_ULTRA_CONDENSED = 1
+  2:
+    Result := scfsEXTRA_CONDENSED;                    /// <summary>SC_STRETCH_EXTRA_CONDENSED = 2
+  3:
+    Result := scfsCONDENSED;                          /// <summary>SC_STRETCH_CONDENSED = 3
+  4:
+    Result := scfsSEMI_CONDENSED;                     /// <summary>SC_STRETCH_SEMI_CONDENSED = 4
+  5:
+    Result := scfsNORMAL;                             /// <summary>SC_STRETCH_NORMAL = 5
+  6:
+    Result := scfsSEMI_EXPANDED;                      /// <summary>SC_STRETCH_SEMI_EXPANDED = 6
+  7:
+    Result := scfsEXPANDED;                           /// <summary>SC_STRETCH_EXPANDED = 7
+  8:
+    Result := scfsEXTRA_EXPANDED;                     /// <summary>SC_STRETCH_EXTRA_EXPANDED = 8
+  9:
+    Result := scfsULTRA_EXPANDED;                     /// <summary>SC_STRETCH_ULTRA_EXPANDED = 9
+  else
+    Result := scfsULTRA_CONDENSED;                    /// <summary>SC_STRETCH_ULTRA_CONDENSED = 1;
+  end;
+end;
+
+function TDSciElementToInt(AEnum: TDSciElement): Integer;
+begin
+  case AEnum of
+  sceLIST:                                /// <summary>SC_ELEMENT_LIST = 0
+    Result := 0;
+  sceLIST_BACK:                           /// <summary>SC_ELEMENT_LIST_BACK = 1
+    Result := 1;
+  sceLIST_SELECTED:                       /// <summary>SC_ELEMENT_LIST_SELECTED = 2
+    Result := 2;
+  sceLIST_SELECTED_BACK:                  /// <summary>SC_ELEMENT_LIST_SELECTED_BACK = 3
+    Result := 3;
+  sceSELECTION_TEXT:                      /// <summary>SC_ELEMENT_SELECTION_TEXT = 10
+    Result := 10;
+  sceSELECTION_BACK:                      /// <summary>SC_ELEMENT_SELECTION_BACK = 11
+    Result := 11;
+  sceSELECTION_ADDITIONAL_TEXT:           /// <summary>SC_ELEMENT_SELECTION_ADDITIONAL_TEXT = 12
+    Result := 12;
+  sceSELECTION_ADDITIONAL_BACK:           /// <summary>SC_ELEMENT_SELECTION_ADDITIONAL_BACK = 13
+    Result := 13;
+  sceSELECTION_SECONDARY_TEXT:            /// <summary>SC_ELEMENT_SELECTION_SECONDARY_TEXT = 14
+    Result := 14;
+  sceSELECTION_SECONDARY_BACK:            /// <summary>SC_ELEMENT_SELECTION_SECONDARY_BACK = 15
+    Result := 15;
+  sceSELECTION_INACTIVE_TEXT:             /// <summary>SC_ELEMENT_SELECTION_INACTIVE_TEXT = 16
+    Result := 16;
+  sceSELECTION_INACTIVE_BACK:             /// <summary>SC_ELEMENT_SELECTION_INACTIVE_BACK = 17
+    Result := 17;
+  sceSELECTION_INACTIVE_ADDITIONAL_TEXT:  /// <summary>SC_ELEMENT_SELECTION_INACTIVE_ADDITIONAL_TEXT = 18
+    Result := 18;
+  sceSELECTION_INACTIVE_ADDITIONAL_BACK:  /// <summary>SC_ELEMENT_SELECTION_INACTIVE_ADDITIONAL_BACK = 19
+    Result := 19;
+  sceCARET:                               /// <summary>SC_ELEMENT_CARET = 40
+    Result := 40;
+  sceCARET_ADDITIONAL:                    /// <summary>SC_ELEMENT_CARET_ADDITIONAL = 41
+    Result := 41;
+  sceCARET_LINE_BACK:                     /// <summary>SC_ELEMENT_CARET_LINE_BACK = 50
+    Result := 50;
+  sceWHITE_SPACE:                         /// <summary>SC_ELEMENT_WHITE_SPACE = 60
+    Result := 60;
+  sceWHITE_SPACE_BACK:                    /// <summary>SC_ELEMENT_WHITE_SPACE_BACK = 61
+    Result := 61;
+  sceHOT_SPOT_ACTIVE:                     /// <summary>SC_ELEMENT_HOT_SPOT_ACTIVE = 70
+    Result := 70;
+  sceHOT_SPOT_ACTIVE_BACK:                /// <summary>SC_ELEMENT_HOT_SPOT_ACTIVE_BACK = 71
+    Result := 71;
+  sceFOLD_LINE:                           /// <summary>SC_ELEMENT_FOLD_LINE = 80
+    Result := 80;
+  sceHIDDEN_LINE:                         /// <summary>SC_ELEMENT_HIDDEN_LINE = 81
+    Result := 81;
+  else
+    Result := 0;
+  end;
+end;
+
+function TDSciElementFromInt(AEnum: Integer): TDSciElement;
+begin
+  case AEnum of
+  0:
+    Result := sceLIST;                                /// <summary>SC_ELEMENT_LIST = 0
+  1:
+    Result := sceLIST_BACK;                           /// <summary>SC_ELEMENT_LIST_BACK = 1
+  2:
+    Result := sceLIST_SELECTED;                       /// <summary>SC_ELEMENT_LIST_SELECTED = 2
+  3:
+    Result := sceLIST_SELECTED_BACK;                  /// <summary>SC_ELEMENT_LIST_SELECTED_BACK = 3
+  10:
+    Result := sceSELECTION_TEXT;                      /// <summary>SC_ELEMENT_SELECTION_TEXT = 10
+  11:
+    Result := sceSELECTION_BACK;                      /// <summary>SC_ELEMENT_SELECTION_BACK = 11
+  12:
+    Result := sceSELECTION_ADDITIONAL_TEXT;           /// <summary>SC_ELEMENT_SELECTION_ADDITIONAL_TEXT = 12
+  13:
+    Result := sceSELECTION_ADDITIONAL_BACK;           /// <summary>SC_ELEMENT_SELECTION_ADDITIONAL_BACK = 13
+  14:
+    Result := sceSELECTION_SECONDARY_TEXT;            /// <summary>SC_ELEMENT_SELECTION_SECONDARY_TEXT = 14
+  15:
+    Result := sceSELECTION_SECONDARY_BACK;            /// <summary>SC_ELEMENT_SELECTION_SECONDARY_BACK = 15
+  16:
+    Result := sceSELECTION_INACTIVE_TEXT;             /// <summary>SC_ELEMENT_SELECTION_INACTIVE_TEXT = 16
+  17:
+    Result := sceSELECTION_INACTIVE_BACK;             /// <summary>SC_ELEMENT_SELECTION_INACTIVE_BACK = 17
+  18:
+    Result := sceSELECTION_INACTIVE_ADDITIONAL_TEXT;  /// <summary>SC_ELEMENT_SELECTION_INACTIVE_ADDITIONAL_TEXT = 18
+  19:
+    Result := sceSELECTION_INACTIVE_ADDITIONAL_BACK;  /// <summary>SC_ELEMENT_SELECTION_INACTIVE_ADDITIONAL_BACK = 19
+  40:
+    Result := sceCARET;                               /// <summary>SC_ELEMENT_CARET = 40
+  41:
+    Result := sceCARET_ADDITIONAL;                    /// <summary>SC_ELEMENT_CARET_ADDITIONAL = 41
+  50:
+    Result := sceCARET_LINE_BACK;                     /// <summary>SC_ELEMENT_CARET_LINE_BACK = 50
+  60:
+    Result := sceWHITE_SPACE;                         /// <summary>SC_ELEMENT_WHITE_SPACE = 60
+  61:
+    Result := sceWHITE_SPACE_BACK;                    /// <summary>SC_ELEMENT_WHITE_SPACE_BACK = 61
+  70:
+    Result := sceHOT_SPOT_ACTIVE;                     /// <summary>SC_ELEMENT_HOT_SPOT_ACTIVE = 70
+  71:
+    Result := sceHOT_SPOT_ACTIVE_BACK;                /// <summary>SC_ELEMENT_HOT_SPOT_ACTIVE_BACK = 71
+  80:
+    Result := sceFOLD_LINE;                           /// <summary>SC_ELEMENT_FOLD_LINE = 80
+  81:
+    Result := sceHIDDEN_LINE;                         /// <summary>SC_ELEMENT_HIDDEN_LINE = 81
+  else
+    Result := sceLIST;                                /// <summary>SC_ELEMENT_LIST = 0;
+  end;
+end;
+
+function TDSciLayerToInt(AEnum: TDSciLayer): Integer;
+begin
+  case AEnum of
+  sclBASE:                                /// <summary>SC_LAYER_BASE = 0
+    Result := 0;
+  sclUNDER_TEXT:                          /// <summary>SC_LAYER_UNDER_TEXT = 1
+    Result := 1;
+  sclOVER_TEXT:                           /// <summary>SC_LAYER_OVER_TEXT = 2
+    Result := 2;
+  else
+    Result := 0;
+  end;
+end;
+
+function TDSciLayerFromInt(AEnum: Integer): TDSciLayer;
+begin
+  case AEnum of
+  0:
+    Result := sclBASE;                                /// <summary>SC_LAYER_BASE = 0
+  1:
+    Result := sclUNDER_TEXT;                          /// <summary>SC_LAYER_UNDER_TEXT = 1
+  2:
+    Result := sclOVER_TEXT;                           /// <summary>SC_LAYER_OVER_TEXT = 2
+  else
+    Result := sclBASE;                                /// <summary>SC_LAYER_BASE = 0;
+  end;
+end;
+
+function TDSciIndicatorStyleToInt(AEnum: TDSciIndicatorStyle): Integer;
+begin
+  case AEnum of
+  scisPLAIN:                              /// <summary>INDIC_PLAIN = 0
+    Result := 0;
+  scisSQUIGGLE:                           /// <summary>INDIC_SQUIGGLE = 1
+    Result := 1;
+  scisT_T:                                /// <summary>INDIC_TT = 2
+    Result := 2;
+  scisDIAGONAL:                           /// <summary>INDIC_DIAGONAL = 3
+    Result := 3;
+  scisSTRIKE:                             /// <summary>INDIC_STRIKE = 4
+    Result := 4;
+  scisHIDDEN:                             /// <summary>INDIC_HIDDEN = 5
+    Result := 5;
+  scisBOX:                                /// <summary>INDIC_BOX = 6
+    Result := 6;
+  scisROUND_BOX:                          /// <summary>INDIC_ROUNDBOX = 7
+    Result := 7;
+  scisSTRAIGHT_BOX:                       /// <summary>INDIC_STRAIGHTBOX = 8
+    Result := 8;
+  scisDASH:                               /// <summary>INDIC_DASH = 9
+    Result := 9;
+  scisDOTS:                               /// <summary>INDIC_DOTS = 10
+    Result := 10;
+  scisSQUIGGLE_LOW:                       /// <summary>INDIC_SQUIGGLELOW = 11
+    Result := 11;
+  scisDOT_BOX:                            /// <summary>INDIC_DOTBOX = 12
+    Result := 12;
+  scisSQUIGGLE_PIXMAP:                    /// <summary>INDIC_SQUIGGLEPIXMAP = 13
+    Result := 13;
+  scisCOMPOSITION_THICK:                  /// <summary>INDIC_COMPOSITIONTHICK = 14
+    Result := 14;
+  scisCOMPOSITION_THIN:                   /// <summary>INDIC_COMPOSITIONTHIN = 15
+    Result := 15;
+  scisFULL_BOX:                           /// <summary>INDIC_FULLBOX = 16
+    Result := 16;
+  scisTEXT_FORE:                          /// <summary>INDIC_TEXTFORE = 17
+    Result := 17;
+  scisPOINT:                              /// <summary>INDIC_POINT = 18
+    Result := 18;
+  scisPOINT_CHARACTER:                    /// <summary>INDIC_POINTCHARACTER = 19
+    Result := 19;
+  scisGRADIENT:                           /// <summary>INDIC_GRADIENT = 20
+    Result := 20;
+  scisGRADIENT_CENTRE:                    /// <summary>INDIC_GRADIENTCENTRE = 21
+    Result := 21;
+  scisPOINT_TOP:                          /// <summary>INDIC_POINT_TOP = 22
+    Result := 22;
+  scisCONTAINER:                          /// <summary>INDIC_CONTAINER = 8
+    Result := 8;
+  scisIME:                                /// <summary>INDIC_IME = 32
+    Result := 32;
+  scisIME_MAX:                            /// <summary>INDIC_IME_MAX = 35
+    Result := 35;
+  scisMAX:                                /// <summary>INDIC_MAX = 35
+    Result := 35;
+  else
+    Result := 0;
+  end;
+end;
+
+function TDSciIndicatorStyleFromInt(AEnum: Integer): TDSciIndicatorStyle;
+begin
+  case AEnum of
+  0:
+    Result := scisPLAIN;                              /// <summary>INDIC_PLAIN = 0
+  1:
+    Result := scisSQUIGGLE;                           /// <summary>INDIC_SQUIGGLE = 1
+  2:
+    Result := scisT_T;                                /// <summary>INDIC_TT = 2
+  3:
+    Result := scisDIAGONAL;                           /// <summary>INDIC_DIAGONAL = 3
+  4:
+    Result := scisSTRIKE;                             /// <summary>INDIC_STRIKE = 4
+  5:
+    Result := scisHIDDEN;                             /// <summary>INDIC_HIDDEN = 5
+  6:
+    Result := scisBOX;                                /// <summary>INDIC_BOX = 6
+  7:
+    Result := scisROUND_BOX;                          /// <summary>INDIC_ROUNDBOX = 7
+  8:
+    Result := scisSTRAIGHT_BOX;                       /// <summary>INDIC_STRAIGHTBOX = 8
+  9:
+    Result := scisDASH;                               /// <summary>INDIC_DASH = 9
+  10:
+    Result := scisDOTS;                               /// <summary>INDIC_DOTS = 10
+  11:
+    Result := scisSQUIGGLE_LOW;                       /// <summary>INDIC_SQUIGGLELOW = 11
+  12:
+    Result := scisDOT_BOX;                            /// <summary>INDIC_DOTBOX = 12
+  13:
+    Result := scisSQUIGGLE_PIXMAP;                    /// <summary>INDIC_SQUIGGLEPIXMAP = 13
+  14:
+    Result := scisCOMPOSITION_THICK;                  /// <summary>INDIC_COMPOSITIONTHICK = 14
+  15:
+    Result := scisCOMPOSITION_THIN;                   /// <summary>INDIC_COMPOSITIONTHIN = 15
+  16:
+    Result := scisFULL_BOX;                           /// <summary>INDIC_FULLBOX = 16
+  17:
+    Result := scisTEXT_FORE;                          /// <summary>INDIC_TEXTFORE = 17
+  18:
+    Result := scisPOINT;                              /// <summary>INDIC_POINT = 18
+  19:
+    Result := scisPOINT_CHARACTER;                    /// <summary>INDIC_POINTCHARACTER = 19
+  20:
+    Result := scisGRADIENT;                           /// <summary>INDIC_GRADIENT = 20
+  21:
+    Result := scisGRADIENT_CENTRE;                    /// <summary>INDIC_GRADIENTCENTRE = 21
+  22:
+    Result := scisPOINT_TOP;                          /// <summary>INDIC_POINT_TOP = 22
+  32:
+    Result := scisIME;                                /// <summary>INDIC_IME = 32
+  35:
+    Result := scisIME_MAX;                            /// <summary>INDIC_IME_MAX = 35
+  else
+    Result := scisPLAIN;                              /// <summary>INDIC_PLAIN = 0;
+  end;
+end;
+
+function TDSciIndicatorNumbersToInt(AEnum: TDSciIndicatorNumbers): Integer;
+begin
+  case AEnum of
+  scinCONTAINER:                          /// <summary>INDICATOR_CONTAINER = 8
+    Result := 8;
+  scinIME:                                /// <summary>INDICATOR_IME = 32
+    Result := 32;
+  scinIME_MAX:                            /// <summary>INDICATOR_IME_MAX = 35
+    Result := 35;
+  scinHISTORY_REVERTED_TO_ORIGIN_INSERTION:/// <summary>INDICATOR_HISTORY_REVERTED_TO_ORIGIN_INSERTION = 36
+    Result := 36;
+  scinHISTORY_REVERTED_TO_ORIGIN_DELETION:/// <summary>INDICATOR_HISTORY_REVERTED_TO_ORIGIN_DELETION = 37
+    Result := 37;
+  scinHISTORY_SAVED_INSERTION:            /// <summary>INDICATOR_HISTORY_SAVED_INSERTION = 38
+    Result := 38;
+  scinHISTORY_SAVED_DELETION:             /// <summary>INDICATOR_HISTORY_SAVED_DELETION = 39
+    Result := 39;
+  scinHISTORY_MODIFIED_INSERTION:         /// <summary>INDICATOR_HISTORY_MODIFIED_INSERTION = 40
+    Result := 40;
+  scinHISTORY_MODIFIED_DELETION:          /// <summary>INDICATOR_HISTORY_MODIFIED_DELETION = 41
+    Result := 41;
+  scinHISTORY_REVERTED_TO_MODIFIED_INSERTION:/// <summary>INDICATOR_HISTORY_REVERTED_TO_MODIFIED_INSERTION = 42
+    Result := 42;
+  scinHISTORY_REVERTED_TO_MODIFIED_DELETION:/// <summary>INDICATOR_HISTORY_REVERTED_TO_MODIFIED_DELETION = 43
+    Result := 43;
+  scinMAX:                                /// <summary>INDICATOR_MAX = 43
+    Result := 43;
+  else
+    Result := 8;
+  end;
+end;
+
+function TDSciIndicatorNumbersFromInt(AEnum: Integer): TDSciIndicatorNumbers;
+begin
+  case AEnum of
+  8:
+    Result := scinCONTAINER;                          /// <summary>INDICATOR_CONTAINER = 8
+  32:
+    Result := scinIME;                                /// <summary>INDICATOR_IME = 32
+  35:
+    Result := scinIME_MAX;                            /// <summary>INDICATOR_IME_MAX = 35
+  36:
+    Result := scinHISTORY_REVERTED_TO_ORIGIN_INSERTION;/// <summary>INDICATOR_HISTORY_REVERTED_TO_ORIGIN_INSERTION = 36
+  37:
+    Result := scinHISTORY_REVERTED_TO_ORIGIN_DELETION;/// <summary>INDICATOR_HISTORY_REVERTED_TO_ORIGIN_DELETION = 37
+  38:
+    Result := scinHISTORY_SAVED_INSERTION;            /// <summary>INDICATOR_HISTORY_SAVED_INSERTION = 38
+  39:
+    Result := scinHISTORY_SAVED_DELETION;             /// <summary>INDICATOR_HISTORY_SAVED_DELETION = 39
+  40:
+    Result := scinHISTORY_MODIFIED_INSERTION;         /// <summary>INDICATOR_HISTORY_MODIFIED_INSERTION = 40
+  41:
+    Result := scinHISTORY_MODIFIED_DELETION;          /// <summary>INDICATOR_HISTORY_MODIFIED_DELETION = 41
+  42:
+    Result := scinHISTORY_REVERTED_TO_MODIFIED_INSERTION;/// <summary>INDICATOR_HISTORY_REVERTED_TO_MODIFIED_INSERTION = 42
+  43:
+    Result := scinHISTORY_REVERTED_TO_MODIFIED_DELETION;/// <summary>INDICATOR_HISTORY_REVERTED_TO_MODIFIED_DELETION = 43
+  else
+    Result := scinCONTAINER;                          /// <summary>INDICATOR_CONTAINER = 8;
+  end;
+end;
+
+function TDSciIndicValueToInt(AEnum: TDSciIndicValue): Integer;
+begin
+  case AEnum of
+  scivBIT:                                /// <summary>SC_INDICVALUEBIT = $1000000
+    Result := $1000000;
+  scivMASK:                               /// <summary>SC_INDICVALUEMASK = $FFFFFF
+    Result := $FFFFFF;
+  else
+    Result := $1000000;
+  end;
+end;
+
+function TDSciIndicValueFromInt(AEnum: Integer): TDSciIndicValue;
+begin
+  case AEnum of
+  $1000000:
+    Result := scivBIT;                                /// <summary>SC_INDICVALUEBIT = $1000000
+  $FFFFFF:
+    Result := scivMASK;                               /// <summary>SC_INDICVALUEMASK = $FFFFFF
+  else
+    Result := scivBIT;                                /// <summary>SC_INDICVALUEBIT = $1000000;
+  end;
+end;
+
+function TDSciIndicFlagToInt(AEnum: TDSciIndicFlag): Integer;
+begin
+  case AEnum of
+  scifNONE:                               /// <summary>SC_INDICFLAG_NONE = 0
+    Result := 0;
+  scifVALUE_FORE:                         /// <summary>SC_INDICFLAG_VALUEFORE = 1
+    Result := 1;
+  else
+    Result := 0;
+  end;
+end;
+
+function TDSciIndicFlagFromInt(AEnum: Integer): TDSciIndicFlag;
+begin
+  case AEnum of
+  0:
+    Result := scifNONE;                               /// <summary>SC_INDICFLAG_NONE = 0
+  1:
+    Result := scifVALUE_FORE;                         /// <summary>SC_INDICFLAG_VALUEFORE = 1
+  else
+    Result := scifNONE;                               /// <summary>SC_INDICFLAG_NONE = 0;
+  end;
+end;
+
+function TDSciAutoCompleteOptionToInt(AEnum: TDSciAutoCompleteOption): Integer;
+begin
+  case AEnum of
+  scacoNORMAL:                            /// <summary>SC_AUTOCOMPLETE_NORMAL = 0
+    Result := 0;
+  scacoFIXED_SIZE:                        /// <summary>SC_AUTOCOMPLETE_FIXED_SIZE = 1
+    Result := 1;
+  scacoSELECT_FIRST_ITEM:                 /// <summary>SC_AUTOCOMPLETE_SELECT_FIRST_ITEM = 2
+    Result := 2;
+  else
+    Result := 0;
+  end;
+end;
+
+function TDSciAutoCompleteOptionFromInt(AEnum: Integer): TDSciAutoCompleteOption;
+begin
+  case AEnum of
+  0:
+    Result := scacoNORMAL;                            /// <summary>SC_AUTOCOMPLETE_NORMAL = 0
+  1:
+    Result := scacoFIXED_SIZE;                        /// <summary>SC_AUTOCOMPLETE_FIXED_SIZE = 1
+  2:
+    Result := scacoSELECT_FIRST_ITEM;                 /// <summary>SC_AUTOCOMPLETE_SELECT_FIRST_ITEM = 2
+  else
+    Result := scacoNORMAL;                            /// <summary>SC_AUTOCOMPLETE_NORMAL = 0;
+  end;
+end;
+
+function TDSciIndentViewToInt(AEnum: TDSciIndentView): Integer;
+begin
+  case AEnum of
+  scivNONE:                               /// <summary>SC_IV_NONE = 0
+    Result := 0;
+  scivREAL:                               /// <summary>SC_IV_REAL = 1
+    Result := 1;
+  scivLOOK_FORWARD:                       /// <summary>SC_IV_LOOKFORWARD = 2
+    Result := 2;
+  scivLOOK_BOTH:                          /// <summary>SC_IV_LOOKBOTH = 3
+    Result := 3;
+  else
+    Result := 0;
+  end;
+end;
+
+function TDSciIndentViewFromInt(AEnum: Integer): TDSciIndentView;
+begin
+  case AEnum of
+  0:
+    Result := scivNONE;                               /// <summary>SC_IV_NONE = 0
+  1:
+    Result := scivREAL;                               /// <summary>SC_IV_REAL = 1
+  2:
+    Result := scivLOOK_FORWARD;                       /// <summary>SC_IV_LOOKFORWARD = 2
+  3:
+    Result := scivLOOK_BOTH;                          /// <summary>SC_IV_LOOKBOTH = 3
+  else
+    Result := scivNONE;                               /// <summary>SC_IV_NONE = 0;
+  end;
+end;
+
+function TDSciPrintOptionToInt(AEnum: TDSciPrintOption): Integer;
+begin
+  case AEnum of
+  scpoNORMAL:                             /// <summary>SC_PRINT_NORMAL = 0
+    Result := 0;
+  scpoINVERT_LIGHT:                       /// <summary>SC_PRINT_INVERTLIGHT = 1
+    Result := 1;
+  scpoBLACK_ON_WHITE:                     /// <summary>SC_PRINT_BLACKONWHITE = 2
+    Result := 2;
+  scpoCOLOUR_ON_WHITE:                    /// <summary>SC_PRINT_COLOURONWHITE = 3
+    Result := 3;
+  scpoCOLOUR_ON_WHITE_DEFAULT_B_G:        /// <summary>SC_PRINT_COLOURONWHITEDEFAULTBG = 4
+    Result := 4;
+  scpoSCREEN_COLOURS:                     /// <summary>SC_PRINT_SCREENCOLOURS = 5
+    Result := 5;
+  else
+    Result := 0;
+  end;
+end;
+
+function TDSciPrintOptionFromInt(AEnum: Integer): TDSciPrintOption;
+begin
+  case AEnum of
+  0:
+    Result := scpoNORMAL;                             /// <summary>SC_PRINT_NORMAL = 0
+  1:
+    Result := scpoINVERT_LIGHT;                       /// <summary>SC_PRINT_INVERTLIGHT = 1
+  2:
+    Result := scpoBLACK_ON_WHITE;                     /// <summary>SC_PRINT_BLACKONWHITE = 2
+  3:
+    Result := scpoCOLOUR_ON_WHITE;                    /// <summary>SC_PRINT_COLOURONWHITE = 3
+  4:
+    Result := scpoCOLOUR_ON_WHITE_DEFAULT_B_G;        /// <summary>SC_PRINT_COLOURONWHITEDEFAULTBG = 4
+  5:
+    Result := scpoSCREEN_COLOURS;                     /// <summary>SC_PRINT_SCREENCOLOURS = 5
+  else
+    Result := scpoNORMAL;                             /// <summary>SC_PRINT_NORMAL = 0;
+  end;
+end;
+
+function TDSciFindOptionToInt(AEnum: TDSciFindOption): Integer;
+begin
+  case AEnum of
+  scfoWHOLE_WORD:                         /// <summary>SCFIND_WHOLEWORD = $2
+    Result := $2;
+  scfoMATCH_CASE:                         /// <summary>SCFIND_MATCHCASE = $4
+    Result := $4;
+  scfoWORD_START:                         /// <summary>SCFIND_WORDSTART = $00100000
+    Result := $00100000;
+  scfoREG_EXP:                            /// <summary>SCFIND_REGEXP = $00200000
+    Result := $00200000;
+  scfoPOSIX:                              /// <summary>SCFIND_POSIX = $00400000
+    Result := $00400000;
+  scfoCXX11_REG_EX:                       /// <summary>SCFIND_CXX11REGEX = $00800000
+    Result := $00800000;
+  else
+    Result := $2;
+  end;
+end;
+
+function TDSciFindOptionFromInt(AEnum: Integer): TDSciFindOption;
+begin
+  case AEnum of
+  $2:
+    Result := scfoWHOLE_WORD;                         /// <summary>SCFIND_WHOLEWORD = $2
+  $4:
+    Result := scfoMATCH_CASE;                         /// <summary>SCFIND_MATCHCASE = $4
+  $00100000:
+    Result := scfoWORD_START;                         /// <summary>SCFIND_WORDSTART = $00100000
+  $00200000:
+    Result := scfoREG_EXP;                            /// <summary>SCFIND_REGEXP = $00200000
+  $00400000:
+    Result := scfoPOSIX;                              /// <summary>SCFIND_POSIX = $00400000
+  $00800000:
+    Result := scfoCXX11_REG_EX;                       /// <summary>SCFIND_CXX11REGEX = $00800000
+  else
+    Result := scfoWHOLE_WORD;                         /// <summary>SCFIND_WHOLEWORD = $2;
+  end;
+end;
+
+function TDSciFindOptionSetToInt(AEnum: TDSciFindOptionSet): Integer;
+var
+  lEnum: TDSciFindOption;
+begin
+  Result := 0;
+
+  for lEnum in AEnum do
+    Result := Result or TDSciFindOptionToInt(lEnum);
+end;
+
+function TDSciFindOptionSetFromInt(AEnum: Integer): TDSciFindOptionSet;
+var
+  lEnum: TDSciFindOption;
+begin
+  Result := [];
+
+  for lEnum := Low(TDSciFindOption) to High(TDSciFindOption) do
+    if AEnum and TDSciFindOptionToInt(lEnum) <> 0 then
+      Include(Result, lEnum);
+end;
+
+function TDSciChangeHistoryOptionToInt(AEnum: TDSciChangeHistoryOption): Integer;
+begin
+  case AEnum of
+  scchoDISABLED:                          /// <summary>SC_CHANGE_HISTORY_DISABLED = 0
+    Result := 0;
+  scchoENABLED:                           /// <summary>SC_CHANGE_HISTORY_ENABLED = 1
+    Result := 1;
+  scchoMARKERS:                           /// <summary>SC_CHANGE_HISTORY_MARKERS = 2
+    Result := 2;
+  scchoINDICATORS:                        /// <summary>SC_CHANGE_HISTORY_INDICATORS = 4
+    Result := 4;
+  else
+    Result := 0;
+  end;
+end;
+
+function TDSciChangeHistoryOptionFromInt(AEnum: Integer): TDSciChangeHistoryOption;
+begin
+  case AEnum of
+  0:
+    Result := scchoDISABLED;                          /// <summary>SC_CHANGE_HISTORY_DISABLED = 0
+  1:
+    Result := scchoENABLED;                           /// <summary>SC_CHANGE_HISTORY_ENABLED = 1
+  2:
+    Result := scchoMARKERS;                           /// <summary>SC_CHANGE_HISTORY_MARKERS = 2
+  4:
+    Result := scchoINDICATORS;                        /// <summary>SC_CHANGE_HISTORY_INDICATORS = 4
+  else
+    Result := scchoDISABLED;                          /// <summary>SC_CHANGE_HISTORY_DISABLED = 0;
+  end;
+end;
+
+function TDSciUndoSelectionHistoryOptionToInt(AEnum: TDSciUndoSelectionHistoryOption): Integer;
+begin
+  case AEnum of
+  scushoDISABLED:                         /// <summary>SC_UNDO_SELECTION_HISTORY_DISABLED = 0
+    Result := 0;
+  scushoENABLED:                          /// <summary>SC_UNDO_SELECTION_HISTORY_ENABLED = 1
+    Result := 1;
+  scushoSCROLL:                           /// <summary>SC_UNDO_SELECTION_HISTORY_SCROLL = 2
+    Result := 2;
+  else
+    Result := 0;
+  end;
+end;
+
+function TDSciUndoSelectionHistoryOptionFromInt(AEnum: Integer): TDSciUndoSelectionHistoryOption;
+begin
+  case AEnum of
+  0:
+    Result := scushoDISABLED;                         /// <summary>SC_UNDO_SELECTION_HISTORY_DISABLED = 0
+  1:
+    Result := scushoENABLED;                          /// <summary>SC_UNDO_SELECTION_HISTORY_ENABLED = 1
+  2:
+    Result := scushoSCROLL;                           /// <summary>SC_UNDO_SELECTION_HISTORY_SCROLL = 2
+  else
+    Result := scushoDISABLED;                         /// <summary>SC_UNDO_SELECTION_HISTORY_DISABLED = 0;
+  end;
+end;
+
+function TDSciFoldLevelToInt(AEnum: TDSciFoldLevel): Integer;
+begin
+  case AEnum of
+  scflBASE:                               /// <summary>SC_FOLDLEVELBASE = $400
+    Result := $400;
+  scflWHITE_FLAG:                         /// <summary>SC_FOLDLEVELWHITEFLAG = $1000
+    Result := $1000;
+  scflHEADER_FLAG:                        /// <summary>SC_FOLDLEVELHEADERFLAG = $2000
+    Result := $2000;
+  scflNUMBER_MASK:                        /// <summary>SC_FOLDLEVELNUMBERMASK = $0FFF
+    Result := $0FFF;
+  else
+    Result := $400;
+  end;
+end;
+
+function TDSciFoldLevelFromInt(AEnum: Integer): TDSciFoldLevel;
+begin
+  case AEnum of
+  $400:
+    Result := scflBASE;                               /// <summary>SC_FOLDLEVELBASE = $400
+  $1000:
+    Result := scflWHITE_FLAG;                         /// <summary>SC_FOLDLEVELWHITEFLAG = $1000
+  $2000:
+    Result := scflHEADER_FLAG;                        /// <summary>SC_FOLDLEVELHEADERFLAG = $2000
+  $0FFF:
+    Result := scflNUMBER_MASK;                        /// <summary>SC_FOLDLEVELNUMBERMASK = $0FFF
+  else
+    Result := scflBASE;                               /// <summary>SC_FOLDLEVELBASE = $400;
+  end;
+end;
+
+function TDSciFoldLevelSetToInt(AEnum: TDSciFoldLevelSet): Integer;
+var
+  lEnum: TDSciFoldLevel;
+begin
+  Result := 0;
+
+  for lEnum in AEnum do
+    Result := Result or TDSciFoldLevelToInt(lEnum);
+end;
+
+function TDSciFoldLevelSetFromInt(AEnum: Integer): TDSciFoldLevelSet;
+var
+  lEnum: TDSciFoldLevel;
+begin
+  Result := [];
+
+  for lEnum := Low(TDSciFoldLevel) to High(TDSciFoldLevel) do
+    if AEnum and TDSciFoldLevelToInt(lEnum) <> 0 then
+      Include(Result, lEnum);
+end;
+
+function TDSciFoldDisplayTextStyleToInt(AEnum: TDSciFoldDisplayTextStyle): Integer;
+begin
+  case AEnum of
+  scfdtsHIDDEN:                           /// <summary>SC_FOLDDISPLAYTEXT_HIDDEN = 0
+    Result := 0;
+  scfdtsSTANDARD:                         /// <summary>SC_FOLDDISPLAYTEXT_STANDARD = 1
+    Result := 1;
+  scfdtsBOXED:                            /// <summary>SC_FOLDDISPLAYTEXT_BOXED = 2
+    Result := 2;
+  else
+    Result := 0;
+  end;
+end;
+
+function TDSciFoldDisplayTextStyleFromInt(AEnum: Integer): TDSciFoldDisplayTextStyle;
+begin
+  case AEnum of
+  0:
+    Result := scfdtsHIDDEN;                           /// <summary>SC_FOLDDISPLAYTEXT_HIDDEN = 0
+  1:
+    Result := scfdtsSTANDARD;                         /// <summary>SC_FOLDDISPLAYTEXT_STANDARD = 1
+  2:
+    Result := scfdtsBOXED;                            /// <summary>SC_FOLDDISPLAYTEXT_BOXED = 2
+  else
+    Result := scfdtsHIDDEN;                           /// <summary>SC_FOLDDISPLAYTEXT_HIDDEN = 0;
+  end;
+end;
+
+function TDSciFoldActionToInt(AEnum: TDSciFoldAction): Integer;
+begin
+  case AEnum of
+  scfaCONTRACT:                           /// <summary>SC_FOLDACTION_CONTRACT = 0
+    Result := 0;
+  scfaEXPAND:                             /// <summary>SC_FOLDACTION_EXPAND = 1
+    Result := 1;
+  scfaTOGGLE:                             /// <summary>SC_FOLDACTION_TOGGLE = 2
+    Result := 2;
+  scfaCONTRACT_EVERY_LEVEL:               /// <summary>SC_FOLDACTION_CONTRACT_EVERY_LEVEL = 4
+    Result := 4;
+  else
+    Result := 0;
+  end;
+end;
+
+function TDSciFoldActionFromInt(AEnum: Integer): TDSciFoldAction;
+begin
+  case AEnum of
+  0:
+    Result := scfaCONTRACT;                           /// <summary>SC_FOLDACTION_CONTRACT = 0
+  1:
+    Result := scfaEXPAND;                             /// <summary>SC_FOLDACTION_EXPAND = 1
+  2:
+    Result := scfaTOGGLE;                             /// <summary>SC_FOLDACTION_TOGGLE = 2
+  4:
+    Result := scfaCONTRACT_EVERY_LEVEL;               /// <summary>SC_FOLDACTION_CONTRACT_EVERY_LEVEL = 4
+  else
+    Result := scfaCONTRACT;                           /// <summary>SC_FOLDACTION_CONTRACT = 0;
+  end;
+end;
+
+function TDSciAutomaticFoldToInt(AEnum: TDSciAutomaticFold): Integer;
+begin
+  case AEnum of
+  scafNONE:                               /// <summary>SC_AUTOMATICFOLD_NONE = $0000
+    Result := $0000;
+  scafSHOW:                               /// <summary>SC_AUTOMATICFOLD_SHOW = $0001
+    Result := $0001;
+  scafCLICK:                              /// <summary>SC_AUTOMATICFOLD_CLICK = $0002
+    Result := $0002;
+  scafCHANGE:                             /// <summary>SC_AUTOMATICFOLD_CHANGE = $0004
+    Result := $0004;
+  else
+    Result := $0000;
+  end;
+end;
+
+function TDSciAutomaticFoldFromInt(AEnum: Integer): TDSciAutomaticFold;
+begin
+  case AEnum of
+  $0000:
+    Result := scafNONE;                               /// <summary>SC_AUTOMATICFOLD_NONE = $0000
+  $0001:
+    Result := scafSHOW;                               /// <summary>SC_AUTOMATICFOLD_SHOW = $0001
+  $0002:
+    Result := scafCLICK;                              /// <summary>SC_AUTOMATICFOLD_CLICK = $0002
+  $0004:
+    Result := scafCHANGE;                             /// <summary>SC_AUTOMATICFOLD_CHANGE = $0004
+  else
+    Result := scafNONE;                               /// <summary>SC_AUTOMATICFOLD_NONE = $0000;
+  end;
+end;
+
+function TDSciFoldFlagToInt(AEnum: TDSciFoldFlag): Integer;
+begin
+  case AEnum of
+  scffLINE_BEFORE_EXPANDED:               /// <summary>SC_FOLDFLAG_LINEBEFORE_EXPANDED = $0002
+    Result := $0002;
+  scffLINE_BEFORE_CONTRACTED:             /// <summary>SC_FOLDFLAG_LINEBEFORE_CONTRACTED = $0004
+    Result := $0004;
+  scffLINE_AFTER_EXPANDED:                /// <summary>SC_FOLDFLAG_LINEAFTER_EXPANDED = $0008
+    Result := $0008;
+  scffLINE_AFTER_CONTRACTED:              /// <summary>SC_FOLDFLAG_LINEAFTER_CONTRACTED = $0010
+    Result := $0010;
+  scffLEVEL_NUMBERS:                      /// <summary>SC_FOLDFLAG_LEVELNUMBERS = $0040
+    Result := $0040;
+  scffLINE_STATE:                         /// <summary>SC_FOLDFLAG_LINESTATE = $0080
+    Result := $0080;
+  else
+    Result := $0002;
+  end;
+end;
+
+function TDSciFoldFlagFromInt(AEnum: Integer): TDSciFoldFlag;
+begin
+  case AEnum of
+  $0002:
+    Result := scffLINE_BEFORE_EXPANDED;               /// <summary>SC_FOLDFLAG_LINEBEFORE_EXPANDED = $0002
+  $0004:
+    Result := scffLINE_BEFORE_CONTRACTED;             /// <summary>SC_FOLDFLAG_LINEBEFORE_CONTRACTED = $0004
+  $0008:
+    Result := scffLINE_AFTER_EXPANDED;                /// <summary>SC_FOLDFLAG_LINEAFTER_EXPANDED = $0008
+  $0010:
+    Result := scffLINE_AFTER_CONTRACTED;              /// <summary>SC_FOLDFLAG_LINEAFTER_CONTRACTED = $0010
+  $0040:
+    Result := scffLEVEL_NUMBERS;                      /// <summary>SC_FOLDFLAG_LEVELNUMBERS = $0040
+  $0080:
+    Result := scffLINE_STATE;                         /// <summary>SC_FOLDFLAG_LINESTATE = $0080
+  else
+    Result := scffLINE_BEFORE_EXPANDED;               /// <summary>SC_FOLDFLAG_LINEBEFORE_EXPANDED = $0002;
+  end;
+end;
+
+function TDSciFoldFlagSetToInt(AEnum: TDSciFoldFlagSet): Integer;
+var
+  lEnum: TDSciFoldFlag;
+begin
+  Result := 0;
+
+  for lEnum in AEnum do
+    Result := Result or TDSciFoldFlagToInt(lEnum);
+end;
+
+function TDSciFoldFlagSetFromInt(AEnum: Integer): TDSciFoldFlagSet;
+var
+  lEnum: TDSciFoldFlag;
+begin
+  Result := [];
+
+  for lEnum := Low(TDSciFoldFlag) to High(TDSciFoldFlag) do
+    if AEnum and TDSciFoldFlagToInt(lEnum) <> 0 then
+      Include(Result, lEnum);
+end;
+
+function TDSciIdleStylingToInt(AEnum: TDSciIdleStyling): Integer;
+begin
+  case AEnum of
+  scisNONE:                               /// <summary>SC_IDLESTYLING_NONE = 0
+    Result := 0;
+  scisTO_VISIBLE:                         /// <summary>SC_IDLESTYLING_TOVISIBLE = 1
+    Result := 1;
+  scisAFTER_VISIBLE:                      /// <summary>SC_IDLESTYLING_AFTERVISIBLE = 2
+    Result := 2;
+  scisALL:                                /// <summary>SC_IDLESTYLING_ALL = 3
+    Result := 3;
+  else
+    Result := 0;
+  end;
+end;
+
+function TDSciIdleStylingFromInt(AEnum: Integer): TDSciIdleStyling;
+begin
+  case AEnum of
+  0:
+    Result := scisNONE;                               /// <summary>SC_IDLESTYLING_NONE = 0
+  1:
+    Result := scisTO_VISIBLE;                         /// <summary>SC_IDLESTYLING_TOVISIBLE = 1
+  2:
+    Result := scisAFTER_VISIBLE;                      /// <summary>SC_IDLESTYLING_AFTERVISIBLE = 2
+  3:
+    Result := scisALL;                                /// <summary>SC_IDLESTYLING_ALL = 3
+  else
+    Result := scisNONE;                               /// <summary>SC_IDLESTYLING_NONE = 0;
+  end;
+end;
+
+function TDSciWrapToInt(AEnum: TDSciWrap): Integer;
+begin
+  case AEnum of
+  scwNONE:                                /// <summary>SC_WRAP_NONE = 0
+    Result := 0;
+  scwWORD:                                /// <summary>SC_WRAP_WORD = 1
+    Result := 1;
+  scwCHAR:                                /// <summary>SC_WRAP_CHAR = 2
+    Result := 2;
+  scwWHITE_SPACE:                         /// <summary>SC_WRAP_WHITESPACE = 3
+    Result := 3;
+  else
+    Result := 0;
+  end;
+end;
+
+function TDSciWrapFromInt(AEnum: Integer): TDSciWrap;
+begin
+  case AEnum of
+  0:
+    Result := scwNONE;                                /// <summary>SC_WRAP_NONE = 0
+  1:
+    Result := scwWORD;                                /// <summary>SC_WRAP_WORD = 1
+  2:
+    Result := scwCHAR;                                /// <summary>SC_WRAP_CHAR = 2
+  3:
+    Result := scwWHITE_SPACE;                         /// <summary>SC_WRAP_WHITESPACE = 3
+  else
+    Result := scwNONE;                                /// <summary>SC_WRAP_NONE = 0;
+  end;
+end;
+
+function TDSciWrapVisualFlagToInt(AEnum: TDSciWrapVisualFlag): Integer;
+begin
+  case AEnum of
+  scwvfEND:                               /// <summary>SC_WRAPVISUALFLAG_END = $0001
+    Result := $0001;
+  scwvfSTART:                             /// <summary>SC_WRAPVISUALFLAG_START = $0002
+    Result := $0002;
+  scwvfMARGIN:                            /// <summary>SC_WRAPVISUALFLAG_MARGIN = $0004
+    Result := $0004;
+  else
+    Result := $0001;
+  end;
+end;
+
+function TDSciWrapVisualFlagFromInt(AEnum: Integer): TDSciWrapVisualFlag;
+begin
+  case AEnum of
+  $0001:
+    Result := scwvfEND;                               /// <summary>SC_WRAPVISUALFLAG_END = $0001
+  $0002:
+    Result := scwvfSTART;                             /// <summary>SC_WRAPVISUALFLAG_START = $0002
+  $0004:
+    Result := scwvfMARGIN;                            /// <summary>SC_WRAPVISUALFLAG_MARGIN = $0004
+  else
+    Result := scwvfEND;                               /// <summary>SC_WRAPVISUALFLAG_END = $0001;
+  end;
+end;
+
+function TDSciWrapVisualFlagSetToInt(AEnum: TDSciWrapVisualFlagSet): Integer;
+var
+  lEnum: TDSciWrapVisualFlag;
+begin
+  Result := 0;
+
+  for lEnum in AEnum do
+    Result := Result or TDSciWrapVisualFlagToInt(lEnum);
+end;
+
+function TDSciWrapVisualFlagSetFromInt(AEnum: Integer): TDSciWrapVisualFlagSet;
+var
+  lEnum: TDSciWrapVisualFlag;
+begin
+  Result := [];
+
+  for lEnum := Low(TDSciWrapVisualFlag) to High(TDSciWrapVisualFlag) do
+    if AEnum and TDSciWrapVisualFlagToInt(lEnum) <> 0 then
+      Include(Result, lEnum);
+end;
+
+function TDSciWrapVisualLocationToInt(AEnum: TDSciWrapVisualLocation): Integer;
+begin
+  case AEnum of
+  scwvlEND_BY_TEXT:                       /// <summary>SC_WRAPVISUALFLAGLOC_END_BY_TEXT = $0001
+    Result := $0001;
+  scwvlSTART_BY_TEXT:                     /// <summary>SC_WRAPVISUALFLAGLOC_START_BY_TEXT = $0002
+    Result := $0002;
+  else
+    Result := $0001;
+  end;
+end;
+
+function TDSciWrapVisualLocationFromInt(AEnum: Integer): TDSciWrapVisualLocation;
+begin
+  case AEnum of
+  $0001:
+    Result := scwvlEND_BY_TEXT;                       /// <summary>SC_WRAPVISUALFLAGLOC_END_BY_TEXT = $0001
+  $0002:
+    Result := scwvlSTART_BY_TEXT;                     /// <summary>SC_WRAPVISUALFLAGLOC_START_BY_TEXT = $0002
+  else
+    Result := scwvlEND_BY_TEXT;                       /// <summary>SC_WRAPVISUALFLAGLOC_END_BY_TEXT = $0001;
+  end;
+end;
+
+function TDSciWrapVisualLocationSetToInt(AEnum: TDSciWrapVisualLocationSet): Integer;
+var
+  lEnum: TDSciWrapVisualLocation;
+begin
+  Result := 0;
+
+  for lEnum in AEnum do
+    Result := Result or TDSciWrapVisualLocationToInt(lEnum);
+end;
+
+function TDSciWrapVisualLocationSetFromInt(AEnum: Integer): TDSciWrapVisualLocationSet;
+var
+  lEnum: TDSciWrapVisualLocation;
+begin
+  Result := [];
+
+  for lEnum := Low(TDSciWrapVisualLocation) to High(TDSciWrapVisualLocation) do
+    if AEnum and TDSciWrapVisualLocationToInt(lEnum) <> 0 then
+      Include(Result, lEnum);
+end;
+
+function TDSciWrapIndentModeToInt(AEnum: TDSciWrapIndentMode): Integer;
+begin
+  case AEnum of
+  scwimFIXED:                             /// <summary>SC_WRAPINDENT_FIXED = 0
+    Result := 0;
+  scwimSAME:                              /// <summary>SC_WRAPINDENT_SAME = 1
+    Result := 1;
+  scwimINDENT:                            /// <summary>SC_WRAPINDENT_INDENT = 2
+    Result := 2;
+  scwimDEEP_INDENT:                       /// <summary>SC_WRAPINDENT_DEEPINDENT = 3
+    Result := 3;
+  else
+    Result := 0;
+  end;
+end;
+
+function TDSciWrapIndentModeFromInt(AEnum: Integer): TDSciWrapIndentMode;
+begin
+  case AEnum of
+  0:
+    Result := scwimFIXED;                             /// <summary>SC_WRAPINDENT_FIXED = 0
+  1:
+    Result := scwimSAME;                              /// <summary>SC_WRAPINDENT_SAME = 1
+  2:
+    Result := scwimINDENT;                            /// <summary>SC_WRAPINDENT_INDENT = 2
+  3:
+    Result := scwimDEEP_INDENT;                       /// <summary>SC_WRAPINDENT_DEEPINDENT = 3
+  else
+    Result := scwimFIXED;                             /// <summary>SC_WRAPINDENT_FIXED = 0;
+  end;
+end;
+
+function TDSciLineCacheToInt(AEnum: TDSciLineCache): Integer;
+begin
+  case AEnum of
+  sclcNONE:                               /// <summary>SC_CACHE_NONE = 0
+    Result := 0;
+  sclcCARET:                              /// <summary>SC_CACHE_CARET = 1
+    Result := 1;
+  sclcPAGE:                               /// <summary>SC_CACHE_PAGE = 2
+    Result := 2;
+  sclcDOCUMENT:                           /// <summary>SC_CACHE_DOCUMENT = 3
+    Result := 3;
+  else
+    Result := 0;
+  end;
+end;
+
+function TDSciLineCacheFromInt(AEnum: Integer): TDSciLineCache;
+begin
+  case AEnum of
+  0:
+    Result := sclcNONE;                               /// <summary>SC_CACHE_NONE = 0
+  1:
+    Result := sclcCARET;                              /// <summary>SC_CACHE_CARET = 1
+  2:
+    Result := sclcPAGE;                               /// <summary>SC_CACHE_PAGE = 2
+  3:
+    Result := sclcDOCUMENT;                           /// <summary>SC_CACHE_DOCUMENT = 3
+  else
+    Result := sclcNONE;                               /// <summary>SC_CACHE_NONE = 0;
+  end;
+end;
+
+function TDSciPhasesDrawToInt(AEnum: TDSciPhasesDraw): Integer;
+begin
+  case AEnum of
+  scpdONE:                                /// <summary>SC_PHASES_ONE = 0
+    Result := 0;
+  scpdTWO:                                /// <summary>SC_PHASES_TWO = 1
+    Result := 1;
+  scpdMULTIPLE:                           /// <summary>SC_PHASES_MULTIPLE = 2
+    Result := 2;
+  else
+    Result := 0;
+  end;
+end;
+
+function TDSciPhasesDrawFromInt(AEnum: Integer): TDSciPhasesDraw;
+begin
+  case AEnum of
+  0:
+    Result := scpdONE;                                /// <summary>SC_PHASES_ONE = 0
+  1:
+    Result := scpdTWO;                                /// <summary>SC_PHASES_TWO = 1
+  2:
+    Result := scpdMULTIPLE;                           /// <summary>SC_PHASES_MULTIPLE = 2
+  else
+    Result := scpdONE;                                /// <summary>SC_PHASES_ONE = 0;
+  end;
+end;
+
+function TDSciFontQualityToInt(AEnum: TDSciFontQuality): Integer;
+begin
+  case AEnum of
+  scfqQUALITY_MASK:                       /// <summary>SC_EFF_QUALITY_MASK = $F
+    Result := $F;
+  scfqQUALITY_DEFAULT:                    /// <summary>SC_EFF_QUALITY_DEFAULT = 0
+    Result := 0;
+  scfqQUALITY_NON_ANTIALIASED:            /// <summary>SC_EFF_QUALITY_NON_ANTIALIASED = 1
+    Result := 1;
+  scfqQUALITY_ANTIALIASED:                /// <summary>SC_EFF_QUALITY_ANTIALIASED = 2
+    Result := 2;
+  scfqQUALITY_LCD_OPTIMIZED:              /// <summary>SC_EFF_QUALITY_LCD_OPTIMIZED = 3
+    Result := 3;
+  else
+    Result := $F;
+  end;
+end;
+
+function TDSciFontQualityFromInt(AEnum: Integer): TDSciFontQuality;
+begin
+  case AEnum of
+  $F:
+    Result := scfqQUALITY_MASK;                       /// <summary>SC_EFF_QUALITY_MASK = $F
+  0:
+    Result := scfqQUALITY_DEFAULT;                    /// <summary>SC_EFF_QUALITY_DEFAULT = 0
+  1:
+    Result := scfqQUALITY_NON_ANTIALIASED;            /// <summary>SC_EFF_QUALITY_NON_ANTIALIASED = 1
+  2:
+    Result := scfqQUALITY_ANTIALIASED;                /// <summary>SC_EFF_QUALITY_ANTIALIASED = 2
+  3:
+    Result := scfqQUALITY_LCD_OPTIMIZED;              /// <summary>SC_EFF_QUALITY_LCD_OPTIMIZED = 3
+  else
+    Result := scfqQUALITY_MASK;                       /// <summary>SC_EFF_QUALITY_MASK = $F;
+  end;
+end;
+
+function TDSciMultiPasteToInt(AEnum: TDSciMultiPaste): Integer;
+begin
+  case AEnum of
+  scmpONCE:                               /// <summary>SC_MULTIPASTE_ONCE = 0
+    Result := 0;
+  scmpEACH:                               /// <summary>SC_MULTIPASTE_EACH = 1
+    Result := 1;
+  else
+    Result := 0;
+  end;
+end;
+
+function TDSciMultiPasteFromInt(AEnum: Integer): TDSciMultiPaste;
+begin
+  case AEnum of
+  0:
+    Result := scmpONCE;                               /// <summary>SC_MULTIPASTE_ONCE = 0
+  1:
+    Result := scmpEACH;                               /// <summary>SC_MULTIPASTE_EACH = 1
+  else
+    Result := scmpONCE;                               /// <summary>SC_MULTIPASTE_ONCE = 0;
+  end;
+end;
+
+function TDSciAccessibilityToInt(AEnum: TDSciAccessibility): Integer;
+begin
+  case AEnum of
+  scaDISABLED:                            /// <summary>SC_ACCESSIBILITY_DISABLED = 0
+    Result := 0;
+  scaENABLED:                             /// <summary>SC_ACCESSIBILITY_ENABLED = 1
+    Result := 1;
+  else
+    Result := 0;
+  end;
+end;
+
+function TDSciAccessibilityFromInt(AEnum: Integer): TDSciAccessibility;
+begin
+  case AEnum of
+  0:
+    Result := scaDISABLED;                            /// <summary>SC_ACCESSIBILITY_DISABLED = 0
+  1:
+    Result := scaENABLED;                             /// <summary>SC_ACCESSIBILITY_ENABLED = 1
+  else
+    Result := scaDISABLED;                            /// <summary>SC_ACCESSIBILITY_DISABLED = 0;
+  end;
+end;
+
+function TDSciEdgeVisualStyleToInt(AEnum: TDSciEdgeVisualStyle): Integer;
+begin
+  case AEnum of
+  scevsNONE:                              /// <summary>EDGE_NONE = 0
+    Result := 0;
+  scevsLINE:                              /// <summary>EDGE_LINE = 1
+    Result := 1;
+  scevsBACKGROUND:                        /// <summary>EDGE_BACKGROUND = 2
+    Result := 2;
+  scevsMULTI_LINE:                        /// <summary>EDGE_MULTILINE = 3
+    Result := 3;
+  else
+    Result := 0;
+  end;
+end;
+
+function TDSciEdgeVisualStyleFromInt(AEnum: Integer): TDSciEdgeVisualStyle;
+begin
+  case AEnum of
+  0:
+    Result := scevsNONE;                              /// <summary>EDGE_NONE = 0
+  1:
+    Result := scevsLINE;                              /// <summary>EDGE_LINE = 1
+  2:
+    Result := scevsBACKGROUND;                        /// <summary>EDGE_BACKGROUND = 2
+  3:
+    Result := scevsMULTI_LINE;                        /// <summary>EDGE_MULTILINE = 3
+  else
+    Result := scevsNONE;                              /// <summary>EDGE_NONE = 0;
+  end;
+end;
+
+function TDSciPopUpToInt(AEnum: TDSciPopUp): Integer;
+begin
+  case AEnum of
+  scpuNEVER:                              /// <summary>SC_POPUP_NEVER = 0
+    Result := 0;
+  scpuALL:                                /// <summary>SC_POPUP_ALL = 1
+    Result := 1;
+  scpuTEXT:                               /// <summary>SC_POPUP_TEXT = 2
+    Result := 2;
+  else
+    Result := 0;
+  end;
+end;
+
+function TDSciPopUpFromInt(AEnum: Integer): TDSciPopUp;
+begin
+  case AEnum of
+  0:
+    Result := scpuNEVER;                              /// <summary>SC_POPUP_NEVER = 0
+  1:
+    Result := scpuALL;                                /// <summary>SC_POPUP_ALL = 1
+  2:
+    Result := scpuTEXT;                               /// <summary>SC_POPUP_TEXT = 2
+  else
+    Result := scpuNEVER;                              /// <summary>SC_POPUP_NEVER = 0;
+  end;
+end;
+
+function TDSciDocumentOptionToInt(AEnum: TDSciDocumentOption): Integer;
+begin
+  case AEnum of
+  scdoDEFAULT:                            /// <summary>SC_DOCUMENTOPTION_DEFAULT = 0
+    Result := 0;
+  scdoSTYLES_NONE:                        /// <summary>SC_DOCUMENTOPTION_STYLES_NONE = $1
+    Result := $1;
+  scdoTEXT_LARGE:                         /// <summary>SC_DOCUMENTOPTION_TEXT_LARGE = $100
+    Result := $100;
+  else
+    Result := 0;
+  end;
+end;
+
+function TDSciDocumentOptionFromInt(AEnum: Integer): TDSciDocumentOption;
+begin
+  case AEnum of
+  0:
+    Result := scdoDEFAULT;                            /// <summary>SC_DOCUMENTOPTION_DEFAULT = 0
+  $1:
+    Result := scdoSTYLES_NONE;                        /// <summary>SC_DOCUMENTOPTION_STYLES_NONE = $1
+  $100:
+    Result := scdoTEXT_LARGE;                         /// <summary>SC_DOCUMENTOPTION_TEXT_LARGE = $100
+  else
+    Result := scdoDEFAULT;                            /// <summary>SC_DOCUMENTOPTION_DEFAULT = 0;
+  end;
+end;
+
+function TDSciStatusToInt(AEnum: TDSciStatus): Integer;
+begin
+  case AEnum of
+  scsOK:                                  /// <summary>SC_STATUS_OK = 0
+    Result := 0;
+  scsFAILURE:                             /// <summary>SC_STATUS_FAILURE = 1
+    Result := 1;
+  scsBAD_ALLOC:                           /// <summary>SC_STATUS_BADALLOC = 2
+    Result := 2;
+  scsWARN_START:                          /// <summary>SC_STATUS_WARN_START = 1000
+    Result := 1000;
+  scsREG_EX:                              /// <summary>SC_STATUS_WARN_REGEX = 1001
+    Result := 1001;
+  else
+    Result := 0;
+  end;
+end;
+
+function TDSciStatusFromInt(AEnum: Integer): TDSciStatus;
+begin
+  case AEnum of
+  0:
+    Result := scsOK;                                  /// <summary>SC_STATUS_OK = 0
+  1:
+    Result := scsFAILURE;                             /// <summary>SC_STATUS_FAILURE = 1
+  2:
+    Result := scsBAD_ALLOC;                           /// <summary>SC_STATUS_BADALLOC = 2
+  1000:
+    Result := scsWARN_START;                          /// <summary>SC_STATUS_WARN_START = 1000
+  1001:
+    Result := scsREG_EX;                              /// <summary>SC_STATUS_WARN_REGEX = 1001
+  else
+    Result := scsOK;                                  /// <summary>SC_STATUS_OK = 0;
+  end;
+end;
+
+function TDSciVisiblePolicyToInt(AEnum: TDSciVisiblePolicy): Integer;
+begin
+  case AEnum of
+  scvpSLOP:                               /// <summary>VISIBLE_SLOP = $01
+    Result := $01;
+  scvpSTRICT:                             /// <summary>VISIBLE_STRICT = $04
+    Result := $04;
+  else
+    Result := $01;
+  end;
+end;
+
+function TDSciVisiblePolicyFromInt(AEnum: Integer): TDSciVisiblePolicy;
+begin
+  case AEnum of
+  $01:
+    Result := scvpSLOP;                               /// <summary>VISIBLE_SLOP = $01
+  $04:
+    Result := scvpSTRICT;                             /// <summary>VISIBLE_STRICT = $04
+  else
+    Result := scvpSLOP;                               /// <summary>VISIBLE_SLOP = $01;
+  end;
+end;
+
+function TDSciVisiblePolicySetToInt(AEnum: TDSciVisiblePolicySet): Integer;
+var
+  lEnum: TDSciVisiblePolicy;
+begin
+  Result := 0;
+
+  for lEnum in AEnum do
+    Result := Result or TDSciVisiblePolicyToInt(lEnum);
+end;
+
+function TDSciVisiblePolicySetFromInt(AEnum: Integer): TDSciVisiblePolicySet;
+var
+  lEnum: TDSciVisiblePolicy;
+begin
+  Result := [];
+
+  for lEnum := Low(TDSciVisiblePolicy) to High(TDSciVisiblePolicy) do
+    if AEnum and TDSciVisiblePolicyToInt(lEnum) <> 0 then
+      Include(Result, lEnum);
+end;
+
+function TDSciCaretPolicyToInt(AEnum: TDSciCaretPolicy): Integer;
+begin
+  case AEnum of
+  sccpSLOP:                               /// <summary>CARET_SLOP = $01
+    Result := $01;
+  sccpSTRICT:                             /// <summary>CARET_STRICT = $04
+    Result := $04;
+  sccpJUMPS:                              /// <summary>CARET_JUMPS = $10
+    Result := $10;
+  sccpEVEN:                               /// <summary>CARET_EVEN = $08
+    Result := $08;
+  else
+    Result := $01;
+  end;
+end;
+
+function TDSciCaretPolicyFromInt(AEnum: Integer): TDSciCaretPolicy;
+begin
+  case AEnum of
+  $01:
+    Result := sccpSLOP;                               /// <summary>CARET_SLOP = $01
+  $04:
+    Result := sccpSTRICT;                             /// <summary>CARET_STRICT = $04
+  $10:
+    Result := sccpJUMPS;                              /// <summary>CARET_JUMPS = $10
+  $08:
+    Result := sccpEVEN;                               /// <summary>CARET_EVEN = $08
+  else
+    Result := sccpSLOP;                               /// <summary>CARET_SLOP = $01;
+  end;
+end;
+
+function TDSciCaretPolicySetToInt(AEnum: TDSciCaretPolicySet): Integer;
+var
+  lEnum: TDSciCaretPolicy;
+begin
+  Result := 0;
+
+  for lEnum in AEnum do
+    Result := Result or TDSciCaretPolicyToInt(lEnum);
+end;
+
+function TDSciCaretPolicySetFromInt(AEnum: Integer): TDSciCaretPolicySet;
+var
+  lEnum: TDSciCaretPolicy;
+begin
+  Result := [];
+
+  for lEnum := Low(TDSciCaretPolicy) to High(TDSciCaretPolicy) do
+    if AEnum and TDSciCaretPolicyToInt(lEnum) <> 0 then
+      Include(Result, lEnum);
+end;
+
+function TDSciSelectionModeToInt(AEnum: TDSciSelectionMode): Integer;
+begin
+  case AEnum of
+  scsmSTREAM:                             /// <summary>SC_SEL_STREAM = 0
+    Result := 0;
+  scsmRECTANGLE:                          /// <summary>SC_SEL_RECTANGLE = 1
+    Result := 1;
+  scsmLINES:                              /// <summary>SC_SEL_LINES = 2
+    Result := 2;
+  scsmTHIN:                               /// <summary>SC_SEL_THIN = 3
+    Result := 3;
+  else
+    Result := 0;
+  end;
+end;
+
+function TDSciSelectionModeFromInt(AEnum: Integer): TDSciSelectionMode;
+begin
+  case AEnum of
+  0:
+    Result := scsmSTREAM;                             /// <summary>SC_SEL_STREAM = 0
+  1:
+    Result := scsmRECTANGLE;                          /// <summary>SC_SEL_RECTANGLE = 1
+  2:
+    Result := scsmLINES;                              /// <summary>SC_SEL_LINES = 2
+  3:
+    Result := scsmTHIN;                               /// <summary>SC_SEL_THIN = 3
+  else
+    Result := scsmSTREAM;                             /// <summary>SC_SEL_STREAM = 0;
+  end;
+end;
+
+function TDSciCaseInsensitiveBehaviourToInt(AEnum: TDSciCaseInsensitiveBehaviour): Integer;
+begin
+  case AEnum of
+  sccibRESPECT_CASE:                      /// <summary>SC_CASEINSENSITIVEBEHAVIOUR_RESPECTCASE = 0
+    Result := 0;
+  sccibIGNORE_CASE:                       /// <summary>SC_CASEINSENSITIVEBEHAVIOUR_IGNORECASE = 1
+    Result := 1;
+  else
+    Result := 0;
+  end;
+end;
+
+function TDSciCaseInsensitiveBehaviourFromInt(AEnum: Integer): TDSciCaseInsensitiveBehaviour;
+begin
+  case AEnum of
+  0:
+    Result := sccibRESPECT_CASE;                      /// <summary>SC_CASEINSENSITIVEBEHAVIOUR_RESPECTCASE = 0
+  1:
+    Result := sccibIGNORE_CASE;                       /// <summary>SC_CASEINSENSITIVEBEHAVIOUR_IGNORECASE = 1
+  else
+    Result := sccibRESPECT_CASE;                      /// <summary>SC_CASEINSENSITIVEBEHAVIOUR_RESPECTCASE = 0;
+  end;
+end;
+
+function TDSciMultiAutoCompleteToInt(AEnum: TDSciMultiAutoComplete): Integer;
+begin
+  case AEnum of
+  scmacONCE:                              /// <summary>SC_MULTIAUTOC_ONCE = 0
+    Result := 0;
+  scmacEACH:                              /// <summary>SC_MULTIAUTOC_EACH = 1
+    Result := 1;
+  else
+    Result := 0;
+  end;
+end;
+
+function TDSciMultiAutoCompleteFromInt(AEnum: Integer): TDSciMultiAutoComplete;
+begin
+  case AEnum of
+  0:
+    Result := scmacONCE;                              /// <summary>SC_MULTIAUTOC_ONCE = 0
+  1:
+    Result := scmacEACH;                              /// <summary>SC_MULTIAUTOC_EACH = 1
+  else
+    Result := scmacONCE;                              /// <summary>SC_MULTIAUTOC_ONCE = 0;
+  end;
+end;
+
+function TDSciOrderingToInt(AEnum: TDSciOrdering): Integer;
+begin
+  case AEnum of
+  scoPRE_SORTED:                          /// <summary>SC_ORDER_PRESORTED = 0
+    Result := 0;
+  scoPERFORM_SORT:                        /// <summary>SC_ORDER_PERFORMSORT = 1
+    Result := 1;
+  scoCUSTOM:                              /// <summary>SC_ORDER_CUSTOM = 2
+    Result := 2;
+  else
+    Result := 0;
+  end;
+end;
+
+function TDSciOrderingFromInt(AEnum: Integer): TDSciOrdering;
+begin
+  case AEnum of
+  0:
+    Result := scoPRE_SORTED;                          /// <summary>SC_ORDER_PRESORTED = 0
+  1:
+    Result := scoPERFORM_SORT;                        /// <summary>SC_ORDER_PERFORMSORT = 1
+  2:
+    Result := scoCUSTOM;                              /// <summary>SC_ORDER_CUSTOM = 2
+  else
+    Result := scoPRE_SORTED;                          /// <summary>SC_ORDER_PRESORTED = 0;
+  end;
+end;
+
+function TDSciCaretStickyToInt(AEnum: TDSciCaretSticky): Integer;
+begin
+  case AEnum of
+  sccsOFF:                                /// <summary>SC_CARETSTICKY_OFF = 0
+    Result := 0;
+  sccsON:                                 /// <summary>SC_CARETSTICKY_ON = 1
+    Result := 1;
+  sccsWHITE_SPACE:                        /// <summary>SC_CARETSTICKY_WHITESPACE = 2
+    Result := 2;
+  else
+    Result := 0;
+  end;
+end;
+
+function TDSciCaretStickyFromInt(AEnum: Integer): TDSciCaretSticky;
+begin
+  case AEnum of
+  0:
+    Result := sccsOFF;                                /// <summary>SC_CARETSTICKY_OFF = 0
+  1:
+    Result := sccsON;                                 /// <summary>SC_CARETSTICKY_ON = 1
+  2:
+    Result := sccsWHITE_SPACE;                        /// <summary>SC_CARETSTICKY_WHITESPACE = 2
+  else
+    Result := sccsOFF;                                /// <summary>SC_CARETSTICKY_OFF = 0;
+  end;
+end;
+
+function TDSciCaretStyleToInt(AEnum: TDSciCaretStyle): Integer;
+begin
+  case AEnum of
+  sccsINVISIBLE:                          /// <summary>CARETSTYLE_INVISIBLE = 0
+    Result := 0;
+  sccsLINE:                               /// <summary>CARETSTYLE_LINE = 1
+    Result := 1;
+  sccsBLOCK:                              /// <summary>CARETSTYLE_BLOCK = 2
+    Result := 2;
+  sccsOVERSTRIKE_BAR:                     /// <summary>CARETSTYLE_OVERSTRIKE_BAR = 0
+    Result := 0;
+  sccsOVERSTRIKE_BLOCK:                   /// <summary>CARETSTYLE_OVERSTRIKE_BLOCK = $10
+    Result := $10;
+  sccsCURSES:                             /// <summary>CARETSTYLE_CURSES = $20
+    Result := $20;
+  sccsINS_MASK:                           /// <summary>CARETSTYLE_INS_MASK = $F
+    Result := $F;
+  sccsBLOCK_AFTER:                        /// <summary>CARETSTYLE_BLOCK_AFTER = $100
+    Result := $100;
+  else
+    Result := 0;
+  end;
+end;
+
+function TDSciCaretStyleFromInt(AEnum: Integer): TDSciCaretStyle;
+begin
+  case AEnum of
+  0:
+    Result := sccsINVISIBLE;                          /// <summary>CARETSTYLE_INVISIBLE = 0
+  1:
+    Result := sccsLINE;                               /// <summary>CARETSTYLE_LINE = 1
+  2:
+    Result := sccsBLOCK;                              /// <summary>CARETSTYLE_BLOCK = 2
+  $10:
+    Result := sccsOVERSTRIKE_BLOCK;                   /// <summary>CARETSTYLE_OVERSTRIKE_BLOCK = $10
+  $20:
+    Result := sccsCURSES;                             /// <summary>CARETSTYLE_CURSES = $20
+  $F:
+    Result := sccsINS_MASK;                           /// <summary>CARETSTYLE_INS_MASK = $F
+  $100:
+    Result := sccsBLOCK_AFTER;                        /// <summary>CARETSTYLE_BLOCK_AFTER = $100
+  else
+    Result := sccsINVISIBLE;                          /// <summary>CARETSTYLE_INVISIBLE = 0;
+  end;
+end;
+
+function TDSciMarginOptionToInt(AEnum: TDSciMarginOption): Integer;
+begin
+  case AEnum of
+  scmoNONE:                               /// <summary>SC_MARGINOPTION_NONE = 0
+    Result := 0;
+  scmoSUB_LINE_SELECT:                    /// <summary>SC_MARGINOPTION_SUBLINESELECT = 1
+    Result := 1;
+  else
+    Result := 0;
+  end;
+end;
+
+function TDSciMarginOptionFromInt(AEnum: Integer): TDSciMarginOption;
+begin
+  case AEnum of
+  0:
+    Result := scmoNONE;                               /// <summary>SC_MARGINOPTION_NONE = 0
+  1:
+    Result := scmoSUB_LINE_SELECT;                    /// <summary>SC_MARGINOPTION_SUBLINESELECT = 1
+  else
+    Result := scmoNONE;                               /// <summary>SC_MARGINOPTION_NONE = 0;
+  end;
+end;
+
+function TDSciAnnotationVisibleToInt(AEnum: TDSciAnnotationVisible): Integer;
+begin
+  case AEnum of
+  scavHIDDEN:                             /// <summary>ANNOTATION_HIDDEN = 0
+    Result := 0;
+  scavSTANDARD:                           /// <summary>ANNOTATION_STANDARD = 1
+    Result := 1;
+  scavBOXED:                              /// <summary>ANNOTATION_BOXED = 2
+    Result := 2;
+  scavINDENTED:                           /// <summary>ANNOTATION_INDENTED = 3
+    Result := 3;
+  else
+    Result := 0;
+  end;
+end;
+
+function TDSciAnnotationVisibleFromInt(AEnum: Integer): TDSciAnnotationVisible;
+begin
+  case AEnum of
+  0:
+    Result := scavHIDDEN;                             /// <summary>ANNOTATION_HIDDEN = 0
+  1:
+    Result := scavSTANDARD;                           /// <summary>ANNOTATION_STANDARD = 1
+  2:
+    Result := scavBOXED;                              /// <summary>ANNOTATION_BOXED = 2
+  3:
+    Result := scavINDENTED;                           /// <summary>ANNOTATION_INDENTED = 3
+  else
+    Result := scavHIDDEN;                             /// <summary>ANNOTATION_HIDDEN = 0;
+  end;
+end;
+
+function TDSciUndoFlagsToInt(AEnum: TDSciUndoFlags): Integer;
+begin
+  case AEnum of
+  scufMAY_COALESCE:                       /// <summary>UNDO_MAY_COALESCE = 1
+    Result := 1;
+  else
+    Result := 1;
+  end;
+end;
+
+function TDSciUndoFlagsFromInt(AEnum: Integer): TDSciUndoFlags;
+begin
+  case AEnum of
+  1:
+    Result := scufMAY_COALESCE;                       /// <summary>UNDO_MAY_COALESCE = 1
+  else
+    Result := scufMAY_COALESCE;                       /// <summary>UNDO_MAY_COALESCE = 1;
+  end;
+end;
+
+function TDSciUndoFlagsSetToInt(AEnum: TDSciUndoFlagsSet): Integer;
+var
+  lEnum: TDSciUndoFlags;
+begin
+  Result := 0;
+
+  for lEnum in AEnum do
+    Result := Result or TDSciUndoFlagsToInt(lEnum);
+end;
+
+function TDSciUndoFlagsSetFromInt(AEnum: Integer): TDSciUndoFlagsSet;
+var
+  lEnum: TDSciUndoFlags;
+begin
+  Result := [];
+
+  for lEnum := Low(TDSciUndoFlags) to High(TDSciUndoFlags) do
+    if AEnum and TDSciUndoFlagsToInt(lEnum) <> 0 then
+      Include(Result, lEnum);
+end;
+
+function TDSciVirtualSpaceToInt(AEnum: TDSciVirtualSpace): Integer;
+begin
+  case AEnum of
+  scvsRECTANGULAR_SELECTION:              /// <summary>SCVS_RECTANGULARSELECTION = 1
+    Result := 1;
+  scvsUSER_ACCESSIBLE:                    /// <summary>SCVS_USERACCESSIBLE = 2
+    Result := 2;
+  scvsNO_WRAP_LINE_START:                 /// <summary>SCVS_NOWRAPLINESTART = 4
+    Result := 4;
+  else
+    Result := 1;
+  end;
+end;
+
+function TDSciVirtualSpaceFromInt(AEnum: Integer): TDSciVirtualSpace;
+begin
+  case AEnum of
+  1:
+    Result := scvsRECTANGULAR_SELECTION;              /// <summary>SCVS_RECTANGULARSELECTION = 1
+  2:
+    Result := scvsUSER_ACCESSIBLE;                    /// <summary>SCVS_USERACCESSIBLE = 2
+  4:
+    Result := scvsNO_WRAP_LINE_START;                 /// <summary>SCVS_NOWRAPLINESTART = 4
+  else
+    Result := scvsRECTANGULAR_SELECTION;              /// <summary>SCVS_RECTANGULARSELECTION = 1;
+  end;
+end;
+
+function TDSciVirtualSpaceSetToInt(AEnum: TDSciVirtualSpaceSet): Integer;
+var
+  lEnum: TDSciVirtualSpace;
+begin
+  Result := 0;
+
+  for lEnum in AEnum do
+    Result := Result or TDSciVirtualSpaceToInt(lEnum);
+end;
+
+function TDSciVirtualSpaceSetFromInt(AEnum: Integer): TDSciVirtualSpaceSet;
+var
+  lEnum: TDSciVirtualSpace;
+begin
+  Result := [];
+
+  for lEnum := Low(TDSciVirtualSpace) to High(TDSciVirtualSpace) do
+    if AEnum and TDSciVirtualSpaceToInt(lEnum) <> 0 then
+      Include(Result, lEnum);
+end;
+
+function TDSciTechnologyToInt(AEnum: TDSciTechnology): Integer;
+begin
+  case AEnum of
+  sctDEFAULT:                             /// <summary>SC_TECHNOLOGY_DEFAULT = 0
+    Result := 0;
+  sctDIRECT_WRITE:                        /// <summary>SC_TECHNOLOGY_DIRECTWRITE = 1
+    Result := 1;
+  sctDIRECT_WRITE_RETAIN:                 /// <summary>SC_TECHNOLOGY_DIRECTWRITERETAIN = 2
+    Result := 2;
+  sctDIRECT_WRITE_D_C:                    /// <summary>SC_TECHNOLOGY_DIRECTWRITEDC = 3
+    Result := 3;
+  sctDIRECT_WRITE_1:                      /// <summary>SC_TECHNOLOGY_DIRECT_WRITE_1 = 4
+    Result := 4;
+  else
+    Result := 0;
+  end;
+end;
+
+function TDSciTechnologyFromInt(AEnum: Integer): TDSciTechnology;
+begin
+  case AEnum of
+  0:
+    Result := sctDEFAULT;                             /// <summary>SC_TECHNOLOGY_DEFAULT = 0
+  1:
+    Result := sctDIRECT_WRITE;                        /// <summary>SC_TECHNOLOGY_DIRECTWRITE = 1
+  2:
+    Result := sctDIRECT_WRITE_RETAIN;                 /// <summary>SC_TECHNOLOGY_DIRECTWRITERETAIN = 2
+  3:
+    Result := sctDIRECT_WRITE_D_C;                    /// <summary>SC_TECHNOLOGY_DIRECTWRITEDC = 3
+  4:
+    Result := sctDIRECT_WRITE_1;                      /// <summary>SC_TECHNOLOGY_DIRECT_WRITE_1 = 4
+  else
+    Result := sctDEFAULT;                             /// <summary>SC_TECHNOLOGY_DEFAULT = 0;
+  end;
+end;
+
+function TDSciLineEndTypeToInt(AEnum: TDSciLineEndType): Integer;
+begin
+  case AEnum of
+  scletDEFAULT:                           /// <summary>SC_LINE_END_TYPE_DEFAULT = 0
+    Result := 0;
+  scletUNICODE:                           /// <summary>SC_LINE_END_TYPE_UNICODE = 1
+    Result := 1;
+  else
+    Result := 0;
+  end;
+end;
+
+function TDSciLineEndTypeFromInt(AEnum: Integer): TDSciLineEndType;
+begin
+  case AEnum of
+  0:
+    Result := scletDEFAULT;                           /// <summary>SC_LINE_END_TYPE_DEFAULT = 0
+  1:
+    Result := scletUNICODE;                           /// <summary>SC_LINE_END_TYPE_UNICODE = 1
+  else
+    Result := scletDEFAULT;                           /// <summary>SC_LINE_END_TYPE_DEFAULT = 0;
+  end;
+end;
+
+function TDSciRepresentationAppearanceToInt(AEnum: TDSciRepresentationAppearance): Integer;
+begin
+  case AEnum of
+  scra_PLAIN:                             /// <summary>SC_REPRESENTATION_PLAIN = 0
+    Result := 0;
+  scra_BLOB:                              /// <summary>SC_REPRESENTATION_BLOB = 1
+    Result := 1;
+  scra_COLOUR:                            /// <summary>SC_REPRESENTATION_COLOUR = $10
+    Result := $10;
+  else
+    Result := 0;
+  end;
+end;
+
+function TDSciRepresentationAppearanceFromInt(AEnum: Integer): TDSciRepresentationAppearance;
+begin
+  case AEnum of
+  0:
+    Result := scra_PLAIN;                             /// <summary>SC_REPRESENTATION_PLAIN = 0
+  1:
+    Result := scra_BLOB;                              /// <summary>SC_REPRESENTATION_BLOB = 1
+  $10:
+    Result := scra_COLOUR;                            /// <summary>SC_REPRESENTATION_COLOUR = $10
+  else
+    Result := scra_PLAIN;                             /// <summary>SC_REPRESENTATION_PLAIN = 0;
+  end;
+end;
+
+function TDSciEOLAnnotationVisibleToInt(AEnum: TDSciEOLAnnotationVisible): Integer;
+begin
+  case AEnum of
+  sceolavHIDDEN:                          /// <summary>EOLANNOTATION_HIDDEN = $0
+    Result := $0;
+  sceolavSTANDARD:                        /// <summary>EOLANNOTATION_STANDARD = $1
+    Result := $1;
+  sceolavBOXED:                           /// <summary>EOLANNOTATION_BOXED = $2
+    Result := $2;
+  sceolavSTADIUM:                         /// <summary>EOLANNOTATION_STADIUM = $100
+    Result := $100;
+  sceolavFLAT_CIRCLE:                     /// <summary>EOLANNOTATION_FLAT_CIRCLE = $101
+    Result := $101;
+  sceolavANGLE_CIRCLE:                    /// <summary>EOLANNOTATION_ANGLE_CIRCLE = $102
+    Result := $102;
+  sceolavCIRCLE_FLAT:                     /// <summary>EOLANNOTATION_CIRCLE_FLAT = $110
+    Result := $110;
+  sceolavFLATS:                           /// <summary>EOLANNOTATION_FLATS = $111
+    Result := $111;
+  sceolavANGLE_FLAT:                      /// <summary>EOLANNOTATION_ANGLE_FLAT = $112
+    Result := $112;
+  sceolavCIRCLE_ANGLE:                    /// <summary>EOLANNOTATION_CIRCLE_ANGLE = $120
+    Result := $120;
+  sceolavFLAT_ANGLE:                      /// <summary>EOLANNOTATION_FLAT_ANGLE = $121
+    Result := $121;
+  sceolavANGLES:                          /// <summary>EOLANNOTATION_ANGLES = $122
+    Result := $122;
+  else
+    Result := $0;
+  end;
+end;
+
+function TDSciEOLAnnotationVisibleFromInt(AEnum: Integer): TDSciEOLAnnotationVisible;
+begin
+  case AEnum of
+  $0:
+    Result := sceolavHIDDEN;                          /// <summary>EOLANNOTATION_HIDDEN = $0
+  $1:
+    Result := sceolavSTANDARD;                        /// <summary>EOLANNOTATION_STANDARD = $1
+  $2:
+    Result := sceolavBOXED;                           /// <summary>EOLANNOTATION_BOXED = $2
+  $100:
+    Result := sceolavSTADIUM;                         /// <summary>EOLANNOTATION_STADIUM = $100
+  $101:
+    Result := sceolavFLAT_CIRCLE;                     /// <summary>EOLANNOTATION_FLAT_CIRCLE = $101
+  $102:
+    Result := sceolavANGLE_CIRCLE;                    /// <summary>EOLANNOTATION_ANGLE_CIRCLE = $102
+  $110:
+    Result := sceolavCIRCLE_FLAT;                     /// <summary>EOLANNOTATION_CIRCLE_FLAT = $110
+  $111:
+    Result := sceolavFLATS;                           /// <summary>EOLANNOTATION_FLATS = $111
+  $112:
+    Result := sceolavANGLE_FLAT;                      /// <summary>EOLANNOTATION_ANGLE_FLAT = $112
+  $120:
+    Result := sceolavCIRCLE_ANGLE;                    /// <summary>EOLANNOTATION_CIRCLE_ANGLE = $120
+  $121:
+    Result := sceolavFLAT_ANGLE;                      /// <summary>EOLANNOTATION_FLAT_ANGLE = $121
+  $122:
+    Result := sceolavANGLES;                          /// <summary>EOLANNOTATION_ANGLES = $122
+  else
+    Result := sceolavHIDDEN;                          /// <summary>EOLANNOTATION_HIDDEN = $0;
+  end;
+end;
+
+function TDSciSupportsToInt(AEnum: TDSciSupports): Integer;
+begin
+  case AEnum of
+  scsLINE_DRAWS_FINAL:                    /// <summary>SC_SUPPORTS_LINE_DRAWS_FINAL = 0
+    Result := 0;
+  scsPIXEL_DIVISIONS:                     /// <summary>SC_SUPPORTS_PIXEL_DIVISIONS = 1
+    Result := 1;
+  scsFRACTIONAL_STROKE_WIDTH:             /// <summary>SC_SUPPORTS_FRACTIONAL_STROKE_WIDTH = 2
+    Result := 2;
+  scsTRANSLUCENT_STROKE:                  /// <summary>SC_SUPPORTS_TRANSLUCENT_STROKE = 3
+    Result := 3;
+  scsPIXEL_MODIFICATION:                  /// <summary>SC_SUPPORTS_PIXEL_MODIFICATION = 4
+    Result := 4;
+  scsTHREAD_SAFE_MEASURE_WIDTHS:          /// <summary>SC_SUPPORTS_THREAD_SAFE_MEASURE_WIDTHS = 5
+    Result := 5;
+  else
+    Result := 0;
+  end;
+end;
+
+function TDSciSupportsFromInt(AEnum: Integer): TDSciSupports;
+begin
+  case AEnum of
+  0:
+    Result := scsLINE_DRAWS_FINAL;                    /// <summary>SC_SUPPORTS_LINE_DRAWS_FINAL = 0
+  1:
+    Result := scsPIXEL_DIVISIONS;                     /// <summary>SC_SUPPORTS_PIXEL_DIVISIONS = 1
+  2:
+    Result := scsFRACTIONAL_STROKE_WIDTH;             /// <summary>SC_SUPPORTS_FRACTIONAL_STROKE_WIDTH = 2
+  3:
+    Result := scsTRANSLUCENT_STROKE;                  /// <summary>SC_SUPPORTS_TRANSLUCENT_STROKE = 3
+  4:
+    Result := scsPIXEL_MODIFICATION;                  /// <summary>SC_SUPPORTS_PIXEL_MODIFICATION = 4
+  5:
+    Result := scsTHREAD_SAFE_MEASURE_WIDTHS;          /// <summary>SC_SUPPORTS_THREAD_SAFE_MEASURE_WIDTHS = 5
+  else
+    Result := scsLINE_DRAWS_FINAL;                    /// <summary>SC_SUPPORTS_LINE_DRAWS_FINAL = 0;
+  end;
+end;
+
+function TDSciLineCharacterIndexTypeToInt(AEnum: TDSciLineCharacterIndexType): Integer;
+begin
+  case AEnum of
+  sclcitNONE:                             /// <summary>SC_LINECHARACTERINDEX_NONE = 0
+    Result := 0;
+  sclcitUTF32:                            /// <summary>SC_LINECHARACTERINDEX_UTF32 = 1
+    Result := 1;
+  sclcitUTF16:                            /// <summary>SC_LINECHARACTERINDEX_UTF16 = 2
+    Result := 2;
+  else
+    Result := 0;
+  end;
+end;
+
+function TDSciLineCharacterIndexTypeFromInt(AEnum: Integer): TDSciLineCharacterIndexType;
+begin
+  case AEnum of
+  0:
+    Result := sclcitNONE;                             /// <summary>SC_LINECHARACTERINDEX_NONE = 0
+  1:
+    Result := sclcitUTF32;                            /// <summary>SC_LINECHARACTERINDEX_UTF32 = 1
+  2:
+    Result := sclcitUTF16;                            /// <summary>SC_LINECHARACTERINDEX_UTF16 = 2
+  else
+    Result := sclcitNONE;                             /// <summary>SC_LINECHARACTERINDEX_NONE = 0;
+  end;
+end;
+
+function TDSciTypePropertyToInt(AEnum: TDSciTypeProperty): Integer;
+begin
+  case AEnum of
+  sctpBOOLEAN:                            /// <summary>SC_TYPE_BOOLEAN = 0
+    Result := 0;
+  sctpINTEGER:                            /// <summary>SC_TYPE_INTEGER = 1
+    Result := 1;
+  sctpSTRING:                             /// <summary>SC_TYPE_STRING = 2
+    Result := 2;
+  else
+    Result := 0;
+  end;
+end;
+
+function TDSciTypePropertyFromInt(AEnum: Integer): TDSciTypeProperty;
+begin
+  case AEnum of
+  0:
+    Result := sctpBOOLEAN;                            /// <summary>SC_TYPE_BOOLEAN = 0
+  1:
+    Result := sctpINTEGER;                            /// <summary>SC_TYPE_INTEGER = 1
+  2:
+    Result := sctpSTRING;                             /// <summary>SC_TYPE_STRING = 2
+  else
+    Result := sctpBOOLEAN;                            /// <summary>SC_TYPE_BOOLEAN = 0;
+  end;
+end;
+
+function TDSciModificationFlagsToInt(AEnum: TDSciModificationFlags): Integer;
+begin
+  case AEnum of
+  scmfINSERT_TEXT:                        /// <summary>SC_MOD_INSERTTEXT = $1
+    Result := $1;
+  scmfDELETE_TEXT:                        /// <summary>SC_MOD_DELETETEXT = $2
+    Result := $2;
+  scmfCHANGE_STYLE:                       /// <summary>SC_MOD_CHANGESTYLE = $4
+    Result := $4;
+  scmfCHANGE_FOLD:                        /// <summary>SC_MOD_CHANGEFOLD = $8
+    Result := $8;
+  scmfUSER:                               /// <summary>SC_PERFORMED_USER = $10
+    Result := $10;
+  scmfUNDO:                               /// <summary>SC_PERFORMED_UNDO = $20
+    Result := $20;
+  scmfREDO:                               /// <summary>SC_PERFORMED_REDO = $40
+    Result := $40;
+  scmfMULTI_STEP_UNDO_REDO:               /// <summary>SC_MULTISTEPUNDOREDO = $80
+    Result := $80;
+  scmfLAST_STEP_IN_UNDO_REDO:             /// <summary>SC_LASTSTEPINUNDOREDO = $100
+    Result := $100;
+  scmfCHANGE_MARKER:                      /// <summary>SC_MOD_CHANGEMARKER = $200
+    Result := $200;
+  scmfBEFORE_INSERT:                      /// <summary>SC_MOD_BEFOREINSERT = $400
+    Result := $400;
+  scmfBEFORE_DELETE:                      /// <summary>SC_MOD_BEFOREDELETE = $800
+    Result := $800;
+  scmfMULTILINE_UNDO_REDO:                /// <summary>SC_MULTILINEUNDOREDO = $1000
+    Result := $1000;
+  scmfSTART_ACTION:                       /// <summary>SC_STARTACTION = $2000
+    Result := $2000;
+  scmfCHANGE_INDICATOR:                   /// <summary>SC_MOD_CHANGEINDICATOR = $4000
+    Result := $4000;
+  scmfCHANGE_LINE_STATE:                  /// <summary>SC_MOD_CHANGELINESTATE = $8000
+    Result := $8000;
+  scmfCHANGE_MARGIN:                      /// <summary>SC_MOD_CHANGEMARGIN = $10000
+    Result := $10000;
+  scmfCHANGE_ANNOTATION:                  /// <summary>SC_MOD_CHANGEANNOTATION = $20000
+    Result := $20000;
+  scmfCONTAINER:                          /// <summary>SC_MOD_CONTAINER = $40000
+    Result := $40000;
+  scmfLEXER_STATE:                        /// <summary>SC_MOD_LEXERSTATE = $80000
+    Result := $80000;
+  scmfINSERT_CHECK:                       /// <summary>SC_MOD_INSERTCHECK = $100000
+    Result := $100000;
+  scmfCHANGE_TAB_STOPS:                   /// <summary>SC_MOD_CHANGETABSTOPS = $200000
+    Result := $200000;
+  scmfCHANGE_E_O_L_ANNOTATION:            /// <summary>SC_MOD_CHANGEEOLANNOTATION = $400000
+    Result := $400000;
+  scmfEVENT_MASK_ALL:                     /// <summary>SC_MODEVENTMASKALL = $7FFFFF
+    Result := $7FFFFF;
+  else
+    Result := $1;
+  end;
+end;
+
+function TDSciModificationFlagsFromInt(AEnum: Integer): TDSciModificationFlags;
+begin
+  case AEnum of
+  $1:
+    Result := scmfINSERT_TEXT;                        /// <summary>SC_MOD_INSERTTEXT = $1
+  $2:
+    Result := scmfDELETE_TEXT;                        /// <summary>SC_MOD_DELETETEXT = $2
+  $4:
+    Result := scmfCHANGE_STYLE;                       /// <summary>SC_MOD_CHANGESTYLE = $4
+  $8:
+    Result := scmfCHANGE_FOLD;                        /// <summary>SC_MOD_CHANGEFOLD = $8
+  $10:
+    Result := scmfUSER;                               /// <summary>SC_PERFORMED_USER = $10
+  $20:
+    Result := scmfUNDO;                               /// <summary>SC_PERFORMED_UNDO = $20
+  $40:
+    Result := scmfREDO;                               /// <summary>SC_PERFORMED_REDO = $40
+  $80:
+    Result := scmfMULTI_STEP_UNDO_REDO;               /// <summary>SC_MULTISTEPUNDOREDO = $80
+  $100:
+    Result := scmfLAST_STEP_IN_UNDO_REDO;             /// <summary>SC_LASTSTEPINUNDOREDO = $100
+  $200:
+    Result := scmfCHANGE_MARKER;                      /// <summary>SC_MOD_CHANGEMARKER = $200
+  $400:
+    Result := scmfBEFORE_INSERT;                      /// <summary>SC_MOD_BEFOREINSERT = $400
+  $800:
+    Result := scmfBEFORE_DELETE;                      /// <summary>SC_MOD_BEFOREDELETE = $800
+  $1000:
+    Result := scmfMULTILINE_UNDO_REDO;                /// <summary>SC_MULTILINEUNDOREDO = $1000
+  $2000:
+    Result := scmfSTART_ACTION;                       /// <summary>SC_STARTACTION = $2000
+  $4000:
+    Result := scmfCHANGE_INDICATOR;                   /// <summary>SC_MOD_CHANGEINDICATOR = $4000
+  $8000:
+    Result := scmfCHANGE_LINE_STATE;                  /// <summary>SC_MOD_CHANGELINESTATE = $8000
+  $10000:
+    Result := scmfCHANGE_MARGIN;                      /// <summary>SC_MOD_CHANGEMARGIN = $10000
+  $20000:
+    Result := scmfCHANGE_ANNOTATION;                  /// <summary>SC_MOD_CHANGEANNOTATION = $20000
+  $40000:
+    Result := scmfCONTAINER;                          /// <summary>SC_MOD_CONTAINER = $40000
+  $80000:
+    Result := scmfLEXER_STATE;                        /// <summary>SC_MOD_LEXERSTATE = $80000
+  $100000:
+    Result := scmfINSERT_CHECK;                       /// <summary>SC_MOD_INSERTCHECK = $100000
+  $200000:
+    Result := scmfCHANGE_TAB_STOPS;                   /// <summary>SC_MOD_CHANGETABSTOPS = $200000
+  $400000:
+    Result := scmfCHANGE_E_O_L_ANNOTATION;            /// <summary>SC_MOD_CHANGEEOLANNOTATION = $400000
+  $7FFFFF:
+    Result := scmfEVENT_MASK_ALL;                     /// <summary>SC_MODEVENTMASKALL = $7FFFFF
+  else
+    Result := scmfINSERT_TEXT;                        /// <summary>SC_MOD_INSERTTEXT = $1;
+  end;
+end;
+
+function TDSciModificationFlagsSetToInt(AEnum: TDSciModificationFlagsSet): Integer;
+var
+  lEnum: TDSciModificationFlags;
+begin
+  Result := 0;
+
+  for lEnum in AEnum do
+    Result := Result or TDSciModificationFlagsToInt(lEnum);
+end;
+
+function TDSciModificationFlagsSetFromInt(AEnum: Integer): TDSciModificationFlagsSet;
+var
+  lEnum: TDSciModificationFlags;
+begin
+  Result := [];
+
+  for lEnum := Low(TDSciModificationFlags) to High(TDSciModificationFlags) do
+    if AEnum and TDSciModificationFlagsToInt(lEnum) <> 0 then
+      Include(Result, lEnum);
+end;
+
+function TDSciUpdateToInt(AEnum: TDSciUpdate): Integer;
+begin
+  case AEnum of
+  scuNONE:                                /// <summary>SC_UPDATE_NONE = $0
+    Result := $0;
+  scuCONTENT:                             /// <summary>SC_UPDATE_CONTENT = $1
+    Result := $1;
+  scuSELECTION:                           /// <summary>SC_UPDATE_SELECTION = $2
+    Result := $2;
+  scuV_SCROLL:                            /// <summary>SC_UPDATE_V_SCROLL = $4
+    Result := $4;
+  scuH_SCROLL:                            /// <summary>SC_UPDATE_H_SCROLL = $8
+    Result := $8;
+  else
+    Result := $0;
+  end;
+end;
+
+function TDSciUpdateFromInt(AEnum: Integer): TDSciUpdate;
+begin
+  case AEnum of
+  $0:
+    Result := scuNONE;                                /// <summary>SC_UPDATE_NONE = $0
+  $1:
+    Result := scuCONTENT;                             /// <summary>SC_UPDATE_CONTENT = $1
+  $2:
+    Result := scuSELECTION;                           /// <summary>SC_UPDATE_SELECTION = $2
+  $4:
+    Result := scuV_SCROLL;                            /// <summary>SC_UPDATE_V_SCROLL = $4
+  $8:
+    Result := scuH_SCROLL;                            /// <summary>SC_UPDATE_H_SCROLL = $8
+  else
+    Result := scuNONE;                                /// <summary>SC_UPDATE_NONE = $0;
+  end;
+end;
+
+function TDSciUpdateFlagsSetToInt(AEnum: TDSciUpdateFlagsSet): Integer;
+var
+  lEnum: TDSciUpdate;
+begin
+  Result := 0;
+
+  for lEnum in AEnum do
+    Result := Result or TDSciUpdateToInt(lEnum);
+end;
+
+function TDSciUpdateFlagsSetFromInt(AEnum: Integer): TDSciUpdateFlagsSet;
+var
+  lEnum: TDSciUpdate;
+begin
+  Result := [];
+
+  for lEnum := Low(TDSciUpdate) to High(TDSciUpdate) do
+    if AEnum and TDSciUpdateToInt(lEnum) <> 0 then
+      Include(Result, lEnum);
+end;
+
+function TDSciFocusChangeToInt(AEnum: TDSciFocusChange): Integer;
+begin
+  case AEnum of
+  scfcCHANGE:                             /// <summary>SCEN_CHANGE = 768
+    Result := 768;
+  scfcSETFOCUS:                           /// <summary>SCEN_SETFOCUS = 512
+    Result := 512;
+  scfcKILLFOCUS:                          /// <summary>SCEN_KILLFOCUS = 256
+    Result := 256;
+  else
+    Result := 768;
+  end;
+end;
+
+function TDSciFocusChangeFromInt(AEnum: Integer): TDSciFocusChange;
+begin
+  case AEnum of
+  768:
+    Result := scfcCHANGE;                             /// <summary>SCEN_CHANGE = 768
+  512:
+    Result := scfcSETFOCUS;                           /// <summary>SCEN_SETFOCUS = 512
+  256:
+    Result := scfcKILLFOCUS;                          /// <summary>SCEN_KILLFOCUS = 256
+  else
+    Result := scfcCHANGE;                             /// <summary>SCEN_CHANGE = 768;
+  end;
+end;
+
+function TDSciKeysToInt(AEnum: TDSciKeys): Integer;
+begin
+  case AEnum of
+  sckDOWN:                                /// <summary>SCK_DOWN = 300
+    Result := 300;
+  sckUP:                                  /// <summary>SCK_UP = 301
+    Result := 301;
+  sckLEFT:                                /// <summary>SCK_LEFT = 302
+    Result := 302;
+  sckRIGHT:                               /// <summary>SCK_RIGHT = 303
+    Result := 303;
+  sckHOME:                                /// <summary>SCK_HOME = 304
+    Result := 304;
+  sckEND:                                 /// <summary>SCK_END = 305
+    Result := 305;
+  sckPRIOR:                               /// <summary>SCK_PRIOR = 306
+    Result := 306;
+  sckNEXT:                                /// <summary>SCK_NEXT = 307
+    Result := 307;
+  sckDELETE:                              /// <summary>SCK_DELETE = 308
+    Result := 308;
+  sckINSERT:                              /// <summary>SCK_INSERT = 309
+    Result := 309;
+  sckESCAPE:                              /// <summary>SCK_ESCAPE = 7
+    Result := 7;
+  sckBACK:                                /// <summary>SCK_BACK = 8
+    Result := 8;
+  sckTAB:                                 /// <summary>SCK_TAB = 9
+    Result := 9;
+  sckRETURN:                              /// <summary>SCK_RETURN = 13
+    Result := 13;
+  sckADD:                                 /// <summary>SCK_ADD = 310
+    Result := 310;
+  sckSUBTRACT:                            /// <summary>SCK_SUBTRACT = 311
+    Result := 311;
+  sckDIVIDE:                              /// <summary>SCK_DIVIDE = 312
+    Result := 312;
+  sckWIN:                                 /// <summary>SCK_WIN = 313
+    Result := 313;
+  sckR_WIN:                               /// <summary>SCK_RWIN = 314
+    Result := 314;
+  sckMENU:                                /// <summary>SCK_MENU = 315
+    Result := 315;
+  else
+    Result := 300;
+  end;
+end;
+
+function TDSciKeysFromInt(AEnum: Integer): TDSciKeys;
+begin
+  case AEnum of
+  300:
+    Result := sckDOWN;                                /// <summary>SCK_DOWN = 300
+  301:
+    Result := sckUP;                                  /// <summary>SCK_UP = 301
+  302:
+    Result := sckLEFT;                                /// <summary>SCK_LEFT = 302
+  303:
+    Result := sckRIGHT;                               /// <summary>SCK_RIGHT = 303
+  304:
+    Result := sckHOME;                                /// <summary>SCK_HOME = 304
+  305:
+    Result := sckEND;                                 /// <summary>SCK_END = 305
+  306:
+    Result := sckPRIOR;                               /// <summary>SCK_PRIOR = 306
+  307:
+    Result := sckNEXT;                                /// <summary>SCK_NEXT = 307
+  308:
+    Result := sckDELETE;                              /// <summary>SCK_DELETE = 308
+  309:
+    Result := sckINSERT;                              /// <summary>SCK_INSERT = 309
+  7:
+    Result := sckESCAPE;                              /// <summary>SCK_ESCAPE = 7
+  8:
+    Result := sckBACK;                                /// <summary>SCK_BACK = 8
+  9:
+    Result := sckTAB;                                 /// <summary>SCK_TAB = 9
+  13:
+    Result := sckRETURN;                              /// <summary>SCK_RETURN = 13
+  310:
+    Result := sckADD;                                 /// <summary>SCK_ADD = 310
+  311:
+    Result := sckSUBTRACT;                            /// <summary>SCK_SUBTRACT = 311
+  312:
+    Result := sckDIVIDE;                              /// <summary>SCK_DIVIDE = 312
+  313:
+    Result := sckWIN;                                 /// <summary>SCK_WIN = 313
+  314:
+    Result := sckR_WIN;                               /// <summary>SCK_RWIN = 314
+  315:
+    Result := sckMENU;                                /// <summary>SCK_MENU = 315
+  else
+    Result := sckDOWN;                                /// <summary>SCK_DOWN = 300;
+  end;
+end;
+
+function TDSciKeyModToInt(AEnum: TDSciKeyMod): Integer;
+begin
+  case AEnum of
+  sckmSHIFT:                              /// <summary>SCMOD_SHIFT = 1
+    Result := 1;
+  sckmCTRL:                               /// <summary>SCMOD_CTRL = 2
+    Result := 2;
+  sckmALT:                                /// <summary>SCMOD_ALT = 4
+    Result := 4;
+  sckmSUPER:                              /// <summary>SCMOD_SUPER = 8
+    Result := 8;
+  sckmMETA:                               /// <summary>SCMOD_META = 16
+    Result := 16;
+  else
+    Result := 1;
+  end;
+end;
+
+function TDSciKeyModFromInt(AEnum: Integer): TDSciKeyMod;
+begin
+  case AEnum of
+  1:
+    Result := sckmSHIFT;                              /// <summary>SCMOD_SHIFT = 1
+  2:
+    Result := sckmCTRL;                               /// <summary>SCMOD_CTRL = 2
+  4:
+    Result := sckmALT;                                /// <summary>SCMOD_ALT = 4
+  8:
+    Result := sckmSUPER;                              /// <summary>SCMOD_SUPER = 8
+  16:
+    Result := sckmMETA;                               /// <summary>SCMOD_META = 16
+  else
+    Result := sckmSHIFT;                              /// <summary>SCMOD_SHIFT = 1;
+  end;
+end;
+
+function TDSciKeyModSetToInt(AEnum: TDSciKeyModSet): Integer;
+var
+  lEnum: TDSciKeyMod;
+begin
+  Result := 0;
+
+  for lEnum in AEnum do
+    Result := Result or TDSciKeyModToInt(lEnum);
+end;
+
+function TDSciKeyModSetFromInt(AEnum: Integer): TDSciKeyModSet;
+var
+  lEnum: TDSciKeyMod;
+begin
+  Result := [];
+
+  for lEnum := Low(TDSciKeyMod) to High(TDSciKeyMod) do
+    if AEnum and TDSciKeyModToInt(lEnum) <> 0 then
+      Include(Result, lEnum);
+end;
+
+function TDSciCompletionMethodsToInt(AEnum: TDSciCompletionMethods): Integer;
+begin
+  case AEnum of
+  sccmFILL_UP:                            /// <summary>SC_AC_FILLUP = 1
+    Result := 1;
+  sccmDOUBLE_CLICK:                       /// <summary>SC_AC_DOUBLECLICK = 2
+    Result := 2;
+  sccmTAB:                                /// <summary>SC_AC_TAB = 3
+    Result := 3;
+  sccmNEWLINE:                            /// <summary>SC_AC_NEWLINE = 4
+    Result := 4;
+  sccmCOMMAND:                            /// <summary>SC_AC_COMMAND = 5
+    Result := 5;
+  sccmSINGLE_CHOICE:                      /// <summary>SC_AC_SINGLE_CHOICE = 6
+    Result := 6;
+  else
+    Result := 1;
+  end;
+end;
+
+function TDSciCompletionMethodsFromInt(AEnum: Integer): TDSciCompletionMethods;
+begin
+  case AEnum of
+  1:
+    Result := sccmFILL_UP;                            /// <summary>SC_AC_FILLUP = 1
+  2:
+    Result := sccmDOUBLE_CLICK;                       /// <summary>SC_AC_DOUBLECLICK = 2
+  3:
+    Result := sccmTAB;                                /// <summary>SC_AC_TAB = 3
+  4:
+    Result := sccmNEWLINE;                            /// <summary>SC_AC_NEWLINE = 4
+  5:
+    Result := sccmCOMMAND;                            /// <summary>SC_AC_COMMAND = 5
+  6:
+    Result := sccmSINGLE_CHOICE;                      /// <summary>SC_AC_SINGLE_CHOICE = 6
+  else
+    Result := sccmFILL_UP;                            /// <summary>SC_AC_FILLUP = 1;
+  end;
+end;
+
+function TDSciCharacterSourceToInt(AEnum: TDSciCharacterSource): Integer;
+begin
+  case AEnum of
+  sccsDIRECT_INPUT:                       /// <summary>SC_CHARACTERSOURCE_DIRECT_INPUT = 0
+    Result := 0;
+  sccsTENTATIVE_INPUT:                    /// <summary>SC_CHARACTERSOURCE_TENTATIVE_INPUT = 1
+    Result := 1;
+  sccsIME_RESULT:                         /// <summary>SC_CHARACTERSOURCE_IME_RESULT = 2
+    Result := 2;
+  else
+    Result := 0;
+  end;
+end;
+
+function TDSciCharacterSourceFromInt(AEnum: Integer): TDSciCharacterSource;
+begin
+  case AEnum of
+  0:
+    Result := sccsDIRECT_INPUT;                       /// <summary>SC_CHARACTERSOURCE_DIRECT_INPUT = 0
+  1:
+    Result := sccsTENTATIVE_INPUT;                    /// <summary>SC_CHARACTERSOURCE_TENTATIVE_INPUT = 1
+  2:
+    Result := sccsIME_RESULT;                         /// <summary>SC_CHARACTERSOURCE_IME_RESULT = 2
+  else
+    Result := sccsDIRECT_INPUT;                       /// <summary>SC_CHARACTERSOURCE_DIRECT_INPUT = 0;
+  end;
+end;
+
+function TDSciBidirectionalToInt(AEnum: TDSciBidirectional): Integer;
+begin
+  case AEnum of
+  scbDISABLED:                            /// <summary>SC_BIDIRECTIONAL_DISABLED = 0
+    Result := 0;
+  scbL2R:                                 /// <summary>SC_BIDIRECTIONAL_L2R = 1
+    Result := 1;
+  scbR2L:                                 /// <summary>SC_BIDIRECTIONAL_R2L = 2
+    Result := 2;
+  else
+    Result := 0;
+  end;
+end;
+
+function TDSciBidirectionalFromInt(AEnum: Integer): TDSciBidirectional;
+begin
+  case AEnum of
+  0:
+    Result := scbDISABLED;                            /// <summary>SC_BIDIRECTIONAL_DISABLED = 0
+  1:
+    Result := scbL2R;                                 /// <summary>SC_BIDIRECTIONAL_L2R = 1
+  2:
+    Result := scbR2L;                                 /// <summary>SC_BIDIRECTIONAL_R2L = 2
+  else
+    Result := scbDISABLED;                            /// <summary>SC_BIDIRECTIONAL_DISABLED = 0;
+  end;
+end;
+
+function TDSciLexerIdToInt(AEnum: TDSciLexerId): Integer;
+begin
+  case AEnum of
+  sclCONTAINER:                           /// <summary>SCLEX_CONTAINER = 0
+    Result := 0;
+  sclNULL:                                /// <summary>SCLEX_NULL = 1
+    Result := 1;
+  sclPYTHON:                              /// <summary>SCLEX_PYTHON = 2
+    Result := 2;
+  sclCPP:                                 /// <summary>SCLEX_CPP = 3
+    Result := 3;
+  sclHTML:                                /// <summary>SCLEX_HTML = 4
+    Result := 4;
+  sclXML:                                 /// <summary>SCLEX_XML = 5
+    Result := 5;
+  sclPERL:                                /// <summary>SCLEX_PERL = 6
+    Result := 6;
+  sclSQL:                                 /// <summary>SCLEX_SQL = 7
+    Result := 7;
+  sclVB:                                  /// <summary>SCLEX_VB = 8
+    Result := 8;
+  sclPROPERTIES:                          /// <summary>SCLEX_PROPERTIES = 9
+    Result := 9;
+  sclERRORLIST:                           /// <summary>SCLEX_ERRORLIST = 10
+    Result := 10;
+  sclMAKEFILE:                            /// <summary>SCLEX_MAKEFILE = 11
+    Result := 11;
+  sclBATCH:                               /// <summary>SCLEX_BATCH = 12
+    Result := 12;
+  sclXCODE:                               /// <summary>SCLEX_XCODE = 13
+    Result := 13;
+  sclLATEX:                               /// <summary>SCLEX_LATEX = 14
+    Result := 14;
+  sclLUA:                                 /// <summary>SCLEX_LUA = 15
+    Result := 15;
+  sclDIFF:                                /// <summary>SCLEX_DIFF = 16
+    Result := 16;
+  sclCONF:                                /// <summary>SCLEX_CONF = 17
+    Result := 17;
+  sclPASCAL:                              /// <summary>SCLEX_PASCAL = 18
+    Result := 18;
+  sclAVE:                                 /// <summary>SCLEX_AVE = 19
+    Result := 19;
+  sclADA:                                 /// <summary>SCLEX_ADA = 20
+    Result := 20;
+  sclLISP:                                /// <summary>SCLEX_LISP = 21
+    Result := 21;
+  sclRUBY:                                /// <summary>SCLEX_RUBY = 22
+    Result := 22;
+  sclEIFFEL:                              /// <summary>SCLEX_EIFFEL = 23
+    Result := 23;
+  sclEIFFELKW:                            /// <summary>SCLEX_EIFFELKW = 24
+    Result := 24;
+  sclTCL:                                 /// <summary>SCLEX_TCL = 25
+    Result := 25;
+  sclNNCRONTAB:                           /// <summary>SCLEX_NNCRONTAB = 26
+    Result := 26;
+  sclBULLANT:                             /// <summary>SCLEX_BULLANT = 27
+    Result := 27;
+  sclVBSCRIPT:                            /// <summary>SCLEX_VBSCRIPT = 28
+    Result := 28;
+  sclBAAN:                                /// <summary>SCLEX_BAAN = 31
+    Result := 31;
+  sclMATLAB:                              /// <summary>SCLEX_MATLAB = 32
+    Result := 32;
+  sclSCRIPTOL:                            /// <summary>SCLEX_SCRIPTOL = 33
+    Result := 33;
+  sclASM:                                 /// <summary>SCLEX_ASM = 34
+    Result := 34;
+  sclCPPNOCASE:                           /// <summary>SCLEX_CPPNOCASE = 35
+    Result := 35;
+  sclFORTRAN:                             /// <summary>SCLEX_FORTRAN = 36
+    Result := 36;
+  sclF77:                                 /// <summary>SCLEX_F77 = 37
+    Result := 37;
+  sclCSS:                                 /// <summary>SCLEX_CSS = 38
+    Result := 38;
+  sclPOV:                                 /// <summary>SCLEX_POV = 39
+    Result := 39;
+  sclLOUT:                                /// <summary>SCLEX_LOUT = 40
+    Result := 40;
+  sclESCRIPT:                             /// <summary>SCLEX_ESCRIPT = 41
+    Result := 41;
+  sclPS:                                  /// <summary>SCLEX_PS = 42
+    Result := 42;
+  sclNSIS:                                /// <summary>SCLEX_NSIS = 43
+    Result := 43;
+  sclMMIXAL:                              /// <summary>SCLEX_MMIXAL = 44
+    Result := 44;
+  sclCLW:                                 /// <summary>SCLEX_CLW = 45
+    Result := 45;
+  sclCLWNOCASE:                           /// <summary>SCLEX_CLWNOCASE = 46
+    Result := 46;
+  sclLOT:                                 /// <summary>SCLEX_LOT = 47
+    Result := 47;
+  sclYAML:                                /// <summary>SCLEX_YAML = 48
+    Result := 48;
+  sclTEX:                                 /// <summary>SCLEX_TEX = 49
+    Result := 49;
+  sclMETAPOST:                            /// <summary>SCLEX_METAPOST = 50
+    Result := 50;
+  sclPOWERBASIC:                          /// <summary>SCLEX_POWERBASIC = 51
+    Result := 51;
+  sclFORTH:                               /// <summary>SCLEX_FORTH = 52
+    Result := 52;
+  sclERLANG:                              /// <summary>SCLEX_ERLANG = 53
+    Result := 53;
+  sclOCTAVE:                              /// <summary>SCLEX_OCTAVE = 54
+    Result := 54;
+  sclMSSQL:                               /// <summary>SCLEX_MSSQL = 55
+    Result := 55;
+  sclVERILOG:                             /// <summary>SCLEX_VERILOG = 56
+    Result := 56;
+  sclKIX:                                 /// <summary>SCLEX_KIX = 57
+    Result := 57;
+  sclGUI4CLI:                             /// <summary>SCLEX_GUI4CLI = 58
+    Result := 58;
+  sclSPECMAN:                             /// <summary>SCLEX_SPECMAN = 59
+    Result := 59;
+  sclAU3:                                 /// <summary>SCLEX_AU3 = 60
+    Result := 60;
+  sclAPDL:                                /// <summary>SCLEX_APDL = 61
+    Result := 61;
+  sclBASH:                                /// <summary>SCLEX_BASH = 62
+    Result := 62;
+  sclASN1:                                /// <summary>SCLEX_ASN1 = 63
+    Result := 63;
+  sclVHDL:                                /// <summary>SCLEX_VHDL = 64
+    Result := 64;
+  sclCAML:                                /// <summary>SCLEX_CAML = 65
+    Result := 65;
+  sclBLITZBASIC:                          /// <summary>SCLEX_BLITZBASIC = 66
+    Result := 66;
+  sclPUREBASIC:                           /// <summary>SCLEX_PUREBASIC = 67
+    Result := 67;
+  sclHASKELL:                             /// <summary>SCLEX_HASKELL = 68
+    Result := 68;
+  sclPHPSCRIPT:                           /// <summary>SCLEX_PHPSCRIPT = 69
+    Result := 69;
+  sclTADS3:                               /// <summary>SCLEX_TADS3 = 70
+    Result := 70;
+  sclREBOL:                               /// <summary>SCLEX_REBOL = 71
+    Result := 71;
+  sclSMALLTALK:                           /// <summary>SCLEX_SMALLTALK = 72
+    Result := 72;
+  sclFLAGSHIP:                            /// <summary>SCLEX_FLAGSHIP = 73
+    Result := 73;
+  sclCSOUND:                              /// <summary>SCLEX_CSOUND = 74
+    Result := 74;
+  sclFREEBASIC:                           /// <summary>SCLEX_FREEBASIC = 75
+    Result := 75;
+  sclINNOSETUP:                           /// <summary>SCLEX_INNOSETUP = 76
+    Result := 76;
+  sclOPAL:                                /// <summary>SCLEX_OPAL = 77
+    Result := 77;
+  sclSPICE:                               /// <summary>SCLEX_SPICE = 78
+    Result := 78;
+  sclD:                                   /// <summary>SCLEX_D = 79
+    Result := 79;
+  sclCMAKE:                               /// <summary>SCLEX_CMAKE = 80
+    Result := 80;
+  sclGAP:                                 /// <summary>SCLEX_GAP = 81
+    Result := 81;
+  sclPLM:                                 /// <summary>SCLEX_PLM = 82
+    Result := 82;
+  sclPROGRESS:                            /// <summary>SCLEX_PROGRESS = 83
+    Result := 83;
+  sclABAQUS:                              /// <summary>SCLEX_ABAQUS = 84
+    Result := 84;
+  sclASYMPTOTE:                           /// <summary>SCLEX_ASYMPTOTE = 85
+    Result := 85;
+  sclR:                                   /// <summary>SCLEX_R = 86
+    Result := 86;
+  sclMAGIK:                               /// <summary>SCLEX_MAGIK = 87
+    Result := 87;
+  sclPOWERSHELL:                          /// <summary>SCLEX_POWERSHELL = 88
+    Result := 88;
+  sclMYSQL:                               /// <summary>SCLEX_MYSQL = 89
+    Result := 89;
+  sclPO:                                  /// <summary>SCLEX_PO = 90
+    Result := 90;
+  sclTAL:                                 /// <summary>SCLEX_TAL = 91
+    Result := 91;
+  sclCOBOL:                               /// <summary>SCLEX_COBOL = 92
+    Result := 92;
+  sclTACL:                                /// <summary>SCLEX_TACL = 93
+    Result := 93;
+  sclSORCUS:                              /// <summary>SCLEX_SORCUS = 94
+    Result := 94;
+  sclPOWERPRO:                            /// <summary>SCLEX_POWERPRO = 95
+    Result := 95;
+  sclNIMROD:                              /// <summary>SCLEX_NIMROD = 96
+    Result := 96;
+  sclSML:                                 /// <summary>SCLEX_SML = 97
+    Result := 97;
+  sclMARKDOWN:                            /// <summary>SCLEX_MARKDOWN = 98
+    Result := 98;
+  sclTXT2TAGS:                            /// <summary>SCLEX_TXT2TAGS = 99
+    Result := 99;
+  sclA68K:                                /// <summary>SCLEX_A68K = 100
+    Result := 100;
+  sclMODULA:                              /// <summary>SCLEX_MODULA = 101
+    Result := 101;
+  sclCOFFEESCRIPT:                        /// <summary>SCLEX_COFFEESCRIPT = 102
+    Result := 102;
+  sclTCMD:                                /// <summary>SCLEX_TCMD = 103
+    Result := 103;
+  sclAVS:                                 /// <summary>SCLEX_AVS = 104
+    Result := 104;
+  sclECL:                                 /// <summary>SCLEX_ECL = 105
+    Result := 105;
+  sclOSCRIPT:                             /// <summary>SCLEX_OSCRIPT = 106
+    Result := 106;
+  sclVISUALPROLOG:                        /// <summary>SCLEX_VISUALPROLOG = 107
+    Result := 107;
+  sclLITERATEHASKELL:                     /// <summary>SCLEX_LITERATEHASKELL = 108
+    Result := 108;
+  sclSTTXT:                               /// <summary>SCLEX_STTXT = 109
+    Result := 109;
+  sclKVIRC:                               /// <summary>SCLEX_KVIRC = 110
+    Result := 110;
+  sclRUST:                                /// <summary>SCLEX_RUST = 111
+    Result := 111;
+  sclDMAP:                                /// <summary>SCLEX_DMAP = 112
+    Result := 112;
+  sclAS:                                  /// <summary>SCLEX_AS = 113
+    Result := 113;
+  sclDMIS:                                /// <summary>SCLEX_DMIS = 114
+    Result := 114;
+  sclREGISTRY:                            /// <summary>SCLEX_REGISTRY = 115
+    Result := 115;
+  sclBIBTEX:                              /// <summary>SCLEX_BIBTEX = 116
+    Result := 116;
+  sclSREC:                                /// <summary>SCLEX_SREC = 117
+    Result := 117;
+  sclIHEX:                                /// <summary>SCLEX_IHEX = 118
+    Result := 118;
+  sclTEHEX:                               /// <summary>SCLEX_TEHEX = 119
+    Result := 119;
+  sclJSON:                                /// <summary>SCLEX_JSON = 120
+    Result := 120;
+  sclEDIFACT:                             /// <summary>SCLEX_EDIFACT = 121
+    Result := 121;
+  sclINDENT:                              /// <summary>SCLEX_INDENT = 122
+    Result := 122;
+  sclMAXIMA:                              /// <summary>SCLEX_MAXIMA = 123
+    Result := 123;
+  sclSTATA:                               /// <summary>SCLEX_STATA = 124
+    Result := 124;
+  sclSAS:                                 /// <summary>SCLEX_SAS = 125
+    Result := 125;
+  sclNIM:                                 /// <summary>SCLEX_NIM = 126
+    Result := 126;
+  sclCIL:                                 /// <summary>SCLEX_CIL = 127
+    Result := 127;
+  sclX12:                                 /// <summary>SCLEX_X12 = 128
+    Result := 128;
+  sclDATAFLEX:                            /// <summary>SCLEX_DATAFLEX = 129
+    Result := 129;
+  sclHOLLYWOOD:                           /// <summary>SCLEX_HOLLYWOOD = 130
+    Result := 130;
+  sclRAKU:                                /// <summary>SCLEX_RAKU = 131
+    Result := 131;
+  sclFSHARP:                              /// <summary>SCLEX_FSHARP = 132
+    Result := 132;
+  sclJULIA:                               /// <summary>SCLEX_JULIA = 133
+    Result := 133;
+  sclASCIIDOC:                            /// <summary>SCLEX_ASCIIDOC = 134
+    Result := 134;
+  sclGDSCRIPT:                            /// <summary>SCLEX_GDSCRIPT = 135
+    Result := 135;
+  sclTOML:                                /// <summary>SCLEX_TOML = 136
+    Result := 136;
+  sclTROFF:                               /// <summary>SCLEX_TROFF = 137
+    Result := 137;
+  sclDART:                                /// <summary>SCLEX_DART = 138
+    Result := 138;
+  sclZIG:                                 /// <summary>SCLEX_ZIG = 139
+    Result := 139;
+  sclNIX:                                 /// <summary>SCLEX_NIX = 140
+    Result := 140;
+  sclSINEX:                               /// <summary>SCLEX_SINEX = 141
+    Result := 141;
+  sclESCSEQ:                              /// <summary>SCLEX_ESCSEQ = 142
+    Result := 142;
+  sclAUTOMATIC:                           /// <summary>SCLEX_AUTOMATIC = 1000
+    Result := 1000;
+  else
+    Result := 0;
+  end;
+end;
+
+function TDSciLexerIdFromInt(AEnum: Integer): TDSciLexerId;
+begin
+  case AEnum of
+  0:
+    Result := sclCONTAINER;                           /// <summary>SCLEX_CONTAINER = 0
+  1:
+    Result := sclNULL;                                /// <summary>SCLEX_NULL = 1
+  2:
+    Result := sclPYTHON;                              /// <summary>SCLEX_PYTHON = 2
+  3:
+    Result := sclCPP;                                 /// <summary>SCLEX_CPP = 3
+  4:
+    Result := sclHTML;                                /// <summary>SCLEX_HTML = 4
+  5:
+    Result := sclXML;                                 /// <summary>SCLEX_XML = 5
+  6:
+    Result := sclPERL;                                /// <summary>SCLEX_PERL = 6
+  7:
+    Result := sclSQL;                                 /// <summary>SCLEX_SQL = 7
+  8:
+    Result := sclVB;                                  /// <summary>SCLEX_VB = 8
+  9:
+    Result := sclPROPERTIES;                          /// <summary>SCLEX_PROPERTIES = 9
+  10:
+    Result := sclERRORLIST;                           /// <summary>SCLEX_ERRORLIST = 10
+  11:
+    Result := sclMAKEFILE;                            /// <summary>SCLEX_MAKEFILE = 11
+  12:
+    Result := sclBATCH;                               /// <summary>SCLEX_BATCH = 12
+  13:
+    Result := sclXCODE;                               /// <summary>SCLEX_XCODE = 13
+  14:
+    Result := sclLATEX;                               /// <summary>SCLEX_LATEX = 14
+  15:
+    Result := sclLUA;                                 /// <summary>SCLEX_LUA = 15
+  16:
+    Result := sclDIFF;                                /// <summary>SCLEX_DIFF = 16
+  17:
+    Result := sclCONF;                                /// <summary>SCLEX_CONF = 17
+  18:
+    Result := sclPASCAL;                              /// <summary>SCLEX_PASCAL = 18
+  19:
+    Result := sclAVE;                                 /// <summary>SCLEX_AVE = 19
+  20:
+    Result := sclADA;                                 /// <summary>SCLEX_ADA = 20
+  21:
+    Result := sclLISP;                                /// <summary>SCLEX_LISP = 21
+  22:
+    Result := sclRUBY;                                /// <summary>SCLEX_RUBY = 22
+  23:
+    Result := sclEIFFEL;                              /// <summary>SCLEX_EIFFEL = 23
+  24:
+    Result := sclEIFFELKW;                            /// <summary>SCLEX_EIFFELKW = 24
+  25:
+    Result := sclTCL;                                 /// <summary>SCLEX_TCL = 25
+  26:
+    Result := sclNNCRONTAB;                           /// <summary>SCLEX_NNCRONTAB = 26
+  27:
+    Result := sclBULLANT;                             /// <summary>SCLEX_BULLANT = 27
+  28:
+    Result := sclVBSCRIPT;                            /// <summary>SCLEX_VBSCRIPT = 28
+  31:
+    Result := sclBAAN;                                /// <summary>SCLEX_BAAN = 31
+  32:
+    Result := sclMATLAB;                              /// <summary>SCLEX_MATLAB = 32
+  33:
+    Result := sclSCRIPTOL;                            /// <summary>SCLEX_SCRIPTOL = 33
+  34:
+    Result := sclASM;                                 /// <summary>SCLEX_ASM = 34
+  35:
+    Result := sclCPPNOCASE;                           /// <summary>SCLEX_CPPNOCASE = 35
+  36:
+    Result := sclFORTRAN;                             /// <summary>SCLEX_FORTRAN = 36
+  37:
+    Result := sclF77;                                 /// <summary>SCLEX_F77 = 37
+  38:
+    Result := sclCSS;                                 /// <summary>SCLEX_CSS = 38
+  39:
+    Result := sclPOV;                                 /// <summary>SCLEX_POV = 39
+  40:
+    Result := sclLOUT;                                /// <summary>SCLEX_LOUT = 40
+  41:
+    Result := sclESCRIPT;                             /// <summary>SCLEX_ESCRIPT = 41
+  42:
+    Result := sclPS;                                  /// <summary>SCLEX_PS = 42
+  43:
+    Result := sclNSIS;                                /// <summary>SCLEX_NSIS = 43
+  44:
+    Result := sclMMIXAL;                              /// <summary>SCLEX_MMIXAL = 44
+  45:
+    Result := sclCLW;                                 /// <summary>SCLEX_CLW = 45
+  46:
+    Result := sclCLWNOCASE;                           /// <summary>SCLEX_CLWNOCASE = 46
+  47:
+    Result := sclLOT;                                 /// <summary>SCLEX_LOT = 47
+  48:
+    Result := sclYAML;                                /// <summary>SCLEX_YAML = 48
+  49:
+    Result := sclTEX;                                 /// <summary>SCLEX_TEX = 49
+  50:
+    Result := sclMETAPOST;                            /// <summary>SCLEX_METAPOST = 50
+  51:
+    Result := sclPOWERBASIC;                          /// <summary>SCLEX_POWERBASIC = 51
+  52:
+    Result := sclFORTH;                               /// <summary>SCLEX_FORTH = 52
+  53:
+    Result := sclERLANG;                              /// <summary>SCLEX_ERLANG = 53
+  54:
+    Result := sclOCTAVE;                              /// <summary>SCLEX_OCTAVE = 54
+  55:
+    Result := sclMSSQL;                               /// <summary>SCLEX_MSSQL = 55
+  56:
+    Result := sclVERILOG;                             /// <summary>SCLEX_VERILOG = 56
+  57:
+    Result := sclKIX;                                 /// <summary>SCLEX_KIX = 57
+  58:
+    Result := sclGUI4CLI;                             /// <summary>SCLEX_GUI4CLI = 58
+  59:
+    Result := sclSPECMAN;                             /// <summary>SCLEX_SPECMAN = 59
+  60:
+    Result := sclAU3;                                 /// <summary>SCLEX_AU3 = 60
+  61:
+    Result := sclAPDL;                                /// <summary>SCLEX_APDL = 61
+  62:
+    Result := sclBASH;                                /// <summary>SCLEX_BASH = 62
+  63:
+    Result := sclASN1;                                /// <summary>SCLEX_ASN1 = 63
+  64:
+    Result := sclVHDL;                                /// <summary>SCLEX_VHDL = 64
+  65:
+    Result := sclCAML;                                /// <summary>SCLEX_CAML = 65
+  66:
+    Result := sclBLITZBASIC;                          /// <summary>SCLEX_BLITZBASIC = 66
+  67:
+    Result := sclPUREBASIC;                           /// <summary>SCLEX_PUREBASIC = 67
+  68:
+    Result := sclHASKELL;                             /// <summary>SCLEX_HASKELL = 68
+  69:
+    Result := sclPHPSCRIPT;                           /// <summary>SCLEX_PHPSCRIPT = 69
+  70:
+    Result := sclTADS3;                               /// <summary>SCLEX_TADS3 = 70
+  71:
+    Result := sclREBOL;                               /// <summary>SCLEX_REBOL = 71
+  72:
+    Result := sclSMALLTALK;                           /// <summary>SCLEX_SMALLTALK = 72
+  73:
+    Result := sclFLAGSHIP;                            /// <summary>SCLEX_FLAGSHIP = 73
+  74:
+    Result := sclCSOUND;                              /// <summary>SCLEX_CSOUND = 74
+  75:
+    Result := sclFREEBASIC;                           /// <summary>SCLEX_FREEBASIC = 75
+  76:
+    Result := sclINNOSETUP;                           /// <summary>SCLEX_INNOSETUP = 76
+  77:
+    Result := sclOPAL;                                /// <summary>SCLEX_OPAL = 77
+  78:
+    Result := sclSPICE;                               /// <summary>SCLEX_SPICE = 78
+  79:
+    Result := sclD;                                   /// <summary>SCLEX_D = 79
+  80:
+    Result := sclCMAKE;                               /// <summary>SCLEX_CMAKE = 80
+  81:
+    Result := sclGAP;                                 /// <summary>SCLEX_GAP = 81
+  82:
+    Result := sclPLM;                                 /// <summary>SCLEX_PLM = 82
+  83:
+    Result := sclPROGRESS;                            /// <summary>SCLEX_PROGRESS = 83
+  84:
+    Result := sclABAQUS;                              /// <summary>SCLEX_ABAQUS = 84
+  85:
+    Result := sclASYMPTOTE;                           /// <summary>SCLEX_ASYMPTOTE = 85
+  86:
+    Result := sclR;                                   /// <summary>SCLEX_R = 86
+  87:
+    Result := sclMAGIK;                               /// <summary>SCLEX_MAGIK = 87
+  88:
+    Result := sclPOWERSHELL;                          /// <summary>SCLEX_POWERSHELL = 88
+  89:
+    Result := sclMYSQL;                               /// <summary>SCLEX_MYSQL = 89
+  90:
+    Result := sclPO;                                  /// <summary>SCLEX_PO = 90
+  91:
+    Result := sclTAL;                                 /// <summary>SCLEX_TAL = 91
+  92:
+    Result := sclCOBOL;                               /// <summary>SCLEX_COBOL = 92
+  93:
+    Result := sclTACL;                                /// <summary>SCLEX_TACL = 93
+  94:
+    Result := sclSORCUS;                              /// <summary>SCLEX_SORCUS = 94
+  95:
+    Result := sclPOWERPRO;                            /// <summary>SCLEX_POWERPRO = 95
+  96:
+    Result := sclNIMROD;                              /// <summary>SCLEX_NIMROD = 96
+  97:
+    Result := sclSML;                                 /// <summary>SCLEX_SML = 97
+  98:
+    Result := sclMARKDOWN;                            /// <summary>SCLEX_MARKDOWN = 98
+  99:
+    Result := sclTXT2TAGS;                            /// <summary>SCLEX_TXT2TAGS = 99
+  100:
+    Result := sclA68K;                                /// <summary>SCLEX_A68K = 100
+  101:
+    Result := sclMODULA;                              /// <summary>SCLEX_MODULA = 101
+  102:
+    Result := sclCOFFEESCRIPT;                        /// <summary>SCLEX_COFFEESCRIPT = 102
+  103:
+    Result := sclTCMD;                                /// <summary>SCLEX_TCMD = 103
+  104:
+    Result := sclAVS;                                 /// <summary>SCLEX_AVS = 104
+  105:
+    Result := sclECL;                                 /// <summary>SCLEX_ECL = 105
+  106:
+    Result := sclOSCRIPT;                             /// <summary>SCLEX_OSCRIPT = 106
+  107:
+    Result := sclVISUALPROLOG;                        /// <summary>SCLEX_VISUALPROLOG = 107
+  108:
+    Result := sclLITERATEHASKELL;                     /// <summary>SCLEX_LITERATEHASKELL = 108
+  109:
+    Result := sclSTTXT;                               /// <summary>SCLEX_STTXT = 109
+  110:
+    Result := sclKVIRC;                               /// <summary>SCLEX_KVIRC = 110
+  111:
+    Result := sclRUST;                                /// <summary>SCLEX_RUST = 111
+  112:
+    Result := sclDMAP;                                /// <summary>SCLEX_DMAP = 112
+  113:
+    Result := sclAS;                                  /// <summary>SCLEX_AS = 113
+  114:
+    Result := sclDMIS;                                /// <summary>SCLEX_DMIS = 114
+  115:
+    Result := sclREGISTRY;                            /// <summary>SCLEX_REGISTRY = 115
+  116:
+    Result := sclBIBTEX;                              /// <summary>SCLEX_BIBTEX = 116
+  117:
+    Result := sclSREC;                                /// <summary>SCLEX_SREC = 117
+  118:
+    Result := sclIHEX;                                /// <summary>SCLEX_IHEX = 118
+  119:
+    Result := sclTEHEX;                               /// <summary>SCLEX_TEHEX = 119
+  120:
+    Result := sclJSON;                                /// <summary>SCLEX_JSON = 120
+  121:
+    Result := sclEDIFACT;                             /// <summary>SCLEX_EDIFACT = 121
+  122:
+    Result := sclINDENT;                              /// <summary>SCLEX_INDENT = 122
+  123:
+    Result := sclMAXIMA;                              /// <summary>SCLEX_MAXIMA = 123
+  124:
+    Result := sclSTATA;                               /// <summary>SCLEX_STATA = 124
+  125:
+    Result := sclSAS;                                 /// <summary>SCLEX_SAS = 125
+  126:
+    Result := sclNIM;                                 /// <summary>SCLEX_NIM = 126
+  127:
+    Result := sclCIL;                                 /// <summary>SCLEX_CIL = 127
+  128:
+    Result := sclX12;                                 /// <summary>SCLEX_X12 = 128
+  129:
+    Result := sclDATAFLEX;                            /// <summary>SCLEX_DATAFLEX = 129
+  130:
+    Result := sclHOLLYWOOD;                           /// <summary>SCLEX_HOLLYWOOD = 130
+  131:
+    Result := sclRAKU;                                /// <summary>SCLEX_RAKU = 131
+  132:
+    Result := sclFSHARP;                              /// <summary>SCLEX_FSHARP = 132
+  133:
+    Result := sclJULIA;                               /// <summary>SCLEX_JULIA = 133
+  134:
+    Result := sclASCIIDOC;                            /// <summary>SCLEX_ASCIIDOC = 134
+  135:
+    Result := sclGDSCRIPT;                            /// <summary>SCLEX_GDSCRIPT = 135
+  136:
+    Result := sclTOML;                                /// <summary>SCLEX_TOML = 136
+  137:
+    Result := sclTROFF;                               /// <summary>SCLEX_TROFF = 137
+  138:
+    Result := sclDART;                                /// <summary>SCLEX_DART = 138
+  139:
+    Result := sclZIG;                                 /// <summary>SCLEX_ZIG = 139
+  140:
+    Result := sclNIX;                                 /// <summary>SCLEX_NIX = 140
+  141:
+    Result := sclSINEX;                               /// <summary>SCLEX_SINEX = 141
+  142:
+    Result := sclESCSEQ;                              /// <summary>SCLEX_ESCSEQ = 142
+  1000:
+    Result := sclAUTOMATIC;                           /// <summary>SCLEX_AUTOMATIC = 1000
+  else
+    Result := sclCONTAINER;                           /// <summary>SCLEX_CONTAINER = 0;
+  end;
+end;
+
+
+// </scigen-enum-func-code>
+
+
 end.
+
+
 

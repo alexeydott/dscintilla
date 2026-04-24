@@ -1,0 +1,5 @@
+procedure SetFontLocale(const ALocaleName: UnicodeString);
+procedure TDScintilla.SetFontLocale(const ALocaleName: UnicodeString);
+begin
+  FHelper.SetText(SCI_SETFONTLOCALE, 0, ALocaleName);
+end;

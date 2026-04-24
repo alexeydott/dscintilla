@@ -1,0 +1,6 @@
+procedure AnnotationSetStyles(ALine: NativeInt; const AStyles: TDSciStyles);
+procedure TDScintilla.AnnotationSetStyles(ALine: NativeInt; const AStyles: TDSciStyles);
+begin
+  SendEditor(SCI_ANNOTATIONSETSTYLES, ALine, LPARAM(AStyles));
+end;
+

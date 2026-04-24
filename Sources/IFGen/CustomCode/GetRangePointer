@@ -1,0 +1,6 @@
+function GetRangePointer(APosition: NativeInt; ARangeLength: NativeInt): Pointer;
+function TDScintilla.GetRangePointer(APosition: NativeInt; ARangeLength: NativeInt): Pointer;
+begin
+  Result := Pointer(SendEditor(SCI_GETRANGEPOINTER, APosition, ARangeLength));
+end;
+

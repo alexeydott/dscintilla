@@ -1,0 +1,6 @@
+function ReplaceTargetRE(const AText: UnicodeString): NativeInt;
+function TDScintilla.ReplaceTargetRE(const AText: UnicodeString): NativeInt;
+begin
+  Result := FHelper.SetTextLen(SCI_REPLACETARGETRE, AText);
+end;
+
