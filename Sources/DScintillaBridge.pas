@@ -1,5 +1,5 @@
 ﻿unit DScintillaBridge;
-{$IFDEF SCINLILLA_STATIC_LINKING}
+{$IFDEF SCINTILLA_STATIC_LINKING}
 { Suppress "declared but never used" hints for force-link anchor symbols.
   Must remain active at unit end — Delphi checks unused symbols there. }
 {$HINTS OFF}
@@ -27,7 +27,7 @@ uses
   Winapi.Messages,
   System.SysUtils, System.SyncObjs,
   DScintillaLogger
-  {$IFDEF SCINLILLA_STATIC_LINKING}
+  {$IFDEF SCINTILLA_STATIC_LINKING}
   ,System.Win.Crtl{$ENDIF};  // provides memcpy, strlen, malloc, free, etc. to linked C objects
 
 type
@@ -41,7 +41,7 @@ const
   SCI_GETDIRECTFUNCTION = 2184;
   SCI_GETDIRECTPOINTER  = 2185;
   SCI_SETILEXER         = 4033;
-{$IFDEF SCINLILLA_STATIC_LINKING}
+{$IFDEF SCINTILLA_STATIC_LINKING}
 {$IFDEF WIN32}
 function SciBridge_RegisterClasses(hInstance: HINST): Boolean; stdcall; external name '_SciBridge_RegisterClasses@4';
 function SciBridge_ReleaseResources: Boolean; stdcall; external name '_SciBridge_ReleaseResources@0';
@@ -69,7 +69,7 @@ function LexBridge_AssignLexerByName(hSci: HWND; name: PAnsiChar): LongBool; std
 // Exported by Scintilla's Windows build.
 function Scintilla_DirectFunction(ptr: NativeInt; iMessage: Cardinal; wParam: NativeUInt; lParam: NativeInt): NativeInt; stdcall; external name 'Scintilla_DirectFunction';
 {$ENDIF}
-{$ENDIF SCINLILLA_STATIC_LINKING}
+{$ENDIF SCINTILLA_STATIC_LINKING}
 
 const
   {$IFDEF WIN64}
@@ -79,7 +79,7 @@ const
   {$ENDIF}
   cSciBridgeLexillaDll = 'Lexilla.dll';
 
-{$IFnDEF SCINLILLA_STATIC_LINKING}
+{$IFnDEF SCINTILLA_STATIC_LINKING}
 const
   cSciBridgeDllPath: string = 'SCI_BRIDGE_DLL_PATH';
 var
@@ -107,7 +107,7 @@ type
   private
     FLock: TCriticalSection;
     FSciDllHandle: HMODULE;
-    FLexDllHandle: HMODULE;{$IFDEF SCINLILLA_STATIC_LINKING}
+    FLexDllHandle: HMODULE;{$IFDEF SCINTILLA_STATIC_LINKING}
     FClassesRegistered: Boolean;{$ENDIF}
 
     FCreateLexer: TSciBridgeCreateLexer;
@@ -123,7 +123,7 @@ type
     procedure DoLoad;
     procedure DoUnload;
     procedure ResetLexillaExports;
-  {$IFNDEF SCINLILLA_STATIC_LINKING}
+  {$IFNDEF SCINTILLA_STATIC_LINKING}
     function ResolveDllPath: string;
     procedure ResolveLexillaExports;
   {$ELSE}
@@ -162,7 +162,7 @@ function SciSetLexerByName(hSci: HWND; const LexerName: AnsiString): Boolean;
 
 implementation
 
-{$IFDEF SCINLILLA_STATIC_LINKING}
+{$IFDEF SCINTILLA_STATIC_LINKING}
 {$IFDEF WIN64}
 { Single combined object: all Scintilla/Lexilla sources + C++ runtime stubs +
   libc++/libunwind, partially linked by GNU ld and sanitized by coff_sanitize.py
@@ -178,7 +178,7 @@ implementation
 {$ELSE}
 {$I 'SciBridge.Objects.inc'}
 {$ENDIF}
-{$ENDIF SCINLILLA_STATIC_LINKING}
+{$ENDIF SCINTILLA_STATIC_LINKING}
 
 
 { TSciBridgeLoader }
@@ -208,7 +208,7 @@ begin
   FGetNameSpace := nil;
 end;
 
-{$IFDEF SCINLILLA_STATIC_LINKING}
+{$IFDEF SCINTILLA_STATIC_LINKING}
 procedure TSciBridgeLoader.InitStaticLexillaExports;
 begin
   @FCreateLexer := @LexBridge_CreateLexer;
@@ -220,7 +220,7 @@ begin
 end;
 {$ENDIF}
 
-{$IFNDEF SCINLILLA_STATIC_LINKING}
+{$IFNDEF SCINTILLA_STATIC_LINKING}
 function TSciBridgeLoader.ResolveDllPath: string;
 var
   lEnvValue: string;
@@ -294,7 +294,7 @@ end;
 {$ENDIF}
 
 procedure TSciBridgeLoader.DoLoad;
-{$IFNDEF SCINLILLA_STATIC_LINKING}
+{$IFNDEF SCINTILLA_STATIC_LINKING}
 var
   lPath: string;
   lBuf: array[0..MAX_PATH] of Char;
@@ -305,7 +305,7 @@ begin
 
   DSciLog('[BRIDGE] DoLoad starting...', cDSciLogInfo);
 
-{$IFDEF SCINLILLA_STATIC_LINKING}
+{$IFDEF SCINTILLA_STATIC_LINKING}
   if not FClassesRegistered then
   begin
     if not SciBridge_RegisterClasses(HInstance) then
@@ -347,7 +347,7 @@ begin
   DSciLog('[BRIDGE] DoUnload starting...', cDSciLogInfo);
   ResetLexillaExports;
 
-{$IFDEF SCINLILLA_STATIC_LINKING}
+{$IFDEF SCINTILLA_STATIC_LINKING}
   if FClassesRegistered then
   begin
     SciBridge_ReleaseResources;
@@ -504,32 +504,32 @@ begin
     SciSetLexer(hSci, L);
 end;
 
-{$IFDEF SCINLILLA_STATIC_LINKING}
+{$IFDEF SCINTILLA_STATIC_LINKING}
 {$IFDEF WIN64}
 procedure SciStatic_RunDestructors; cdecl; external name 'SciStatic_RunDestructors';
 {$ENDIF WIN64}
-{$ENDIF SCINLILLA_STATIC_LINKING}
+{$ENDIF SCINTILLA_STATIC_LINKING}
 
 initialization
   TSciBridgeLoader.FInstance := TSciBridgeLoader.Create;
-{$IFDEF SCINLILLA_STATIC_LINKING}
+{$IFDEF SCINTILLA_STATIC_LINKING}
   DSciLog('=== DScintillaBridge initialization start ===', cDSciLogDebug);
   DSciLog('Calling SciStatic_RunConstructors...', cDSciLogDebug);
 {$IFDEF WIN64}
   SciStatic_RunConstructors;
 {$ENDIF WIN64}
   DSciLog('SciStatic_RunConstructors completed OK', cDSciLogDebug);
-{$ENDIF SCINLILLA_STATIC_LINKING}
+{$ENDIF SCINTILLA_STATIC_LINKING}
 
 finalization
-{$IFDEF SCINLILLA_STATIC_LINKING}
+{$IFDEF SCINTILLA_STATIC_LINKING}
   DSciLog('=== DScintillaBridge finalization start ===', cDSciLogDebug);
   DSciLog('Calling SciStatic_RunDestructors...', cDSciLogDebug);
 {$IFDEF WIN64}
   SciStatic_RunDestructors;
 {$ENDIF WIN64}
   DSciLog('SciStatic_RunDestructors completed OK', cDSciLogDebug);
-{$ENDIF SCINLILLA_STATIC_LINKING}
+{$ENDIF SCINTILLA_STATIC_LINKING}
   TSciBridgeLoader.FInstance.Free;
   TSciBridgeLoader.FInstance := nil;
 

@@ -102,12 +102,12 @@ begin
 end;
 
 procedure TDLexilla.SetDllModule(const Value: string);
-{$IFNDEF SCINLILLA_STATIC_LINKING}
+{$IFNDEF SCINTILLA_STATIC_LINKING}
 var
   lDllModule: string;
 {$ENDIF}
 begin
-{$IFDEF SCINLILLA_STATIC_LINKING}
+{$IFDEF SCINTILLA_STATIC_LINKING}
   FLexillaDllModule := cDLexillaDll;
 {$ELSE}
   lDllModule := Trim(Value);

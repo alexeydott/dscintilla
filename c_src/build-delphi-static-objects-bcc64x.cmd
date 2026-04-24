@@ -197,5 +197,5 @@ echo.
 echo === Build complete ===
 for %%F in ("%OUTPUT_OBJ%") do echo Output: %%~fF (%%~zF bytes)
 echo.
-echo To use: define SCINLILLA_STATIC_LINKING in your Delphi project
+echo To use: define SCINTILLA_STATIC_LINKING in your Delphi project
 echo and add DScintillaBridge to your uses clause.

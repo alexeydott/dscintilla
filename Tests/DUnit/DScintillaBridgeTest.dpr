@@ -3,10 +3,10 @@ program DScintillaBridgeTest;
 {$APPTYPE CONSOLE}
 
 {$R *.res}
-{.$define SCINLILLA_STATIC_LINKING}
+{.$define SCINTILLA_STATIC_LINKING}
 uses
   System.SysUtils
-  {$IFdef SCINLILLA_STATIC_LINKING}
+  {$IFdef SCINTILLA_STATIC_LINKING}
   ,DScintillaBridge
   {$ENDIF}
   ;

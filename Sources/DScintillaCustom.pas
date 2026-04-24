@@ -261,13 +261,13 @@ begin
 end;
 
 procedure TDScintillaCustom.SetSciDllModule(const Value: String);
-{$IFNDEF SCINLILLA_STATIC_LINKING}
+{$IFNDEF SCINTILLA_STATIC_LINKING}
 var
   lHadHandle: Boolean;
   lSciDllModule: String;
 {$ENDIF}
 begin
-{$IFDEF SCINLILLA_STATIC_LINKING}
+{$IFDEF SCINTILLA_STATIC_LINKING}
   // Static linking: DLL module cannot be switched at runtime.
   FSciDllModule := cDScintillaDll;
 {$ELSE}
@@ -321,7 +321,7 @@ begin
   if FSciDllHandle <> 0 then
     Exit;
 
-{$IFNDEF SCINLILLA_STATIC_LINKING}
+{$IFNDEF SCINTILLA_STATIC_LINKING}
   // Push custom DLL module into bridge path before loading
   if not SameText(FSciDllModule, cDScintillaDll) and (FSciDllModule <> '') then
   begin
