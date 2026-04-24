@@ -1,4 +1,4 @@
-##DScintilla
+## DScintilla
 
 A completely rewritten Delphi/VCL wrapper for the Scintilla text editor, providing integration with lexers and generated API bindings.
 
