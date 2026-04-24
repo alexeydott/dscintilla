@@ -1,4 +1,4 @@
-﻿{* ***** BEGIN LICENSE BLOCK *****
+{* ***** BEGIN LICENSE BLOCK *****
  * Version: MPL 1.1/GPL 2.0/LGPL 2.1
  *
  * The contents of this file are subject to the Mozilla Public License Version
@@ -58,12 +58,12 @@ type
 
   TDScintilla = class(TDScintillaCustom)
   private
-    const cStatusPanelFile = 0;
+    const cStatusPanelLexer = 0;
     const cStatusPanelPos = 1;
-    const cStatusPanelLexer = 2;
-    const cStatusPanelEncoding = 3;
-    const cStatusPanelTheme = 4;
-    const cStatusPanelLoad = 5;
+    const cStatusPanelTheme = 2;
+    const cStatusPanelFile = 3;
+    const cStatusPanelLoad = 4;
+    const cStatusPanelEncoding = 5;
     const cStatusPanelCount = 6;
     const cStatusLexerMenuAutoHint = '<auto>';
     const cStatusLexerMenuPlainHint = '<plain>';
@@ -1154,12 +1154,14 @@ begin
     FStatusBar.OnContextPopup := StatusBarContextPopup;
     for lIndex := 0 to cStatusPanelCount - 1 do
       FStatusBar.Panels.Add;
-    FStatusBar.Panels[cStatusPanelFile].Width := MulDiv(420, Screen.PixelsPerInch, 96);
-    FStatusBar.Panels[cStatusPanelPos].Width := MulDiv(120, Screen.PixelsPerInch, 96);
-    FStatusBar.Panels[cStatusPanelLexer].Width := MulDiv(170, Screen.PixelsPerInch, 96);
-    FStatusBar.Panels[cStatusPanelEncoding].Width := MulDiv(190, Screen.PixelsPerInch, 96);
-    FStatusBar.Panels[cStatusPanelTheme].Width := MulDiv(180, Screen.PixelsPerInch, 96);
-    FStatusBar.Panels[cStatusPanelLoad].Width := MulDiv(240, Screen.PixelsPerInch, 96);
+    // Initial widths are placeholder values; RefreshStatusBar distributes
+    // the available space evenly among visible panels on first call.
+    FStatusBar.Panels[cStatusPanelLexer].Width := 80;
+    FStatusBar.Panels[cStatusPanelPos].Width := 80;
+    FStatusBar.Panels[cStatusPanelTheme].Width := 80;
+    FStatusBar.Panels[cStatusPanelFile].Width := 80;
+    FStatusBar.Panels[cStatusPanelLoad].Width := 80;
+    FStatusBar.Panels[cStatusPanelEncoding].Width := 80;
     DSciLog('[VISUAL] Created managed TDScintilla status bar.', cDSciLogDebug);
   end
   else if FStatusBar.Parent <> lHost then
@@ -1483,8 +1485,10 @@ end;
 procedure TDScintilla.RefreshStatusBar;
 var
   lLoadStatus: TDSciFileLoadStatus;
-  lFileText,lThemeName,lLexerText,lEncodingName,lStatusText,lLoadText: UnicodeString;
+  lFileText, lThemeName, lLexerText, lEncodingName, lStatusText, lLoadText: UnicodeString;
   lCanvas: TCanvas;
+  lTextWidths: array[0..cStatusPanelCount - 1] of Integer;
+  lTotalTextWidth, lVisibleCount, lAvail, lExtra, lRemainder, lLastVisible, lIndex: Integer;
 begin
   CreateStatusBarIfNeeded;
   if FStatusBar = nil then
@@ -1538,36 +1542,89 @@ begin
       lLoadText := 'Load: cancelled';
   end;
 
-  lCanvas := FStatusBar.Canvas;
-
-  if FStatusPanelFileVisible then
-    FStatusBar.Panels[cStatusPanelFile].Text := lFileText
-  else
-  begin
-    FStatusBar.Panels[cStatusPanelFile].Width := 0;
-    FStatusBar.Panels[cStatusPanelFile].Text := '';
-  end;
-
-  lStatusText := BuildStatusBarPositionText;
-  if FStatusPanelPosVisible then
-  begin
-    FStatusBar.Panels[cStatusPanelPos].Width := lCanvas.TextWidth(lStatusText+'___');
-    FStatusBar.Panels[cStatusPanelPos].Text := lStatusText;
-  end
-  else
-  begin
-    FStatusBar.Panels[cStatusPanelPos].Width := 0;
-    FStatusBar.Panels[cStatusPanelPos].Text := '';
-  end;
-
   if Settings.CurrentLanguage = '' then
     lLexerText := 'Lexer: plain text'
   else
     lLexerText := 'Lexer: ' + Settings.CurrentLanguage;
 
+  lStatusText := BuildStatusBarPositionText;
+
+  // Measure text widths for each visible panel
+  lCanvas := FStatusBar.Canvas;
+  FillChar(lTextWidths, SizeOf(lTextWidths), 0);
+  lVisibleCount := 0;
+  lTotalTextWidth := 0;
+
   if FStatusPanelLexerVisible then
   begin
-    FStatusBar.Panels[cStatusPanelLexer].Width := lCanvas.TextWidth(lLexerText+'_');
+    lTextWidths[cStatusPanelLexer] := lCanvas.TextWidth(lLexerText + '_');
+    Inc(lVisibleCount);
+    Inc(lTotalTextWidth, lTextWidths[cStatusPanelLexer]);
+  end;
+
+  if FStatusPanelPosVisible then
+  begin
+    lTextWidths[cStatusPanelPos] := lCanvas.TextWidth(lStatusText + '___');
+    Inc(lVisibleCount);
+    Inc(lTotalTextWidth, lTextWidths[cStatusPanelPos]);
+  end;
+
+  if FStatusPanelThemeVisible then
+  begin
+    lTextWidths[cStatusPanelTheme] := lCanvas.TextWidth(lThemeName + '_');
+    Inc(lVisibleCount);
+    Inc(lTotalTextWidth, lTextWidths[cStatusPanelTheme]);
+  end;
+
+  if FStatusPanelFileVisible then
+  begin
+    lTextWidths[cStatusPanelFile] := lCanvas.TextWidth(lFileText + '_');
+    Inc(lVisibleCount);
+    Inc(lTotalTextWidth, lTextWidths[cStatusPanelFile]);
+  end;
+
+  if FStatusPanelLoadVisible then
+  begin
+    lTextWidths[cStatusPanelLoad] := lCanvas.TextWidth(lLoadText + '_');
+    Inc(lVisibleCount);
+    Inc(lTotalTextWidth, lTextWidths[cStatusPanelLoad]);
+  end;
+
+  if FStatusPanelEncodingVisible then
+  begin
+    lTextWidths[cStatusPanelEncoding] := lCanvas.TextWidth(lEncodingName + '_');
+    Inc(lVisibleCount);
+    Inc(lTotalTextWidth, lTextWidths[cStatusPanelEncoding]);
+  end;
+
+  // Distribute remaining space evenly among visible panels 
+  // Find the rightmost visible panel (it absorbs integer division remainder).
+  lLastVisible := -1;
+  for lIndex := cStatusPanelCount - 1 downto 0 do
+    if lTextWidths[lIndex] > 0 then
+    begin
+      lLastVisible := lIndex;
+      Break;
+    end;
+
+  if lVisibleCount > 0 then
+  begin
+    lAvail := Max(0, FStatusBar.ClientWidth - lTotalTextWidth);
+    lExtra := lAvail div lVisibleCount;
+    lRemainder := lAvail - lExtra * lVisibleCount;
+  end
+  else
+  begin
+    lExtra := 0;
+    lRemainder := 0;
+  end;
+
+  // Apply widths and texts
+  if FStatusPanelLexerVisible then
+  begin
+    FStatusBar.Panels[cStatusPanelLexer].Width :=
+      lTextWidths[cStatusPanelLexer] + lExtra +
+      IfThen(cStatusPanelLexer = lLastVisible, lRemainder);
     FStatusBar.Panels[cStatusPanelLexer].Text := lLexerText;
   end
   else
@@ -1576,20 +1633,24 @@ begin
     FStatusBar.Panels[cStatusPanelLexer].Text := '';
   end;
 
-  if FStatusPanelEncodingVisible then
+  if FStatusPanelPosVisible then
   begin
-    FStatusBar.Panels[cStatusPanelEncoding].Width := lCanvas.TextWidth(lEncodingName+'_');
-    FStatusBar.Panels[cStatusPanelEncoding].Text := lEncodingName;
+    FStatusBar.Panels[cStatusPanelPos].Width :=
+      lTextWidths[cStatusPanelPos] + lExtra +
+      IfThen(cStatusPanelPos = lLastVisible, lRemainder);
+    FStatusBar.Panels[cStatusPanelPos].Text := lStatusText;
   end
   else
   begin
-    FStatusBar.Panels[cStatusPanelEncoding].Width := 0;
-    FStatusBar.Panels[cStatusPanelEncoding].Text := '';
+    FStatusBar.Panels[cStatusPanelPos].Width := 0;
+    FStatusBar.Panels[cStatusPanelPos].Text := '';
   end;
 
   if FStatusPanelThemeVisible then
   begin
-    FStatusBar.Panels[cStatusPanelTheme].Width := lCanvas.TextWidth(lThemeName+'_');
+    FStatusBar.Panels[cStatusPanelTheme].Width :=
+      lTextWidths[cStatusPanelTheme] + lExtra +
+      IfThen(cStatusPanelTheme = lLastVisible, lRemainder);
     FStatusBar.Panels[cStatusPanelTheme].Text := lThemeName;
   end
   else
@@ -1598,12 +1659,43 @@ begin
     FStatusBar.Panels[cStatusPanelTheme].Text := '';
   end;
 
+  if FStatusPanelFileVisible then
+  begin
+    FStatusBar.Panels[cStatusPanelFile].Width :=
+      lTextWidths[cStatusPanelFile] + lExtra +
+      IfThen(cStatusPanelFile = lLastVisible, lRemainder);
+    FStatusBar.Panels[cStatusPanelFile].Text := lFileText;
+  end
+  else
+  begin
+    FStatusBar.Panels[cStatusPanelFile].Width := 0;
+    FStatusBar.Panels[cStatusPanelFile].Text := '';
+  end;
+
   if FStatusPanelLoadVisible then
-    FStatusBar.Panels[cStatusPanelLoad].Text := lLoadText
+  begin
+    FStatusBar.Panels[cStatusPanelLoad].Width :=
+      lTextWidths[cStatusPanelLoad] + lExtra +
+      IfThen(cStatusPanelLoad = lLastVisible, lRemainder);
+    FStatusBar.Panels[cStatusPanelLoad].Text := lLoadText;
+  end
   else
   begin
     FStatusBar.Panels[cStatusPanelLoad].Width := 0;
     FStatusBar.Panels[cStatusPanelLoad].Text := '';
+  end;
+
+  if FStatusPanelEncodingVisible then
+  begin
+    FStatusBar.Panels[cStatusPanelEncoding].Width :=
+      lTextWidths[cStatusPanelEncoding] + lExtra +
+      IfThen(cStatusPanelEncoding = lLastVisible, lRemainder);
+    FStatusBar.Panels[cStatusPanelEncoding].Text := lEncodingName;
+  end
+  else
+  begin
+    FStatusBar.Panels[cStatusPanelEncoding].Width := 0;
+    FStatusBar.Panels[cStatusPanelEncoding].Text := '';
   end;
 end;
 
@@ -3064,7 +3156,7 @@ begin
   end;
 
   // Suppress the subsequent WM_CONTEXTMENU that the system generates from
-  // WM_RBUTTONUP via DefWindowProc — the popup was already shown above.
+  // WM_RBUTTONUP via DefWindowProc - the popup was already shown above.
   FContextMenuShownByRButton := True;
   inherited;
 end;
@@ -3364,10 +3456,7 @@ begin
 
   if (AFlags * [scuCONTENT, scuSELECTION] <> []) and Assigned(FStatusBar) and
     FStatusBarVisible and FStatusPanelPosVisible then
-  begin
-    FStatusBar.Panels[cStatusPanelPos].Width := FStatusBar.Canvas.TextWidth(BuildStatusBarPositionText) + 2;
-    FStatusBar.Panels[cStatusPanelPos].Text := BuildStatusBarPositionText;
-  end;
+    RefreshStatusBar;
 
   if Assigned(FOnUpdateUI) then
     FOnUpdateUI(Self, AFlags);
