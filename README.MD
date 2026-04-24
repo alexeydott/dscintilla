@@ -12,7 +12,7 @@ A completely rewritten Delphi/VCL wrapper for the Scintilla text editor, providi
 - **Autocomplete and function lists** - XML-based language services for code hints (Notepad++ compatible)
 - **Combined Scintilla + Lexilla DLL** - A single DLL containing export functions for both the editor and the lexer
 - **Static linking** - experimental version (x64 only at this time) with static linking of the Scinlilla&Lexilla code directly 
-    for more information and examples see SCINLILLA_STATIC_LINKING in ./demos/dscieditor/
+    for more information and examples see SCINТILLA_STATIC_LINKING in ./demos/dscieditor/
 
 ##Scintilla documentation
 http://www.scintilla.org/ScintillaDoc.html
