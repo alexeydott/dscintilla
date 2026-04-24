@@ -16,6 +16,6 @@ My initial goal was to create a simple tool for viewing source files for persona
 - **Static linking** - experimental version (x64 only at this time) with static linking of the Scinlilla&Lexilla code directly 
     for more information and examples see SCINТILLA_STATIC_LINKING in ./demos/dscieditor/
 
-##Scintilla documentation
+## usefull Scintilla documentation
 http://www.scintilla.org/ScintillaDoc.html
 
