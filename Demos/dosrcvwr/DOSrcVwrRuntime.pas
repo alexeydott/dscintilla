@@ -213,7 +213,7 @@ begin
   // For portable/USB installs, redirect log to plugin config dir (overrides default path)
   if PluginHelper.Inner.IsUSBInstall then
   begin
-    LogInfo('HandleInitEx: portable install — redirecting log to config dir');
+    LogInfo('HandleInitEx: portable install - redirecting log to config dir');
     RelocateLogToDir(PluginHelper.ConfigDir);
   end;
 

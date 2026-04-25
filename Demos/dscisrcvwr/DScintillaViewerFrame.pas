@@ -798,11 +798,18 @@ end;
 
 procedure TSourceCodePreviewExtensionForm.UpdateLineNumberMarginWidth;
 var
+  LConfig: TObject;
   LLineCount: NativeInt;
   LDigits: Integer;
   LWidth: Integer;
 begin
   if not Assigned(FEditor) then Exit;
+  // Honour the line-numbering visibility set by ApplyConfigLineNumbering.
+  // When line numbers are disabled the settings system sets width=0; do not
+  // override that with a computed positive value.
+  if FEditor.Settings.GetCurrentConfig(LConfig) and
+     not (LConfig as TDSciVisualConfig).LineNumbering then
+    Exit;
   try
     LLineCount := FEditor.LineCount;
     LDigits := 1;

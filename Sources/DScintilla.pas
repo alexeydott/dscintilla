@@ -231,6 +231,8 @@ type
       var Handled: Boolean);
     procedure StatusBarMouseUp(Sender: TObject; Button: TMouseButton;
       Shift: TShiftState; X, Y: Integer);
+    procedure ShowPopupMenu(APopupMenu: TPopupMenu; AOwnerHwnd: HWND;
+      const AScreenPoint: TPoint);
     function StyleToHtmlCss(AStyle: Integer): UnicodeString;
     procedure FinalizeFileLoadThread;
     procedure FlushPendingFileLoadMessages;
@@ -1979,18 +1981,18 @@ begin
     cStatusPanelLexer:
       begin
         RebuildStatusBarLexerMenu;
-        FStatusBarLexerPopup.Popup(lScreenPoint.X, lScreenPoint.Y);
+        ShowPopupMenu(FStatusBarLexerPopup, FStatusBar.Handle, lScreenPoint);
       end;
     cStatusPanelEncoding:
       begin
         RebuildStatusBarEncodingMenu;
-        FStatusBarEncodingPopup.Popup(lScreenPoint.X, lScreenPoint.Y);
+        ShowPopupMenu(FStatusBarEncodingPopup, FStatusBar.Handle, lScreenPoint);
       end;
     cStatusPanelTheme:
       begin
         RebuildStatusBarThemeMenu;
         if (FStatusBarThemePopup <> nil) and (FStatusBarThemePopup.Items.Count > 1) then
-          FStatusBarThemePopup.Popup(lScreenPoint.X, lScreenPoint.Y);
+          ShowPopupMenu(FStatusBarThemePopup, FStatusBar.Handle, lScreenPoint);
       end;
   end;
 end;
@@ -3149,6 +3151,10 @@ begin
   if not lHandled then
   begin
     lMenu := ActiveContextMenu;
+    DSciLog(Format('[CTX] WMRButtonUp pos=(%d,%d) inMargin=%s activeMenu=%s',
+      [lClientPoint.X, lClientPoint.Y,
+       BoolToStr(IsPointInMarginArea(lClientPoint), True),
+       BoolToStr(lMenu <> nil, True)]), cDSciLogDebug);
     if (lMenu <> nil) and not IsPointInMarginArea(lClientPoint) then
       ShowContextMenu(lMenu, lScreenPoint)
     else if IsPointInMarginArea(lClientPoint) and (FGutterContextMenu <> nil) then
@@ -3266,6 +3272,51 @@ begin
   end;
 end;
 
+procedure TDScintilla.ShowPopupMenu(APopupMenu: TPopupMenu; AOwnerHwnd: HWND;
+  const AScreenPoint: TPoint);
+var
+  LMenuHandle: HMENU;
+  LCmd: Integer;
+begin
+  if (APopupMenu = nil) or (AOwnerHwnd = 0) then
+    Exit;
+
+  DSciLog(Format('[CTX] ShowPopupMenu owner=$%x pos=(%d,%d)',
+    [AOwnerHwnd, AScreenPoint.X, AScreenPoint.Y]), cDSciLogDebug);
+
+  // Fire OnPopup so the menu can populate itself (e.g. clone status-bar items).
+  if Assigned(APopupMenu.OnPopup) then
+    APopupMenu.OnPopup(APopupMenu);
+
+  // Get (or lazily create) the Win32 HMENU.  After OnPopup fires, sub-item
+  // VCL changes propagate SubItemChanged(Rebuild=True) up the tree which
+  // rebuilds affected HMENUs in place.  The root HMENU retains stable
+  // sub-menu HMENU references, so calling Handle is sufficient.
+  LMenuHandle := APopupMenu.Handle;
+  if LMenuHandle = 0 then
+  begin
+    DSciLog('[CTX] ShowPopupMenu: HMENU is 0, aborting', cDSciLogError);
+    Exit;
+  end;
+
+  DSciLog(Format('[CTX] ShowPopupMenu: HMENU=$%x items=%d',
+    [LMenuHandle, APopupMenu.Items.Count]), cDSciLogDebug);
+
+  // TrackPopupMenu with TPM_RETURNCMD: returns the selected command ID directly
+  // instead of posting WM_COMMAND.  This pattern matches ShowEditorContextMenu
+  // and works correctly in DLL plugin hosts (e.g. Directory Opus) where
+  // TPopupMenu.Popup fails because it routes through PopupList.Window which
+  // may not receive posted WM_COMMAND in the host's message loop.
+  LCmd := Integer(TrackPopupMenu(LMenuHandle,
+    TPM_RETURNCMD or TPM_RIGHTBUTTON or TPM_NONOTIFY,
+    AScreenPoint.X, AScreenPoint.Y, 0, AOwnerHwnd, nil));
+
+  DSciLog(Format('[CTX] ShowPopupMenu: cmd=%d', [LCmd]), cDSciLogDebug);
+
+  if LCmd <> 0 then
+    APopupMenu.DispatchCommand(Word(LCmd));
+end;
+
 procedure TDScintilla.ShowContextMenu(APopupMenu: TPopupMenu;
   const AScreenPoint: TPoint);
 begin
@@ -3273,7 +3324,7 @@ begin
     Exit;
 
   APopupMenu.PopupComponent := Self;
-  APopupMenu.Popup(AScreenPoint.X, AScreenPoint.Y);
+  ShowPopupMenu(APopupMenu, Handle, AScreenPoint);
 end;
 
 procedure TDScintilla.UpdateBraceHighlighting;
