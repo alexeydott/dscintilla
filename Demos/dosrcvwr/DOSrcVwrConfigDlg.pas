@@ -39,6 +39,10 @@ type
 var
   GDialogHelper: TConfigDialogHelper;
   GDialogHandle: HWND;
+  { Weak reference to the open modeless dialog.  Used only at finalization to
+    clear callbacks before GDialogHelper is freed, preventing a dangling
+    method-pointer if the DLL is unloaded while the dialog is still open. }
+  GDialog: TDSciVisualSettingsDialog;
 
 procedure TConfigDialogHelper.HandleApplyConfig(AConfig: TDSciVisualConfig);
 begin
@@ -81,6 +85,7 @@ end;
 procedure TConfigDialogHelper.HandleDialogDestroy(Sender: TObject);
 begin
   LogInfo('ConfigDialogHelper: dialog destroyed, cleaning up');
+  GDialog := nil;
   GDialogHandle := 0;
   if GDialogHelper = Self then
     GDialogHelper := nil;
@@ -147,18 +152,19 @@ begin
     LDialog := TDSciVisualSettingsDialog.Create(nil);
     try
       LDialog.Position := poScreenCenter;
-      { Make the dialog owned by the DOpus window so it stays on top. }
+      { Use OwnerWnd (before the window handle is created) so CreateParams sets
+        the correct top-level owner.  This is the WinAPI-correct alternative to
+        the post-creation SetWindowLongPtr(GWLP_HWNDPARENT) pattern.
+        GetAncestor ensures we pass a root (top-level) HWND as required. }
       if AParentWnd <> 0 then
-      begin
-        LDialog.HandleNeeded;
-        SetWindowLongPtr(LDialog.Handle, GWLP_HWNDPARENT, AParentWnd);
-      end;
+        LDialog.OwnerWnd := GetAncestor(AParentWnd, GA_ROOT);
       LDialog.OnApplyConfig := GDialogHelper.HandleApplyConfig;
       LDialog.OnDestroy := GDialogHelper.HandleDialogDestroy;
       LogInfo('ShowConfigureDialog: showing modeless dialog...');
       LDialog.ShowSettingsModeless(LSettingsDir, LConfigFile, LConfig);
       Result := LDialog.Handle;
       GDialogHandle := Result;
+      GDialog := LDialog;
       LogInfo('ShowConfigureDialog: modeless dialog shown, HWND=$%x', [Result]);
     except
       on E: Exception do
@@ -194,6 +200,15 @@ end;
 initialization
 
 finalization
+  { If the DLL is unloaded while the dialog is still open, clear the callbacks
+    before freeing the helper so there is no dangling method-pointer when
+    Windows later destroys the orphaned window. }
+  if GDialog <> nil then
+  begin
+    GDialog.OnApplyConfig := nil;
+    GDialog.OnDestroy := nil;
+    GDialog := nil;
+  end;
   FreeAndNil(GDialogHelper);
   GDialogHandle := 0;
 

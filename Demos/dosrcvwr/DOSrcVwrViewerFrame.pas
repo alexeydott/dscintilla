@@ -11,6 +11,7 @@ uses
   Vcl.Controls, Vcl.Forms, Vcl.StdCtrls, Vcl.ExtCtrls,
 
   DScintilla, DScintillaTypes, DScintillaSearchReplaceDLG, DScintillaGotoDLG,
+  DScintillaVisualConfig, DScintillaVisualSettingsDLG,
   DOpusViewerPlugins;
 
 type
@@ -53,6 +54,10 @@ type
     FFindDialog: TDSciFindDialog;
     // Goto dialog (non-nil only while OpenGotoDialog is executing)
     FGotoDialog: TDSciGotoDialog;
+    // Settings dialog (modeless, owned; non-nil while open)
+    FSettingsDialog: TDSciVisualSettingsDialog;
+    // Set to True at the very start of Destroy to guard all callbacks
+    FDestroying: Boolean;
     // Search state
     FSearchMatches: TList<TDSciSearchMatch>;
     FCurrentSearchIndex: Integer;
@@ -94,6 +99,10 @@ type
     procedure WMHighlightSelectionMatches(var AMessage: TMessage); message cHighlightSelectionMatchesMessage;
     procedure SyncFindDialogSummary(const ASummary: string);
     procedure EnsureFindDialog;
+    // Settings dialog helpers
+    function GetDialogOwnerWnd: HWND;
+    procedure SettingsApplyConfig(AConfig: TDSciVisualConfig);
+    procedure SettingsDialogDestroy(Sender: TObject);
     // Search bar event handlers
     procedure SearchEditChange(Sender: TObject);
     procedure SearchEditKeyDown(Sender: TObject; var Key: Word; Shift: TShiftState);
@@ -120,9 +129,14 @@ type
     procedure CloseInlineSearch;
     procedure OpenFindDialog;
     procedure OpenGotoDialog;
+    procedure OpenSettingsDialog;
     procedure HandleKeyDown(var Key: Word; Shift: TShiftState);
     function FindDialogHandle: HWND;
     procedure CancelAndFreeDialogs;
+    { Set FDestroying and cancel all dialogs. Called from WM_DESTROY (before
+      the frame object is freed in WM_NCDESTROY) so that the FDestroying flag
+      is active during the window between WM_DESTROY and the destructor. }
+    procedure BeginDestroying;
     property ParentOpusWnd: HWND read FParentOpusWnd;
     property Flags: DWORD read FFlags;
     property Editor: TDScintilla read FEditor;
@@ -136,8 +150,8 @@ implementation
 uses
   System.SysUtils, System.IOUtils, System.Math, System.Character,
 
-  DScintillaVisualConfig,
-  DOSrcVwrLog, DOSrcVwrRuntime;
+  DOpusPluginHelpers,
+  DOSrcVwrLog, DOSrcVwrRuntime, DOSrcVwrHost;
 
 function GetOwnDllDir: string;
 var
@@ -204,10 +218,10 @@ end;
 destructor TDOSrcVwrViewerFrame.Destroy;
 begin
   LogInfo('ViewerFrame.Destroy: enter');
-  FreeAndNil(FGotoDialog);
-  FreeAndNil(FFindDialog);
+  if not FDestroying then
+    BeginDestroying;
   FSearchMatches.Free;
-  FEditor.Free;
+  FreeAndNil(FEditor);
   LogInfo('ViewerFrame.Destroy: done');
   inherited;
 end;
@@ -393,6 +407,7 @@ const
   cCmdCopyHtml = 2;
   cCmdSelectAll = 3;
   cCmdFind = 4;
+  cCmdSettings = 5;
   cCmdFoldAll = 10;
   cCmdUnfoldAll = 11;
   cCmdFoldCurrent = 12;
@@ -426,6 +441,7 @@ begin
     AppendMenu(LMenu, MF_STRING, cCmdSelectAll, 'Select All');
     AppendMenu(LMenu, MF_SEPARATOR, 0, nil);
     AppendMenu(LMenu, MF_STRING, cCmdFind, 'Find...');
+    AppendMenu(LMenu, MF_STRING, cCmdSettings, 'Editor Settings...');
     AppendMenu(LMenu, MF_SEPARATOR, 0, nil);
 
     AppendMenu(LFoldMenu, MF_STRING, cCmdFoldAll, 'Fold All');
@@ -450,6 +466,7 @@ begin
       cCmdCopyHtml:      FEditor.CopySelectionAsHtml;
       cCmdSelectAll:     FEditor.SelectAll;
       cCmdFind:          OpenInlineSearch;
+      cCmdSettings:      OpenSettingsDialog;
       cCmdFoldAll:       FEditor.FoldAll(scfaCONTRACT_EVERY_LEVEL);
       cCmdUnfoldAll:     FEditor.FoldAll(scfaEXPAND);
       cCmdFoldCurrent, cCmdUnfoldCurrent, cCmdFoldNested, cCmdUnfoldNested:
@@ -493,7 +510,7 @@ begin
   FSearchRowPanel.Padding.Top := ScaleDpi(4);
   FSearchRowPanel.Padding.Right := ScaleDpi(6);
 
-  { Row 1 — right to left (alRight): last created → rightmost.
+  { Row 1 right to left (alRight): last created → rightmost.
     Visual order left→right: [Edit][▲][▼][×] }
   FSearchPrevButton := TButton.Create(Self);
   FSearchPrevButton.Parent := FSearchRowPanel;
@@ -533,7 +550,7 @@ begin
   FSearchEdit.OnChange := SearchEditChange;
   FSearchEdit.OnKeyDown := SearchEditKeyDown;
 
-  { Row 2 — options panel: checkboxes on left, results label on right. }
+  { Row 2 options panel: checkboxes on left, results label on right. }
   FSearchOptionsPanel := TPanel.Create(Self);
   FSearchOptionsPanel.Parent := FSearchPanel;
   FSearchOptionsPanel.Align := alClient;
@@ -819,7 +836,7 @@ begin
   if APreferNearestToCaret then
     LSelectedIndex := FindNearestSearchResultIndex(FEditor.CurrentPos)
   else
-    LSelectedIndex := FindNearestSearchResultIndex(FEditor.CurrentPos);
+    LSelectedIndex := 0; // no caret preference start from first match
 
   SelectSearchResult(LSelectedIndex);
 end;
@@ -913,6 +930,8 @@ end;
 procedure TDOSrcVwrViewerFrame.ExecuteFindDialogAction(Sender: TObject;
   const AConfig: TDSciSearchConfig; AAction: TDSciFindDialogAction);
 begin
+  if FDestroying then
+    Exit;
   EnsureFindDialog;
   FFindDialog.AddSearchHistory(AConfig.Query);
 
@@ -1133,6 +1152,8 @@ var
   LConfig: TDSciSearchConfig;
   LSelectedText: string;
 begin
+  if FDestroying then
+    Exit;
   EnsureFindDialog;
 
   if FHasActiveSearchConfig then
@@ -1154,7 +1175,7 @@ end;
 function TDOSrcVwrViewerFrame.FindDialogHandle: HWND;
 begin
   { Only return a valid handle when the dialog is actually visible.
-    A hidden FFindDialog must not be fed to IsDialogMessage — otherwise it
+    A hidden FFindDialog must not be fed to IsDialogMessage otherwise it
     silently intercepts Tab / Enter / Escape that should go to inline search. }
   if Assigned(FFindDialog) and FFindDialog.HandleAllocated and FFindDialog.Visible then
     Result := FFindDialog.Handle
@@ -1162,30 +1183,53 @@ begin
     Result := 0;
 end;
 
-procedure TDOSrcVwrViewerFrame.CancelAndFreeDialogs;
+procedure TDOSrcVwrViewerFrame.BeginDestroying;
 begin
-  { Called from WM_DESTROY so that the viewer's modal loops exit before the
-    HWND is torn down. Without this, ShowModal's EnableTaskWindows call is
-    never reached and the caller thread (DO's lister thread) remains blocked
-    with its windows disabled until the next time the user manually closes
-    the dialog — which may be impossible if the preview pane is already gone.
+  { Set the guard flag first so all callbacks and keyboard handlers reject
+    calls immediately, even before the objects are freed. }
+  FDestroying := True;
+  CancelAndFreeDialogs;
+end;
 
-    For the GotoDialog (modal): set ModalResult so that ShowModal's loop
-    exits on its next iteration, which calls EnableTaskWindows and returns
-    control to OpenGotoDialog's finally block (which does the actual Free).
-    Do NOT Free here — the form must outlive the modal loop iteration.
+procedure TDOSrcVwrViewerFrame.CancelAndFreeDialogs;
+var
+  LSettings: TDSciVisualSettingsDialog;
+begin
+  { Called from BeginDestroying (via WM_DESTROY and destructor) so that all
+    dialogs are closed before the viewer's HWND and editor are torn down.
 
-    For the FindDialog (modeless): safe to free directly. }
+    GotoDialog (modal): set ModalResult so ShowModal's loop exits on its next
+    iteration, which calls EnableTaskWindows and returns control to the finally
+    block in OpenGotoDialog. Do NOT Free or nil her the form must outlive
+    the modal loop iteration; the finally block owns the FreeAndNil.
+
+    FindDialog (modeless): safe to free directly.
+
+    SettingsDialog (modeless): call CloseFromOwnerDestroy first (clears callbacks,
+    prevents applying config to the dying editor, closes the window), then Free. }
+
   if FGotoDialog <> nil then
   begin
     LogInfo('CancelAndFreeDialogs: cancelling GotoDialog (ModalResult := mrCancel)');
     FGotoDialog.ModalResult := mrCancel;
-    FGotoDialog := nil;
+    { Do NOT nil FGotoDialog here the finally block in OpenGotoDialog is
+      responsible for FreeAndNil.  Nil-ing early would leave the object
+      allocated but unreachable (memory leak). }
   end;
+
   if FFindDialog <> nil then
   begin
     LogInfo('CancelAndFreeDialogs: freeing FindDialog');
     FreeAndNil(FFindDialog);
+  end;
+
+  LSettings := FSettingsDialog;
+  FSettingsDialog := nil;
+  if LSettings <> nil then
+  begin
+    LogInfo('CancelAndFreeDialogs: closing SettingsDialog');
+    LSettings.CloseFromOwnerDestroy;
+    LSettings.Free;
   end;
 end;
 
@@ -1197,6 +1241,9 @@ var
   LTarget: NativeInt;
   LOpusRootWnd: HWND;
 begin
+  if FDestroying then
+    Exit;
+
   { Guard against reentrancy (Ctrl+G pressed while dialog is already showing). }
   if FGotoDialog <> nil then
   begin
@@ -1238,6 +1285,13 @@ begin
     Exit;
   end;
 
+  { Guard: viewer may have been destroyed while the dialog was open. }
+  if FDestroying then
+  begin
+    LogInfo('GotoDialog: viewer destroyed during dialog, skipping navigation');
+    Exit;
+  end;
+
   { Guard: viewer window may have been destroyed while the dialog was open. }
   if (FEditor = nil) or not FEditor.HandleAllocated then
   begin
@@ -1275,6 +1329,111 @@ begin
     Winapi.Windows.SetFocus(FEditor.Handle);
 end;
 
+function TDOSrcVwrViewerFrame.GetDialogOwnerWnd: HWND;
+begin
+  { Return the root (top-level) ancestor of the DOpus host window.
+    A top-level owner is required by WinAPI for owned windows to have correct
+    Z-order, lifecycle binding, and activation behaviour. }
+  Result := 0;
+  if FParentOpusWnd <> 0 then
+    Result := GetAncestor(FParentOpusWnd, GA_ROOT);
+  if Result = 0 then
+  begin
+    if HandleAllocated then
+      Result := GetAncestor(Handle, GA_ROOT);
+    if Result = 0 then
+      Result := Application.Handle;
+  end;
+end;
+
+procedure TDOSrcVwrViewerFrame.OpenSettingsDialog;
+var
+  LConfig: TDSciVisualConfig;
+begin
+  if FDestroying then
+    Exit;
+
+  { Singleton bring existing dialog to front. }
+  if FSettingsDialog <> nil then
+  begin
+    if FSettingsDialog.HandleAllocated then
+      SetForegroundWindow(FSettingsDialog.Handle);
+    Exit;
+  end;
+
+  LConfig := TDSciVisualConfig.Create;
+  try
+    try
+      if FileExists(FConfigFileName) then
+        LConfig.LoadFromFile(FConfigFileName);
+    except
+      on E: Exception do
+        LogError('OpenSettingsDialog: LoadFromFile: %s', [E.Message]);
+    end;
+
+    FSettingsDialog := TDSciVisualSettingsDialog.Create(nil);
+    try
+      FSettingsDialog.OwnerWnd := GetDialogOwnerWnd;
+      FSettingsDialog.OnApplyConfig := SettingsApplyConfig;
+      FSettingsDialog.OnDestroy := SettingsDialogDestroy;
+      FSettingsDialog.ShowSettingsModeless(
+        ExtractFileDir(FConfigFileName), FConfigFileName, LConfig);
+    except
+      on E: Exception do
+      begin
+        LogError('OpenSettingsDialog: [%s] %s', [E.ClassName, E.Message]);
+        FreeAndNil(FSettingsDialog);
+      end;
+    end;
+  finally
+    LConfig.Free;
+  end;
+end;
+
+procedure TDOSrcVwrViewerFrame.SettingsApplyConfig(AConfig: TDSciVisualConfig);
+begin
+  if FDestroying then
+    Exit;
+  if (FEditor = nil) or not FEditor.HandleAllocated then
+    Exit;
+
+  LogInfo('SettingsApplyConfig: saving config to %s', [FConfigFileName]);
+  try
+    ForceDirectories(ExtractFileDir(FConfigFileName));
+    if FileExists(FConfigFileName) then
+    begin
+      try
+        TFile.Copy(FConfigFileName, FConfigFileName + '.bak', True);
+      except
+        on E: Exception do
+          LogError('SettingsApplyConfig: backup failed: %s', [E.Message]);
+      end;
+    end;
+    AConfig.SaveToFile(FConfigFileName);
+    LogInfo('SettingsApplyConfig: saved OK');
+
+    { Apply logging settings immediately without waiting for ReloadConfig. }
+    SetLogEnabled(AConfig.LogEnabled);
+    SetLogLevel(TDOpusPluginLogLevel(EnsureRange(AConfig.LogLevel, 0, 3)));
+    SetLogOutput(EnsureRange(AConfig.LogOutput, 0, 1));
+
+    { Reload this viewer's presentation and notify all other active viewers. }
+    ReloadConfig;
+    NotifyViewersConfigChanged;
+  except
+    on E: Exception do
+      LogError('SettingsApplyConfig: [%s] %s', [E.ClassName, E.Message]);
+  end;
+end;
+
+procedure TDOSrcVwrViewerFrame.SettingsDialogDestroy(Sender: TObject);
+begin
+  { The modeless settings dialog auto-freed itself (caFree in OnClose).
+    Clear our reference so we don't try to use or free it again. }
+  if Sender = FSettingsDialog then
+    FSettingsDialog := nil;
+end;
+
 procedure TDOSrcVwrViewerFrame.HandleKeyDown(var Key: Word; Shift: TShiftState);
 var
   LConfig: TDSciSearchConfig;
@@ -1293,7 +1452,7 @@ begin
     Ord('S'):
       if ssCtrl in Shift then
       begin
-        { Viewer is read-only — consume Ctrl+S and Ctrl+Shift+S so they don't
+        { Viewer is read-only consume Ctrl+S and Ctrl+Shift+S so they don't
           reach DO's file-save accelerator and open an unwanted Save As dialog. }
         LogInfo('HandleKeyDown: Ctrl+S consumed (viewer is read-only)');
         Key := 0;
@@ -1310,7 +1469,7 @@ begin
       begin
         if FSearchPanel.Visible then
         begin
-          { Inline search is open — navigate directly without touching the
+          { Inline search is ope navigate directly without touching the
             Find dialog.  Calling ExecuteFindDialogAction here would trigger
             EnsureFindDialog, which allocates a hidden FFindDialog whose HWND
             then leaks into IsDialogMessage and steals Tab/Enter/Escape. }

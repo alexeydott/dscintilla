@@ -126,6 +126,7 @@ begin
     DVPLUGINMSG_MOUSEWHEEL:      Result := 'MOUSEWHEEL';
     DVPLUGINMSG_TRANSLATEACCEL:  Result := 'TRANSLATEACCEL';
     DVPLUGINMSG_ISDLGMESSAGE:    Result := 'ISDLGMESSAGE';
+    WM_NCDESTROY:                Result := 'WM_NCDESTROY';
     WM_SETFOCUS:                 Result := 'WM_SETFOCUS';
     WM_KILLFOCUS:                Result := 'WM_KILLFOCUS';
     WM_DESTROY:                  Result := 'WM_DESTROY';
@@ -361,17 +362,35 @@ begin
 
       WM_DESTROY:
       begin
-        { Cancel and free all open dialogs FIRST so that:
+        { Set FDestroying and cancel all open dialogs FIRST so that:
           (a) any active ShowModal loop exits and calls EnableTaskWindows,
-          (b) the caller thread is unblocked before the viewer is torn down.
-          Must be done while LFrame is still registered (non-nil). }
+          (b) the caller thread is unblocked before the viewer is torn down,
+          (c) the FDestroying flag prevents stale callbacks between now
+              and the actual object-free in WM_NCDESTROY.
+          The WndProc subclass and frame object are kept alive until
+          WM_NCDESTROY so that messages delivered between the two can
+          still be dispatched safely. }
         if LFrame <> nil then
-          LFrame.CancelAndFreeDialogs;
+          LFrame.BeginDestroying;
         UnregisterViewerHandle(AWnd);
+        LogInfo('Viewer window destroying');
+      end;
+
+      WM_NCDESTROY:
+      begin
+        { Last message the window will ever receive.  Restore the original
+          WndProc, let VCL process WM_NCDESTROY (sets FHandle := 0), then
+          free the frame object.  Freeing after CallWindowProc is safe:
+          FHandle = 0 prevents TWinControl.Destroy from calling DestroyWindow
+          again, and all dialogs were already closed in WM_DESTROY. }
         RemoveProp(AWnd, cOldWndProcProp);
         if LOldProc <> nil then
           SetWindowLongPtr(AWnd, GWL_WNDPROC, NativeInt(LOldProc));
-        LogInfo('Viewer window destroying');
+        LogInfo('Viewer window NC-destroying, freeing frame');
+        Result := CallWindowProc(LOldProc, AWnd, AMsg, AWParam, ALParam);
+        if LFrame <> nil then
+          LFrame.Free;
+        Exit;
       end;
     end;
   except

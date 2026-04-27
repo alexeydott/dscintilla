@@ -25,6 +25,8 @@ type
     FUpdatingLayout: Boolean;
     FModeless: Boolean;
     FOnApplyConfig: TDSciVisualConfigApplyEvent;
+    FOwnerWnd: HWND;
+    FClosingFromOwnerDestroy: Boolean;
 
     FContentPanel: TPanel;
     FButtonsPanel: TPanel;
@@ -248,8 +250,8 @@ type
     class function Scale(AValue: Integer): Integer; static;
   protected
     procedure ChangeScale(M, D: Integer; isDpiChange: Boolean); override;
-    // Force Desktop as owner window to prevent UIPI Code 5 when ShowModal is
-    // called from a Low-IL COM preview handler. See TDSciGotoDialog.CreateParams.
+    // Sets owner HWND from FOwnerWnd (top-level host window), Application.Handle,
+    // or GetDesktopWindow as emergency fallback only. See TODO 2.2.
     procedure CreateParams(var Params: TCreateParams); override;
     procedure CreateWnd; override;
     procedure Resize; override;
@@ -265,6 +267,8 @@ type
       AConfig: TDSciVisualConfig);
 
     property OnApplyConfig: TDSciVisualConfigApplyEvent read FOnApplyConfig write FOnApplyConfig;
+    property OwnerWnd: HWND read FOwnerWnd write FOwnerWnd;
+    procedure CloseFromOwnerDestroy;
   end;
 
 implementation
@@ -532,6 +536,11 @@ begin
   if not FOpenThemeDialog.Execute(Handle) then
     Exit;
 
+  // Owner may have been destroyed while the common dialog was open
+  if FClosingFromOwnerDestroy or (csDestroying in ComponentState) or
+     not HandleAllocated then
+    Exit;
+
   try
     lTargetDirectory := ExpandFileName(TPath.Combine(ExtractFileDir(FConfigFileName), 'themes'));
     lTargetFileName := TPath.Combine(lTargetDirectory,
@@ -583,7 +592,15 @@ procedure TDSciVisualSettingsDialog.CreateParams(var Params: TCreateParams);
 begin
   inherited CreateParams(Params);
   if not (csDesigning in ComponentState) then
-    Params.WndParent := GetDesktopWindow;
+  begin
+    if FOwnerWnd <> 0 then
+      Params.WndParent := FOwnerWnd
+    else if Application.Handle <> 0 then
+      Params.WndParent := Application.Handle
+    else
+      // Emergency fallback only - dialog will have no Z-order/lifecycle owner
+      Params.WndParent := GetDesktopWindow;
+  end;
 end;
 
 procedure TDSciVisualSettingsDialog.CreateWnd;
@@ -3249,6 +3266,8 @@ end;
 
 procedure TDSciVisualSettingsDialog.OkButtonClick(Sender: TObject);
 begin
+  if FClosingFromOwnerDestroy then
+    Exit;
   SyncSelectedStyleToConfig;
   if FModeless then
   begin
@@ -3272,6 +3291,20 @@ procedure TDSciVisualSettingsDialog.ModelessFormClose(Sender: TObject;
   var Action: TCloseAction);
 begin
   Action := caFree;
+end;
+
+procedure TDSciVisualSettingsDialog.CloseFromOwnerDestroy;
+begin
+  FClosingFromOwnerDestroy := True;
+  FOnApplyConfig := nil;
+  OnClose := nil;
+  if HandleAllocated then
+  begin
+    if fsModal in FormState then
+      ModalResult := mrCancel
+    else
+      Close;
+  end;
 end;
 
 function TDSciVisualSettingsDialog.EditSettings(const ASettingsDirectory,

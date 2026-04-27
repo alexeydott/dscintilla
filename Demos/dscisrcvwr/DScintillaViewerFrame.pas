@@ -904,7 +904,7 @@ begin
       FGotoDialog.ModalResult := mrCancel;
       FGotoDialog := nil;
     end;
-    // For FVisualSettingsDialog (modal): same pattern as FGotoDialog —
+    // For FVisualSettingsDialog (modal): same pattern as FGotoDialog 
     // signal mrCancel so ShowModal exits; MenuSettingsClick's finally block
     // owns the actual Free.
     if Assigned(FVisualSettingsDialog) then
@@ -1171,7 +1171,7 @@ begin
   // For FGotoDialog (modal): set ModalResult so that ShowModal's loop exits on
   // its next iteration, which calls EnableTaskWindows and returns control to
   // OpenGotoDialog's finally block (which does the actual Free).
-  // Do NOT Free here — the form must outlive the modal loop iteration.
+  // Do NOT Free here the form must outlive the modal loop iteration.
   //
   // For FVisualSettingsDialog (modal): same approach as FGotoDialog.
   //
@@ -1226,7 +1226,7 @@ begin
     // (ModalResult := mrCancel) and nil the field without double-freeing: the
     // finally block owns the actual Free. If CancelAndFreeDialogs runs first and
     // nils FGotoDialog, FreeAndNil(nil) is a no-op and the caller (who holds the
-    // COM reference) accepts the leak — acceptable during forced shutdown.
+    // COM reference) accepts the leak acceptable during forced shutdown.
     FGotoDialog := TDSciGotoDialog.Create(nil);
     // Preview handler runs at Low IL -> programmatic window activation is
     // blocked by Explorer (Medium IL). TOPMOST makes the dialog visible above
@@ -1900,7 +1900,7 @@ var
   LStyle: LONG;
 begin
   GetClassName(AWnd, LClass, Length(LClass));
-  // Never touch Scintilla — it manages its own colours
+  // Never touch Scintilla it manages its own colours
   if not SameText(LClass, 'Scintilla') then
   begin
     AllowDarkModeForWindow(AWnd, _GEnumIsDark);
@@ -1948,7 +1948,7 @@ begin
     [BoolToStr(LTheme.IsDark, True),
      ColorToRGB(LTheme.Surface), ColorToRGB(LTheme.Foreground)]), cDSciLogDebug);
 
-  // Enable/disable dark mode for the host process — this is required for
+  // Enable/disable dark mode for the host process this is required for
   // common controls (Button, Edit, CheckBox) to render with dark theme text.
   // In a DLL preview handler context this affects the prevhost.exe process.
   AllowDarkModeForApp(LTheme.IsDark);
@@ -1963,7 +1963,7 @@ begin
   if LTheme.IsDark then
   begin
     // Setting Self.Color propagates to all VCL-painted controls that have
-    // ParentColor=True (TPanel, TCheckBox, TLabel) — no need to set each one.
+    // ParentColor=True (TPanel, TCheckBox, TLabel) no need to set each one.
     Self.Color          := LTheme.Surface;
     Self.Font.Color     := LTheme.Foreground;
     // TCheckBox draws its own label; its Color property controls the background

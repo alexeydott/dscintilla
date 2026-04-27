@@ -3822,7 +3822,7 @@ begin
   // When ClearPreview (or WMDestroy) is invoked while the settings dialog is in its
   // ShowModal loop, the fix sets ModalResult := mrCancel on the live dialog instance.
   // This test verifies that TDSciVisualSettingsDialog.EditSettings returns False when
-  // ModalResult is set externally from outside its ShowModal loop — exactly the
+  // ModalResult is set externally from outside its ShowModal loop exactly the
   // mechanism relied upon by ClearPreview's FVisualSettingsDialog cancellation.
   lTempDir := CreateWritableTempDir;
   try
