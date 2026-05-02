@@ -1,17 +1,19 @@
-"""COFF sanitizer for Delphi dcc64 compatibility.
+"""COFF sanitizer for Delphi dcc32/dcc64 compatibility.
 
-Fixes dcc64 issues with C++ COFF objects compiled by bcc64x/MinGW:
+Fixes dcc32/dcc64 issues with C++ COFF objects compiled by bcc64x/MinGW:
 
 1. Resolves COMDAT symbol duplication: when a symbol is both DEFINED and
    UNDEFINED (from ld -r preserving COMDAT semantics), patches UNDEFINED
    entries to point to the DEFINED section/value — fixes E2065.
 2. Flattens COMDAT section names: `.text$_ZN...` -> `.text`
-   (dcc64 does not understand the `$` section-group convention)
+   (dcc32/dcc64 does not understand the `$` section-group convention)
 3. Clears IMAGE_SCN_LNK_COMDAT flag from section characteristics
 4. Replaces remaining `$` (0x24) with `_` (0x5F) in symbol names
 5. Truncates symbol names > MAX_NAME chars with MD5 hash suffix
-6. Promotes C++ global constructor symbols (_GLOBAL__sub_I_*, _GLOBAL__I_*)
-   from STATIC to EXTERNAL so Delphi can reference them for initialization
+6. Promotes C++ global constructor symbols to EXTERNAL so Delphi can
+   reference them for initialization:
+   - Win64 (bcc64x): _GLOBAL__sub_I_*, _GLOBAL__I_*, SciStatic_RunDestructors
+   - Win32 (MinGW i686): __GLOBAL__sub_I_*, _SciStatic_RunDestructors
 
 Uses in-place byte replacement to preserve all offsets and relocations.
 """
@@ -116,8 +118,16 @@ def sanitize_coff(in_path, out_path):
     # PASS 0: Resolve COMDAT symbol duplication
     # ld -r preserves UNDEFINED refs alongside DEFINED COMDAT symbols.
     # Patch each UNDEFINED entry to match the DEFINED section/value.
+    #
+    # This handles two cases:
+    #  a) EXTERNAL (cls=2) undefs — present in both Win32 and Win64 COFF
+    #  b) STATIC (cls=3) undefs  — present in Win32 MinGW COFF only; these are
+    #     COMDAT section-anchor symbols (.text$_ZNFoo with sec=0) left over after
+    #     GNU ld -r resolves duplicate COMDAT sections. dcc32 crashes (F2084 AV)
+    #     when it encounters STATIC symbols with sec_num==0, so we resolve them
+    #     here against the matching STATIC DEFINED entry.
     # ================================================================
-    # Build map: symbol_name -> (section_number, value) for defined externals
+    # Build map: symbol_name -> (section_number, value) for BOTH EXTERNAL and STATIC
     defined = {}
     i = 0
     while i < num_symbols:
@@ -125,21 +135,21 @@ def sanitize_coff(in_path, out_path):
         sec_num = struct.unpack_from('<h', data, sym_off + 12)[0]  # signed int16
         storage_class = data[sym_off + 16]
         num_aux = data[sym_off + 17]
-        if sec_num > 0 and storage_class == IMAGE_SYM_CLASS_EXTERNAL:
+        if sec_num > 0 and storage_class in (IMAGE_SYM_CLASS_EXTERNAL, IMAGE_SYM_CLASS_STATIC):
             name = _get_sym_name(data, sym_off, strtab_off)
             value = struct.unpack_from('<I', data, sym_off + 8)[0]
             if name not in defined:
                 defined[name] = (sec_num, value)
         i += 1 + num_aux
 
-    # Patch UNDEFINED entries that have a known definition
+    # Patch UNDEFINED entries (both EXTERNAL and STATIC) that have a known definition
     i = 0
     while i < num_symbols:
         sym_off = sym_table_off + i * 18
         sec_num = struct.unpack_from('<h', data, sym_off + 12)[0]
         storage_class = data[sym_off + 16]
         num_aux = data[sym_off + 17]
-        if sec_num == 0 and storage_class == IMAGE_SYM_CLASS_EXTERNAL:
+        if sec_num == 0 and storage_class in (IMAGE_SYM_CLASS_EXTERNAL, IMAGE_SYM_CLASS_STATIC):
             name = _get_sym_name(data, sym_off, strtab_off)
             if name in defined:
                 def_sec, def_val = defined[name]
@@ -148,7 +158,7 @@ def sanitize_coff(in_path, out_path):
                 stats['undefs_resolved'] += 1
         i += 1 + num_aux
 
-    print(f'COMDAT undefs resolved: {stats["undefs_resolved"]}')
+    print(f'COMDAT undefs resolved (EXTERNAL+STATIC): {stats["undefs_resolved"]}')
 
     # ================================================================
     # PASS 1: Flatten COMDAT section names and clear COMDAT flags
@@ -257,7 +267,13 @@ def sanitize_coff(in_path, out_path):
     # imm8 mode bits: [3]=suppress precision exception  [1:0]=rounding
     #   0x09 = floor (toward -inf)    0x0A = ceil (toward +inf)
     #   0x0B = trunc (toward zero)    0x08 = nearest even
+    #
+    # Win32 (i386 cdecl) x87 FPU patches for lround/lroundf:
+    #   arg at [esp+4] (double=8B, float=4B), long return in EAX.
+    #   Sequence: sub esp,4 | fldl/flds [esp+8] | frndint | fistpl [esp]
+    #             | pop eax | ret    (14 bytes, fits in 16-byte slot)
     STUB_PATCHES = {
+        # Win64 (x86-64 ABI) -------------------------------------------------
         b'round':   bytes([0x66, 0x0F, 0x3A, 0x0B, 0xC0, 0x08, 0xC3]),
         b'roundf':  bytes([0x66, 0x0F, 0x3A, 0x0A, 0xC0, 0x08, 0xC3]),
         b'lround':  bytes([0xF2, 0x0F, 0x2D, 0xC0, 0xC3]),
@@ -267,6 +283,27 @@ def sanitize_coff(in_path, out_path):
         b'floorf':  bytes([0x66, 0x0F, 0x3A, 0x0A, 0xC0, 0x09, 0xC3]),
         b'ceil':    bytes([0x66, 0x0F, 0x3A, 0x0B, 0xC0, 0x0A, 0xC3]),
         b'ceilf':   bytes([0x66, 0x0F, 0x3A, 0x0A, 0xC0, 0x0A, 0xC3]),
+        # Win32 (i386 cdecl) — underscore-prefixed, x87 FPU implementation --
+        # _lround(double): sub esp,4 | fldl [esp+8] | frndint |
+        #                  fistpl [esp] | pop eax | ret
+        b'_lround':  bytes([
+            0x83, 0xEC, 0x04,            # sub  esp, 4
+            0xDD, 0x44, 0x24, 0x08,      # fldl [esp+8]  (double arg)
+            0xD9, 0xFC,                  # frndint
+            0xDB, 0x1C, 0x24,            # fistpl [esp]
+            0x58,                        # pop  eax
+            0xC3,                        # ret
+        ]),
+        # _lroundf(float): sub esp,4 | flds [esp+8] | frndint |
+        #                  fistpl [esp] | pop eax | ret
+        b'_lroundf': bytes([
+            0x83, 0xEC, 0x04,            # sub  esp, 4
+            0xD9, 0x44, 0x24, 0x08,      # flds [esp+8]  (float arg)
+            0xD9, 0xFC,                  # frndint
+            0xDB, 0x1C, 0x24,            # fistpl [esp]
+            0x58,                        # pop  eax
+            0xC3,                        # ret
+        ]),
     }
 
     # Find .text section raw data pointer and relocation table
@@ -343,6 +380,80 @@ def sanitize_coff(in_path, out_path):
     print(f'Infinite-loop stubs patched: {stats["stubs_fixed"]}')
 
     # ================================================================
+    # PASS 1.8: Canonicalize duplicate math-function symbol definitions
+    #
+    # Problem (Win32 / i386 COFF):
+    #   Scintilla sources compiled by Clang32 without -fno-builtin emit
+    #   global EXTERNAL _floor / _ceil / _trunc / _round stubs as PLT-like
+    #   thunks.  These stubs appear in the COFF symbol table AFTER shim32's
+    #   real definitions.  dcc32 uses "last wins" semantics for duplicate
+    #   EXTERNAL symbols, so it resolves `_floor` to the late-index stub.
+    #   The stub's own DISP32 relocation also references `_floor` → dcc32
+    #   resolves that to the SAME stub → displacement = -5 → E9 FB FF FF FF
+    #   = infinite self-loop at runtime.
+    #
+    # Fix:
+    #   For every symbol whose name is in MATH_SYMS_{I386,AMD64} and which
+    #   has a LATER table index than the first occurrence, overwrite its
+    #   VALUE with the first occurrence's value.  Now every occurrence of
+    #   `_floor` in the table points to shim32's real implementation at 0x50.
+    #   Regardless of which symbol dcc32 "wins" with, it resolves to real code.
+    #   The DISP32 reloc inside the stub also resolves to real code → the stub
+    #   becomes a harmless trampoline to the shim32 implementation.
+    # ================================================================
+
+    # Win32 i386 cdecl (underscore-prefixed)
+    MATH_SYMS_I386 = {
+        b'_floor', b'_floorf', b'_ceil', b'_ceilf',
+        b'_round', b'_roundf', b'_trunc', b'_truncf',
+        b'_lround', b'_lroundf',
+    }
+    # Win64 x86-64 (no prefix)
+    MATH_SYMS_AMD64 = {
+        b'floor', b'floorf', b'ceil', b'ceilf',
+        b'round', b'roundf', b'trunc', b'truncf',
+        b'lround', b'lroundf',
+    }
+    ALL_MATH_SYMS = MATH_SYMS_I386 | MATH_SYMS_AMD64
+
+    # First pass: find the first (lowest-index) definition for each math symbol
+    first_math_def = {}  # name -> (value, secnum)
+    i = 0
+    while i < num_symbols:
+        sym_off = sym_table_off + i * 18
+        secnum  = struct.unpack_from('<h', data, sym_off + 12)[0]
+        scl     = data[sym_off + 16]
+        naux    = data[sym_off + 17]
+        if secnum > 0 and scl == IMAGE_SYM_CLASS_EXTERNAL:
+            name = _get_sym_name(data, sym_off, strtab_off)
+            if name in ALL_MATH_SYMS and name not in first_math_def:
+                value = struct.unpack_from('<I', data, sym_off + 8)[0]
+                first_math_def[name] = (value, secnum)
+        i += 1 + naux
+
+    # Second pass: overwrite duplicates to match the first definition
+    math_dedup_count = 0
+    i = 0
+    while i < num_symbols:
+        sym_off = sym_table_off + i * 18
+        secnum  = struct.unpack_from('<h', data, sym_off + 12)[0]
+        scl     = data[sym_off + 16]
+        naux    = data[sym_off + 17]
+        if secnum > 0 and scl == IMAGE_SYM_CLASS_EXTERNAL:
+            name = _get_sym_name(data, sym_off, strtab_off)
+            if name in first_math_def:
+                canon_val, canon_sec = first_math_def[name]
+                cur_val = struct.unpack_from('<I', data, sym_off + 8)[0]
+                if cur_val != canon_val:
+                    struct.pack_into('<I', data, sym_off + 8, canon_val)
+                    struct.pack_into('<h', data, sym_off + 12, canon_sec)
+                    math_dedup_count += 1
+        i += 1 + naux
+
+    if math_dedup_count:
+        print(f'Math symbol duplicates canonicalized: {math_dedup_count}')
+
+    # ================================================================
     # PASS 2: Replace $ in short symbol names (inline 8-byte field)
     # ================================================================
     for i in range(num_symbols):
@@ -394,10 +505,16 @@ def sanitize_coff(in_path, out_path):
     print(f'Names truncated: {stats["names_truncated"]}')
 
     # ================================================================
-    # PASS 4: Promote C++ global constructor symbols to EXTERNAL
-    # bcc64x/MinGW emits _GLOBAL__sub_I_* and _GLOBAL__I_* as STATIC.
+    # PASS 4: Promote C++ global constructor/destructor symbols to EXTERNAL
+    # bcc64x/MinGW emits constructor and destructor helper symbols as STATIC.
     # Delphi cannot reference STATIC symbols via `external name '...'`.
     # Promote them to EXTERNAL so DScintillaBridge can call them.
+    #
+    # Win64 (bcc64x, x86-64-w64-windows-gnu):
+    #   _GLOBAL__sub_I_*, _GLOBAL__I_*, SciStatic_RunDestructors
+    # Win32 (MinGW i686, i686-w64-windows-gnu):
+    #   __GLOBAL__sub_I_*, _SciStatic_RunDestructors
+    #   (Win32 cdecl adds one leading underscore to all C symbols)
     # ================================================================
     stats['ctors_promoted'] = 0
     i = 0
@@ -408,8 +525,11 @@ def sanitize_coff(in_path, out_path):
         num_aux = data[sym_off + 17]
         if sec_num > 0 and storage_class == IMAGE_SYM_CLASS_STATIC:
             name = _get_sym_name(data, sym_off, strtab_off)
-            if (name.startswith(b'_GLOBAL__sub_I_') or name.startswith(b'_GLOBAL__I_')
-                    or name == b'SciStatic_RunDestructors'):
+            if (name.startswith(b'_GLOBAL__sub_I_')    # Win64 bcc64x
+                    or name.startswith(b'_GLOBAL__I_')  # Win64 bcc64x alternate
+                    or name.startswith(b'__GLOBAL__sub_I_')  # Win32 MinGW i686
+                    or name == b'SciStatic_RunDestructors'   # Win64
+                    or name == b'_SciStatic_RunDestructors'):  # Win32
                 data[sym_off + 16] = IMAGE_SYM_CLASS_EXTERNAL
                 stats['ctors_promoted'] += 1
         i += 1 + num_aux

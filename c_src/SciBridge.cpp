@@ -6,6 +6,57 @@
 #include <cstdint>
 #include <windows.h>
 
+// ----------------------------------------------------------------------------
+// Win32 static only: patch 300 MinGW __imp__ IAT stubs that dcc32 places in
+// .data (not in the PE import table) so the PE loader never patches them.
+// Called from Delphi BEFORE SciStatic_RunConstructors using real Win32 function
+// pointers from Delphi's own (correctly patched) IAT — avoiding chicken-and-egg.
+// ----------------------------------------------------------------------------
+#if defined(_WIN32) && !defined(_WIN64)
+
+typedef HMODULE (WINAPI *PFLoadLibraryA)(LPCSTR);
+typedef FARPROC (WINAPI *PFGetProcAddress)(HMODULE, LPCSTR);
+
+// sci_winapi_patches.h: extern __asm__ declarations + sci_imp_patches[] table
+#include "sci_winapi_patches.h"
+
+extern "C" __declspec(dllexport)
+void __stdcall SciBridge_PatchImports(PFLoadLibraryA pfLoadLibraryA,
+                                      PFGetProcAddress pfGetProcAddress)
+{
+    // DLL index order matches DLL_LIBS in gen_winapi_patch.py and the dll_idx
+    // field in sci_imp_patches[].  Do NOT use any C-runtime functions here —
+    // those would go through the (still broken) IAT.  Only function-pointer
+    // calls and direct memory access are safe at this point.
+    static const char* const dll_names[] = {
+        "imm32.dll",    // 0
+        "oleaut32.dll", // 1
+        "ole32.dll",    // 2
+        "advapi32.dll", // 3
+        "gdi32.dll",    // 4
+        "user32.dll",   // 5
+        "kernel32.dll", // 6
+        "msvcrt.dll",   // 7
+    };
+    const int DLL_COUNT = 8;
+
+    HMODULE mods[DLL_COUNT];
+    for (int i = 0; i < DLL_COUNT; i++) {
+        mods[i] = pfLoadLibraryA(dll_names[i]);
+    }
+
+    const int n = SCI_IMP_PATCH_COUNT;
+    for (int i = 0; i < n; i++) {
+        int d = sci_imp_patches[i].dll_idx;
+        if (d >= 0 && d < DLL_COUNT && mods[d]) {
+            FARPROC fn = pfGetProcAddress(mods[d], sci_imp_patches[i].func_name);
+            if (fn) *sci_imp_patches[i].slot = reinterpret_cast<void*>(fn);
+        }
+    }
+}
+
+#endif // Win32-only
+
 // Upstream public headers.
 #include "ILexer.h"
 #include "Scintilla.h"

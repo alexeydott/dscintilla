@@ -251,7 +251,7 @@ type
   protected
     procedure ChangeScale(M, D: Integer; isDpiChange: Boolean); override;
     // Sets owner HWND from FOwnerWnd (top-level host window), Application.Handle,
-    // or GetDesktopWindow as emergency fallback only. See TODO 2.2.
+    // or GetDesktopWindow as emergency fallback only.
     procedure CreateParams(var Params: TCreateParams); override;
     procedure CreateWnd; override;
     procedure Resize; override;
@@ -346,7 +346,7 @@ begin
     lControl := Application.MainForm;
 
 
-  if Assigned(lControl) and lControl.HandleAllocated then // not ready.
+  if Assigned(lControl) and lControl.HandleAllocated then // control ready.
   begin
     lMonitor := Screen.MonitorFromWindow(lControl.Handle);
   end

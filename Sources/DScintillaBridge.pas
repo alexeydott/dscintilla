@@ -1,23 +1,21 @@
-﻿unit DScintillaBridge;
+unit DScintillaBridge;
 {$IFDEF SCINTILLA_STATIC_LINKING}
 { Suppress "declared but never used" hints for force-link anchor symbols.
-  Must remain active at unit end — Delphi checks unused symbols there. }
+  Must remain active at unit end Delphi checks unused symbols there. }
 {$HINTS OFF}
 {$ENDIF}
 (*
   Delphi declarations for statically linked Scintilla + Lexilla objects.
 
-  Assumptions:
-  - Scintilla/Lexilla and SciBridge.cpp are built by MSVC for the same target
-    (Win32 or Win64) and in the same configuration.
-  - Delphi links the emitted .obj files via {$L ...} from the included .inc file.
-  - Delphi treats ILexer5* as an opaque Pointer and only passes it to SCI_SETILEXER.
+  Platforms:
+  - Win64: uses sci_combined_bcc64x.o (built by c_src\build-delphi-static-objects-bcc64x.cmd
+    with Embarcadero bcc64x / Clang 15, partially linked with GNU ld).
+  - Win32: uses sci_combined_clang32.o (built by c_src\build-delphi-static-objects-msys2-clang32.cmd
+    with MSYS2 MinGW i686 Clang, partially linked with GNU ld (i386pe)).
 
   Notes:
   - Keep the external boundary in plain C. Do not try to describe ILexer5 in Delphi.
-  - Replace the external names below if your actual object file uses different symbol
-    decoration. Verify with dumpbin /symbols on the built obj\scibridge32.obj or
-    obj\scibridge64.obj.
+  - Delphi treats ILexer5* as an opaque Pointer and only passes it to SCI_SETILEXER.
 *)
 
 interface
@@ -26,9 +24,7 @@ uses
   Winapi.Windows,
   Winapi.Messages,
   System.SysUtils, System.SyncObjs,
-  DScintillaLogger
-  {$IFDEF SCINTILLA_STATIC_LINKING}
-  ,System.Win.Crtl{$ENDIF};  // provides memcpy, strlen, malloc, free, etc. to linked C objects
+  DScintillaLogger;
 
 type
   // Direct-call function type exposed by Scintilla through SCI_GETDIRECTFUNCTION,
@@ -51,6 +47,9 @@ function LexBridge_GetLibraryPropertyNames: PAnsiChar; stdcall; external name '_
 function LexBridge_LexerNameFromID(identifier: Integer): PAnsiChar; stdcall; external name '_LexBridge_LexerNameFromID@4';
 function LexBridge_GetNameSpace: PAnsiChar; stdcall; external name '_LexBridge_GetNameSpace@0';
 function LexBridge_AssignLexerByName(hSci: HWND; name: PAnsiChar): LongBool; stdcall; external name '_LexBridge_AssignLexerByName@8';
+// Patches 300 MinGW __imp__ IAT stubs placed by dcc32 into .data (not PE import table).
+// Must be called BEFORE SciStatic_RunConstructors.
+procedure SciBridge_PatchImports(pfLoadLibraryA, pfGetProcAddress: Pointer); stdcall; external name '_SciBridge_PatchImports@8';
 
 // Exported by Scintilla's Windows build.
 function Scintilla_DirectFunction(ptr: NativeInt; iMessage: Cardinal; wParam: NativeUInt; lParam: NativeInt): NativeInt; stdcall; external name '_Scintilla_DirectFunction@16';
@@ -162,6 +161,12 @@ function SciSetLexerByName(hSci: HWND; const LexerName: AnsiString): Boolean;
 
 implementation
 
+{$IFDEF WIN64}
+{$IFDEF SCINTILLA_STATIC_LINKING}
+uses System.Win.Crtl;
+{$ENDIF SCINTILLA_STATIC_LINKING}
+{$ENDIF WIN64}
+
 {$IFDEF SCINTILLA_STATIC_LINKING}
 {$IFDEF WIN64}
 { Single combined object: all Scintilla/Lexilla sources + C++ runtime stubs +
@@ -172,11 +177,24 @@ implementation
   that the bcc64x objects reference but System.Win.Crtl / Winapi.Windows
   do not cover. }
 {$I 'SciBridge.Externals.win64.inc'}
-{ C++ global constructor calls — Delphi does not process .ctors sections,
+{ C++ global constructor calls Delphi does not process .ctors sections,
   so we declare each _GLOBAL__sub_I_* symbol explicitly and call them. }
 {$I 'SciBridge.Ctors.win64.inc'}
 {$ELSE}
-{$I 'SciBridge.Objects.inc'}
+{$IFDEF WIN32}
+{ Single combined object: all Scintilla/Lexilla sources + C++ runtime stubs +
+  libc++/libc++abi, partially linked by GNU ld (i386pe) and sanitized by
+  coff_sanitize.py so section names, COMDAT symbols, and dollar signs are
+  Delphi-compatible. Built by c_src/build-delphi-static-objects-msys2-clang32.cmd. }
+{$L 'obj\sci_combined_clang32.o'}
+{ External declarations for CRT, UCRT, OLE, IMM, and kernel32 functions
+  that the clang32 objects reference but System.Win.Crtl / Winapi.Windows
+  do not cover. }
+{$I 'SciBridge.Externals.win32.inc'}
+{ C++ global constructor calls Delphi does not process .ctors sections,
+  so we declare each __GLOBAL__sub_I_* symbol explicitly and call them. }
+{$I 'SciBridge.Ctors.win32.inc'}
+{$ENDIF WIN32}
 {$ENDIF}
 {$ENDIF SCINTILLA_STATIC_LINKING}
 
@@ -243,7 +261,7 @@ begin
     Exit;
   end;
 
-  // 3. Default DLL name — Windows PATH search
+  // 3. Default DLL name Windows PATH search
   DSciLog('[BRIDGE] Using default DLL name for PATH search: ' + cSciBridgeDefaultDll, cDSciLogDebug);
   Result := cSciBridgeDefaultDll;
 end;
@@ -321,7 +339,7 @@ begin
     SetErrorMode(SEM_NOOPENFILEERRORBOX), which clears the host process's
     SEM_FAILCRITICALERRORS flag. In a DO lister thread (no UI pump) that
     makes LoadLibrary silently fail when DLL dependencies can't be found.
-    Use LoadLibrary directly — the host's error mode is already correct,
+    Use LoadLibrary directly the host's error mode is already correct,
     and 8087 FPU state is irrelevant on x64. }
   FSciDllHandle := LoadLibrary(PChar(lPath));
   if FSciDllHandle = 0 then
@@ -508,16 +526,31 @@ end;
 {$IFDEF WIN64}
 procedure SciStatic_RunDestructors; cdecl; external name 'SciStatic_RunDestructors';
 {$ENDIF WIN64}
+{$IFDEF WIN32}
+procedure SciStatic_RunDestructors; cdecl; external name '_SciStatic_RunDestructors';
+{$ENDIF WIN32}
 {$ENDIF SCINTILLA_STATIC_LINKING}
 
 initialization
   TSciBridgeLoader.FInstance := TSciBridgeLoader.Create;
 {$IFDEF SCINTILLA_STATIC_LINKING}
   DSciLog('=== DScintillaBridge initialization start ===', cDSciLogDebug);
+{$IFDEF WIN32}
+  // Patch 300 MinGW __imp__ IAT stubs before any C++ code runs.
+  // dcc32 places .idata from our OBJ into .data (not PE import table) so the
+  // PE loader never initialises those slots.  We fill them here using real
+  // Win32 function pointers from Delphi's own (correctly patched) IAT.
+  DSciLog('Calling SciBridge_PatchImports...', cDSciLogDebug);
+  SciBridge_PatchImports(@LoadLibraryA, @GetProcAddress);
+  DSciLog('SciBridge_PatchImports completed OK', cDSciLogDebug);
+{$ENDIF WIN32}
   DSciLog('Calling SciStatic_RunConstructors...', cDSciLogDebug);
 {$IFDEF WIN64}
   SciStatic_RunConstructors;
 {$ENDIF WIN64}
+{$IFDEF WIN32}
+  SciStatic_RunConstructors;
+{$ENDIF WIN32}
   DSciLog('SciStatic_RunConstructors completed OK', cDSciLogDebug);
 {$ENDIF SCINTILLA_STATIC_LINKING}
 
@@ -528,6 +561,9 @@ finalization
 {$IFDEF WIN64}
   SciStatic_RunDestructors;
 {$ENDIF WIN64}
+{$IFDEF WIN32}
+  SciStatic_RunDestructors;
+{$ENDIF WIN32}
   DSciLog('SciStatic_RunDestructors completed OK', cDSciLogDebug);
 {$ENDIF SCINTILLA_STATIC_LINKING}
   TSciBridgeLoader.FInstance.Free;

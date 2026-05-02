@@ -44,46 +44,16 @@ implementation
 
 uses
   System.SysUtils, System.IOUtils, System.Math,
-  Vcl.Forms,
   DOpusPluginSupport,
   DScintillaVisualConfig,
   DScintillaDefaultConfig,
-  DOSrcVwrLog;
+  DOSrcVwrLog,
+  DOSrcVwrHost;
 
 var
   GOpusMsgWindow: HWND;
   GInitialized: Boolean;
   GHelper: TDOSrcVwrHelper;
-  GVCLInitialized: Boolean;
-
-type
-  TAppExceptionHandler = class
-    procedure HandleException(Sender: TObject; E: Exception);
-  end;
-
-var
-  GExceptionHandler: TAppExceptionHandler;
-
-procedure TAppExceptionHandler.HandleException(Sender: TObject; E: Exception);
-begin
-  LogError('Application.OnException: [%s] %s', [E.ClassName, E.Message]);
-end;
-
-procedure EnsureVCL;
-begin
-  if GVCLInitialized then
-  begin
-    LogDebug('EnsureVCL: already initialized');
-    Exit;
-  end;
-  LogInfo('EnsureVCL: initializing VCL...');
-  if Application = nil then
-    Vcl.Forms.Application.Initialize;
-  GExceptionHandler := TAppExceptionHandler.Create;
-  Application.OnException := GExceptionHandler.HandleException;
-  GVCLInitialized := True;
-  LogInfo('EnsureVCL: done (Application.OnException hooked)');
-end;
 
 { --- TDOSrcVwrHelper --- }
 
@@ -174,8 +144,9 @@ begin
   LogInfo('HandleInitEx: hwndDOpusMsgWindow=$%x', [AInitData^.hwndDOpusMsgWindow]);
   GOpusMsgWindow := AInitData^.hwndDOpusMsgWindow;
 
-  // Bootstrap VCL for the DLL
-  EnsureVCL;
+  // Initialise VCL on a dedicated thread, isolated from DOpus's main
+  // UI thread, preventing VCL window hooks from corrupting DO window state.
+  InitVCLThread;
 
   // Ensure the singleton helper exists (may already exist from DVP_Identify)
   LogInfo('HandleInitEx: ensuring helper singleton...');
@@ -224,9 +195,9 @@ end;
 procedure HandleUninit;
 begin
   LogInfo('HandleUninit: enter');
+  UninitVCLThread;
   LogInfo('HandleUninit: freeing helper...');
   FreeAndNil(GHelper);
-  FreeAndNil(GExceptionHandler);
   GInitialized := False;
   GOpusMsgWindow := 0;
   LogInfo('HandleUninit: done, calling ShutdownLogging');

@@ -106,6 +106,7 @@ type
     procedure TestStyleCharacterSetRoundTrip;
     procedure TestMarkerLayerRoundTrip;
     procedure TestPropertyLookup;
+    procedure TestSettingsThemeXmlsAreWellFormed;
   end;
 
 implementation
@@ -114,6 +115,7 @@ uses
   Classes, Clipbrd, Controls, Generics.Collections, Graphics, IOUtils, SyncObjs,
   SysUtils, TypInfo,
   DScintillaLanguageServices,
+  DScintillaLogger,
   DScintillaVisualConfig,
   Windows, Messages;
 
@@ -1741,6 +1743,53 @@ end;
 procedure TTestDScintillaTyped.TestPropertyLookup;
 begin
   CheckEquals('lexilla', FScintilla.Lexilla.GetNameSpace);
+end;
+
+procedure TTestDScintillaTyped.TestSettingsThemeXmlsAreWellFormed;
+var
+  lFiles: TStringDynArray;
+  lFileName: string;
+  lModel: TDSciVisualStyleModel;
+  lThemesDir: string;
+  lRootCandidate: string;
+begin
+  // Regression: bare & in XML attribute values (e.g. name="BUILIN FUNC & TYPE")
+  // causes an "white space does not allowed here" parse error in OmniXML.
+  // All theme XML files shipped under settings/themes/ must be well-formed XML.
+  lThemesDir := TPath.Combine(ResolveSettingsDir, 'themes');
+  if TDirectory.Exists(lThemesDir) then
+  begin
+    lFiles := TDirectory.GetFiles(lThemesDir, '*.xml');
+    for lFileName in lFiles do
+    begin
+      lModel := nil;
+      try
+        lModel := LoadThemeStyleModelFromFile(lFileName);
+        DSciLog(Format('Theme XML loaded OK: %s', [ExtractFileName(lFileName)]));
+      except
+        on E: Exception do
+          Fail(Format('Theme XML parse failed for %s: %s - %s',
+            [ExtractFileName(lFileName), E.ClassName, E.Message]));
+      end;
+      lModel.Free;
+    end;
+  end;
+
+  // Regression guard for settings/Dracula.xml which had a bare & on line 909.
+  lRootCandidate := TPath.Combine(ResolveSettingsDir, 'Dracula.xml');
+  if FileExists(lRootCandidate) then
+  begin
+    lModel := nil;
+    try
+      lModel := LoadThemeStyleModelFromFile(lRootCandidate);
+      DSciLog(Format('Theme XML loaded OK: %s', [ExtractFileName(lRootCandidate)]));
+    except
+      on E: Exception do
+        Fail(Format('[Settings/Dracula.xml parse failed: %s - %s',
+          [E.ClassName, E.Message]));
+    end;
+    lModel.Free;
+  end;
 end;
 
 procedure TTestDScintillaTyped.TestLoadFromFileSizeLimitRejectsOversizedFile;

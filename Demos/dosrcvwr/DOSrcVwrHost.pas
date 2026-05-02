@@ -16,13 +16,21 @@ function HandleAbout(AParentWnd: HWND): HWND;
   Thread-safe; safe to call from any thread (uses PostMessage). }
 procedure NotifyViewersConfigChanged;
 
+{ Create the dedicated VCL thread that isolates VCL from DOpus's main UI
+  thread, preventing VCL window hooks (WH_CBT etc.) from intercepting DO
+  window events and corrupting DO window state.  Idempotent; the thread
+  survives across Uninit/InitEx cycles and is stopped only in DLL
+  finalization. }
+procedure InitVCLThread;
+procedure UninitVCLThread;
+
 implementation
 
 uses
   System.SysUtils, System.Classes, System.SyncObjs,
   System.Generics.Collections,
   Winapi.Messages,
-  Vcl.Controls,
+  Vcl.Controls, Vcl.Forms,
   DOSrcVwrLog,
   DOSrcVwrConfigDlg,
   DOSrcVwrViewerFrame,
@@ -31,14 +39,6 @@ uses
 var
   GViewerHandles: TList<HWND>;
   GViewerLock: TCriticalSection;
-
-{$R-}{$Q-}
-
-{ Each CreateViewer call creates a TDOSrcVwrViewerFrame (a VCL control parented
-  to the Opus window). We subclass the VCL window to intercept DVPLUGINMSG
-  messages sent by Opus via SendMessage.
-  Per-HWND storage of the original WndProc via SetProp/GetProp allows
-  multiple simultaneous viewer windows. }
 
 const
   cOldWndProcProp = 'DOSrcVwrOldWndProc';
@@ -55,6 +55,198 @@ type
     NotifyData: DWORD;
     ResultHWND: HWND;
   end;
+
+type
+  { Hidden message-only window created on the dedicated VCL thread.
+    Routes WM_DOSRCVWR_SHOWCONFIG from any calling thread to the VCL thread
+    so VCL forms are always created/destroyed on the correct, isolated thread. }
+  TDSrcVwrConfigDispatcher = class
+  private
+    FHWND: HWND;
+    procedure WndProc(var AMsg: TMessage);
+  public
+    constructor Create;
+    destructor Destroy; override;
+    property Handle: HWND read FHWND;
+  end;
+
+  TVCLAppExceptionHandler = class
+    procedure HandleException(Sender: TObject; E: Exception);
+  end;
+
+  { Dedicated thread that owns VCL initialisation and the settings dialog.
+    ROOT CAUSE of the DO corruptions: VCL was initialised on
+    Thread=DVP_InitEx which is DOpus's own main UI thread.  VCL installs
+    WH_CBT and other per-thread hooks that then intercepted ALL window
+    activation events on that thread - including DOpus's own dialogs -
+    leaving DO windows disabled / corrupt after our dialog closed.
+    but we will act more cunningly: we run VCL on a private thread DOpus never uses.
+    VCL hooks stay on this thread and cannot reach DOpus windows on the DO UI thread.
+    The thread survives across Uninit/InitEx cycles so that
+    Application.FMainThreadID remains constant. }
+  TVCLThread = class(TThread)
+  private
+    FReadyEvent: THandle;
+    FDispatcher: TDSrcVwrConfigDispatcher;
+    FExHandler: TVCLAppExceptionHandler;
+    function GetDispatcherHandle: HWND;
+  protected
+    procedure Execute; override;
+  public
+    constructor Create;
+    destructor Destroy; override;
+    { Block until Execute has initialised VCL and the dispatcher window.
+      Returns True when ready, False on timeout. }
+    function WaitForReady(ATimeoutMs: DWORD): Boolean;
+    property DispatcherHandle: HWND read GetDispatcherHandle;
+  end;
+
+var
+  GVCLThread: TVCLThread;
+  GVCLAppInitialized: Boolean;
+
+{$R-}{$Q-}
+
+{ --- TDSrcVwrConfigDispatcher --- }
+
+constructor TDSrcVwrConfigDispatcher.Create;
+begin
+  inherited;
+  FHWND := AllocateHWnd(WndProc);
+  LogInfo('ConfigDispatcher.Create: HWND=$%x', [FHWND]);
+end;
+
+destructor TDSrcVwrConfigDispatcher.Destroy;
+begin
+  if FHWND <> 0 then
+  begin
+    DeallocateHWnd(FHWND);
+    FHWND := 0;
+  end;
+  inherited;
+end;
+
+procedure TDSrcVwrConfigDispatcher.WndProc(var AMsg: TMessage);
+begin
+  if AMsg.Msg = WM_DOSRCVWR_SHOWCONFIG then
+  begin
+    LogInfo('ConfigDispatcher.WndProc: WM_DOSRCVWR_SHOWCONFIG on VCL thread');
+    if AMsg.LParam <> 0 then
+      with PConfigDialogRequest(AMsg.LParam)^ do
+      begin
+        ResultHWND := ShowConfigureDialog(ParentWnd, NotifyWnd, NotifyData);
+        LogInfo('ConfigDispatcher.WndProc: dialog HWND=$%x', [ResultHWND]);
+      end;
+    AMsg.Result := 1;
+  end
+  else
+    AMsg.Result := DefWindowProc(FHWND, AMsg.Msg, AMsg.WParam, AMsg.LParam);
+end;
+
+procedure InitVCLThread;
+begin
+  if GVCLThread <> nil then
+  begin
+    LogDebug('InitVCLThread: already running (thread=%d, dispatcher=$%x)',
+      [GVCLThread.ThreadID, GVCLThread.DispatcherHandle]);
+    Exit;
+  end;
+  LogInfo('InitVCLThread: creating dedicated VCL thread...');
+  GVCLThread := TVCLThread.Create;
+  if GVCLThread.WaitForReady(5000) then
+    LogInfo('InitVCLThread: ready (thread=%d, dispatcher=$%x)',
+      [GVCLThread.ThreadID, GVCLThread.DispatcherHandle])
+  else
+    LogError('InitVCLThread: timeout waiting for VCL thread ready!');
+end;
+
+procedure UninitVCLThread;
+begin
+  { The VCL thread survives Uninit/InitEx cycles so Application.FMainThreadID
+    stays constant - recreating the thread would invalidate it.
+    The thread is stopped in DLL finalization only. }
+  if GVCLThread <> nil then
+    LogInfo('UninitVCLThread: VCL thread retained (thread=%d)',
+      [GVCLThread.ThreadID])
+  else
+    LogInfo('UninitVCLThread: no VCL thread');
+end;
+
+{ --- TVCLAppExceptionHandler --- }
+
+procedure TVCLAppExceptionHandler.HandleException(Sender: TObject; E: Exception);
+begin
+  LogError('[VCLThread] Application.OnException: [%s] %s', [E.ClassName, E.Message]);
+end;
+
+{ --- TVCLThread --- }
+
+constructor TVCLThread.Create;
+begin
+  FreeOnTerminate := False;
+  FReadyEvent := CreateEvent(nil, True, False, nil);
+  inherited Create(False); // start immediately
+  Self.NameThreadForDebugging('DoSrcVwr VCL thread');
+end;
+
+destructor TVCLThread.Destroy;
+begin
+  if FReadyEvent <> 0 then
+    CloseHandle(FReadyEvent);
+  FreeAndNil(FExHandler);
+  inherited;
+end;
+
+function TVCLThread.GetDispatcherHandle: HWND;
+begin
+  if FDispatcher <> nil then
+    Result := FDispatcher.Handle
+  else
+    Result := 0;
+end;
+
+function TVCLThread.WaitForReady(ATimeoutMs: DWORD): Boolean;
+begin
+  Result := WaitForSingleObject(FReadyEvent, ATimeoutMs) = WAIT_OBJECT_0;
+end;
+
+procedure TVCLThread.Execute;
+begin
+  LogInfo('VCLThread.Execute: starting on dedicated thread %d', [GetCurrentThreadId]);
+  { Initialise VCL on THIS private thread - NOT on DOpus's main UI thread.
+    GVCLAppInitialized guards against double-init on DLL reload cycles
+    where the thread survives and the flag persists. }
+  if not GVCLAppInitialized then
+  begin
+    Application.Initialize;
+    GVCLAppInitialized := True;
+    LogInfo('VCLThread.Execute: VCL initialized on thread %d', [GetCurrentThreadId]);
+  end;
+  FExHandler := TVCLAppExceptionHandler.Create;
+  Application.OnException := FExHandler.HandleException;
+  { Dispatcher window created ON this thread: messages sent to it are
+    delivered here, never on DOpus's thread. }
+  FDispatcher := TDSrcVwrConfigDispatcher.Create;
+  LogInfo('VCLThread.Execute: dispatcher HWND=$%x - signaling ready',
+    [FDispatcher.Handle]);
+  SetEvent(FReadyEvent);
+  { VCL message pump - Application.HandleMessage calls IsKeyMsg/IsDlgMsg
+    so keyboard navigation (Tab etc.) works properly in the settings dialog. }
+  repeat
+    Application.HandleMessage;
+  until Application.Terminated;
+  LogInfo('VCLThread.Execute: terminated - cleaning up');
+  FreeAndNil(FDispatcher);
+  Application.OnException := nil;
+  FreeAndNil(FExHandler);
+  LogInfo('VCLThread.Execute: done');
+end;
+
+{ Each CreateViewer call creates a TDOSrcVwrViewerFrame (a VCL control parented
+  to the Opus window). We subclass the VCL window to intercept DVPLUGINMSG
+  messages sent by Opus via SendMessage.
+  Per-HWND storage of the original WndProc via SetProp/GetProp allows
+  multiple simultaneous viewer windows. }
 
 procedure RegisterViewerHandle(AWnd: HWND);
 begin
@@ -262,10 +454,8 @@ begin
       begin
         LogInfo('WndProc.SHOWCONFIG: running config dialog on UI thread');
         if ALParam <> 0 then
-        begin
           with PConfigDialogRequest(ALParam)^ do
             ResultHWND := ShowConfigureDialog(ParentWnd, NotifyWnd, NotifyData);
-        end;
         Result := 1;
         Exit;
       end;
@@ -319,7 +509,7 @@ begin
       DVPLUGINMSG_ISDLGMESSAGE:
       begin
         // Only handle messages for the modeless Find dialog.
-        // Do NOT call IsDialogMessage on the main frame — it causes
+        // Do NOT call IsDialogMessage on the main frame - it causes
         // infinite message loops in a non-dialog VCL control.
         if (LFrame <> nil) and (ALParam <> 0) then
         begin
@@ -478,12 +668,29 @@ begin
     LReq.NotifyData := ANotifyData;
     LReq.ResultHWND := 0;
     SendMessage(LViewerWnd, WM_DOSRCVWR_SHOWCONFIG, 0, LPARAM(@LReq));
-    Result := LReq.ResultHWND;
+    LogInfo('HandleConfigure: dialog shown via viewer ($%x)', [LReq.ResultHWND]);
+    Result := 0;
   end
   else
   begin
-    LogInfo('HandleConfigure: no viewer — running on caller thread (fallback)');
-    Result := DOSrcVwrConfigDlg.ShowConfigureDialog(AParentWnd, ANotifyWnd, ANotifyData);
+    if (GVCLThread <> nil) and IsWindow(GVCLThread.DispatcherHandle) then
+    begin
+      LogInfo('HandleConfigure: no viewer - routing to dedicated VCL thread (HWND=$%x)',
+        [GVCLThread.DispatcherHandle]);
+      LReq.ParentWnd := AParentWnd;
+      LReq.NotifyWnd := ANotifyWnd;
+      LReq.NotifyData := ANotifyData;
+      LReq.ResultHWND := 0;
+      SendMessage(GVCLThread.DispatcherHandle, WM_DOSRCVWR_SHOWCONFIG, 0, LPARAM(@LReq));
+      LogInfo('HandleConfigure: dialog shown ($%x), DVP_Configure returning 0',
+        [LReq.ResultHWND]);
+      Result := 0;
+    end
+    else
+    begin
+      LogError('HandleConfigure: no viewer and no dispatcher - unsafe fallback on caller thread');
+      Result := DOSrcVwrConfigDlg.ShowConfigureDialog(AParentWnd, ANotifyWnd, ANotifyData);
+    end;
   end;
 
   LogInfo('HandleConfigure: done => $%x', [Result]);
@@ -501,6 +708,14 @@ initialization
   GViewerLock := TCriticalSection.Create;
 
 finalization
+  if GVCLThread <> nil then
+  begin
+    LogInfo('Finalization: stopping VCL thread (thread=%d)...', [GVCLThread.ThreadID]);
+    PostThreadMessage(GVCLThread.ThreadID, WM_QUIT, 0, 0);
+    GVCLThread.WaitFor;
+    FreeAndNil(GVCLThread);
+    LogInfo('Finalization: VCL thread stopped');
+  end;
   FreeAndNil(GViewerLock);
   FreeAndNil(GViewerHandles);
 
