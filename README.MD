@@ -14,7 +14,7 @@ In my opinion, the final result is quite competitive and can be used in other pr
 - **Themes suppors** - Applying editor configurations, syntax themes, and language selection from XML directories (themes compatible with Notepad++)
 - **Autocomplete and function lists** - Bundled language services for code hints (Notepad++ compatible, just copy npp `autoCompletion` & `functionList` folders next to control the settings file)
 - **Combined Scintilla + Lexilla DLL** - Bundled a single DLL containing export functions for both the editor and the lexer
-- **Static linking** - experimental version (x64 only at this time) with static linking of the Scinlilla&Lexilla code directly 
+- **Static linking** - experimental version with static linking of the Scinlilla&Lexilla code directly 
     for more information and examples see SCINТILLA_STATIC_LINKING in ./demos/dscieditor/
 
 ## [Scintilla documentation](scintilla.org/ScintillaDoc.html)
