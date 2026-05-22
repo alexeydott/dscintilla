@@ -1,4 +1,4 @@
-﻿function TDScintilla.GetLength: NativeInt;
+function TDScintilla.GetLength: NativeInt;
 begin
   Result := SendEditor(SCI_GETLENGTH, 0, 0);
 end;
@@ -2539,10 +2539,9 @@ begin
   if (lConfigGroup <> nil) and lConfigGroup.HasLexerID then
     if lConfigGroup.LexerID = Integer(sclNULL) then
     begin
-      DSciLog('Keeping requested language "' +
+      OutputDebugString(PChar('Keeping requested language "' +
         string(FRequestedLexerLanguage) +
-        '" on the plain/null runtime lexer because config maps it to SCLEX_NULL.',
-        cSciBridgeLogInfo);
+        '" on the plain/null runtime lexer because config maps it to SCLEX_NULL.'));
       FActiveLexerLanguage := '';
       SetILexer(nil);
       Exit;
@@ -2553,17 +2552,17 @@ begin
         if lResolvedLanguage <> '' then
         begin
           if not SameText(lResolvedLanguage, lRuntimeLanguage) then
-            DSciLog('Mapping requested language "' +
+            OutputDebugString(PChar('Mapping requested language "' +
               string(FRequestedLexerLanguage) + '" to runtime lexer "' +
               string(lResolvedLanguage) + '" from LexerID ' +
-              IntToStr(lConfigGroup.LexerID) + '.', cSciBridgeLogInfo);
+              IntToStr(lConfigGroup.LexerID) + '.'));
           lRuntimeLanguage := lResolvedLanguage;
         end;
       except
         on E: Exception do
-          DSciLog('Could not resolve runtime lexer for "' +
+          OutputDebugString(PChar('Could not resolve runtime lexer for "' +
             string(FRequestedLexerLanguage) + '" from LexerID ' +
-            IntToStr(lConfigGroup.LexerID) + ': ' + E.Message, cSciBridgeLogError);
+            IntToStr(lConfigGroup.LexerID) + ': ' + E.Message));
       end;
 
   // SCI_SETLEXERLANGUAGE (4006) and SCI_LOADLEXERLIBRARY (4007) were
@@ -2572,8 +2571,8 @@ begin
   // lexer reliably on every call — not only the first time.  Callers (Reapply)
   // re-apply fold properties and Colourise after this, so the new instance is
   // fully configured before the user sees it.
-  DSciLog('Creating lexer "' + string(lRuntimeLanguage) +
-    '" via Lexilla.CreateLexer.', cSciBridgeLogInfo);
+  OutputDebugString(PChar('Creating lexer "' + string(lRuntimeLanguage) +
+    '" via Lexilla.CreateLexer.'));
   lLexer := lLexilla.CreateLexer(lRuntimeLanguage);
   if Pointer(lLexer) = nil then
     raise EInvalidOpException.Create('Lexilla lexer "' +

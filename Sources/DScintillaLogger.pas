@@ -37,8 +37,8 @@ var
   _DSciLogOutput: Integer  = cDSciOutputFile;
   _DSciLogPath: string;
 
-procedure DSciLog(const Msg: string; ALevel: Integer = cDSciLogDebug);
-procedure SciBridgeLog(const Msg: string; ALevel: Integer = cDSciLogDebug); deprecated;
+procedure DSciLog(const Msg: string; ALevel: Integer = cDSciLogError);
+procedure SciBridgeLog(const Msg: string; ALevel: Integer = cDSciLogError); deprecated;
 
 function  GetDSciLogEnabled: Boolean;
 procedure SetDSciLogEnabled(AValue: Boolean);

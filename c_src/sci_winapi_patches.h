@@ -273,6 +273,7 @@ extern void* imp_strcmp __asm__("__imp__strcmp");
 extern void* imp_strcpy __asm__("__imp__strcpy");
 extern void* imp_strdup __asm__("__imp__strdup");
 extern void* imp_strerror __asm__("__imp__strerror");
+extern void* imp_StretchBlt __asm__("__imp__StretchBlt@44");
 extern void* imp_strftime __asm__("__imp__strftime");
 extern void* imp_strlen __asm__("__imp__strlen");
 extern void* imp_strncmp __asm__("__imp__strncmp");
@@ -589,6 +590,7 @@ static const SciImpPatch sci_imp_patches[] = {
     { 7, "strcpy", (void**)&imp_strcpy },  /* msvcrt.dll */
     { 7, "strdup", (void**)&imp_strdup },  /* msvcrt.dll */
     { 7, "strerror", (void**)&imp_strerror },  /* msvcrt.dll */
+    { 4, "StretchBlt", (void**)&imp_StretchBlt },  /* gdi32.dll */
     { 7, "strftime", (void**)&imp_strftime },  /* msvcrt.dll */
     { 7, "strlen", (void**)&imp_strlen },  /* msvcrt.dll */
     { 7, "strncmp", (void**)&imp_strncmp },  /* msvcrt.dll */
@@ -627,4 +629,4 @@ static const SciImpPatch sci_imp_patches[] = {
     { 7, "write", (void**)&imp_write },  /* msvcrt.dll */
 };
 
-static const int SCI_IMP_PATCH_COUNT = 300;
+static const int SCI_IMP_PATCH_COUNT = 301;

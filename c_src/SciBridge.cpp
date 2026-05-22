@@ -7,12 +7,17 @@
 #include <windows.h>
 
 // ----------------------------------------------------------------------------
-// Win32 static only: patch 300 MinGW __imp__ IAT stubs that dcc32 places in
+// Win32 static only: patch MinGW __imp__ IAT stubs that dcc32 places in
 // .data (not in the PE import table) so the PE loader never patches them.
 // Called from Delphi BEFORE SciStatic_RunConstructors using real Win32 function
 // pointers from Delphi's own (correctly patched) IAT — avoiding chicken-and-egg.
+//
+// This block uses __asm__("symbol") GNU/Clang alias syntax and is therefore
+// compiled only by Clang (MSYS2 clang32 static pipeline).  MSVC skips it
+// because the DLL build does not need IAT patching — the PE loader handles
+// the DLL's import table automatically.
 // ----------------------------------------------------------------------------
-#if defined(_WIN32) && !defined(_WIN64)
+#if defined(_WIN32) && !defined(_WIN64) && (defined(__clang__) || defined(__GNUC__))
 
 typedef HMODULE (WINAPI *PFLoadLibraryA)(LPCSTR);
 typedef FARPROC (WINAPI *PFGetProcAddress)(HMODULE, LPCSTR);
@@ -55,7 +60,7 @@ void __stdcall SciBridge_PatchImports(PFLoadLibraryA pfLoadLibraryA,
     }
 }
 
-#endif // Win32-only
+#endif // Win32 + Clang/GCC only
 
 // Upstream public headers.
 #include "ILexer.h"

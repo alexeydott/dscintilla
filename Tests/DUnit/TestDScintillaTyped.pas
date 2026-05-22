@@ -869,8 +869,8 @@ begin
   FScintilla.HandleNeeded;
 
   CheckEquals('cpp', FScintilla.Settings.CurrentLanguage);
-  CheckEquals(Integer(TColor(RGB($FF, $FF, $FA))), Integer(FScintilla.StyleFore[STYLE_DEFAULT]));
-  CheckEquals(Integer(TColor(RGB($17, $20, $24))), Integer(FScintilla.StyleBack[STYLE_DEFAULT]));
+  CheckEquals(Integer(TColor(RGB($C3, $BE, $98))), Integer(FScintilla.StyleFore[STYLE_DEFAULT]));
+  CheckEquals(Integer(TColor(RGB($1A, $0F, $0B))), Integer(FScintilla.StyleBack[STYLE_DEFAULT]));
 end;
 
 procedure TTestDScintillaTyped.TestSettingsClearLanguageResetsLexerState;
@@ -939,8 +939,8 @@ begin
 
   FScintilla.Settings.ApplyLanguageForFileName('sample.cpp');
   CheckEquals('cpp', FScintilla.Settings.CurrentLanguage);
-  CheckEquals(Integer(TColor(RGB($FF, $FF, $FA))), Integer(FScintilla.StyleFore[STYLE_DEFAULT]));
-  CheckEquals(Integer(TColor(RGB($17, $20, $24))), Integer(FScintilla.StyleBack[STYLE_DEFAULT]));
+  CheckEquals(Integer(TColor(RGB($C3, $BE, $98))), Integer(FScintilla.StyleFore[STYLE_DEFAULT]));
+  CheckEquals(Integer(TColor(RGB($1A, $0F, $0B))), Integer(FScintilla.StyleBack[STYLE_DEFAULT]));
 
   FScintilla.SetText(SampleText);
   FScintilla.Colourise(0, -1);
@@ -974,8 +974,8 @@ begin
 
     CheckEquals(lOriginalConfigFileName, FScintilla.Settings.ConfigFileName);
     CheckEquals('cpp', FScintilla.Settings.ResolveLanguageNameByFileName('sample.cpp'));
-    CheckEquals(Integer(TColor(RGB($FF, $FF, $FA))), Integer(FScintilla.StyleFore[STYLE_DEFAULT]));
-    CheckEquals(Integer(TColor(RGB($17, $20, $24))), Integer(FScintilla.StyleBack[STYLE_DEFAULT]));
+    CheckEquals(Integer(TColor(RGB($C3, $BE, $98))), Integer(FScintilla.StyleFore[STYLE_DEFAULT]));
+    CheckEquals(Integer(TColor(RGB($1A, $0F, $0B))), Integer(FScintilla.StyleBack[STYLE_DEFAULT]));
   finally
     if FileExists(lInvalidConfigFileName) then
       SysUtils.DeleteFile(lInvalidConfigFileName);
@@ -999,7 +999,7 @@ begin
     CheckEquals(ExpandFileName(lConfigFileName), FScintilla.Settings.ConfigFileName);
     CheckEquals(4, FScintilla.TabWidth);
     CheckEquals('cpp', FScintilla.Settings.ResolveLanguageNameByFileName('sample.cpp'));
-    CheckEquals(Integer(TColor(RGB($17, $20, $24))), Integer(FScintilla.StyleBack[STYLE_DEFAULT]));
+    CheckEquals(Integer(TColor(RGB($2A, $21, $1C))), Integer(FScintilla.StyleBack[STYLE_DEFAULT]));
   finally
     if DirectoryExists(lTempDirectory) then
       TDirectory.Delete(lTempDirectory, True);
@@ -1290,7 +1290,7 @@ begin
       'Malformed optional sidecars must not stop config-backed language activation');
     CheckEquals(16, FScintilla.StyleAt[0],
       'Malformed optional sidecars must not prevent lexer styling from being applied');
-    CheckEquals(Integer(TColor(RGB($17, $20, $24))),
+    CheckEquals(Integer(TColor(RGB($1A, $0F, $0B))),
       Integer(FScintilla.StyleBack[STYLE_DEFAULT]),
       'Malformed optional sidecars must not prevent editor config application');
   finally

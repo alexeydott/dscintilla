@@ -673,6 +673,7 @@ type
     scsOK,                                  /// <summary>SC_STATUS_OK = 0
     scsFAILURE,                             /// <summary>SC_STATUS_FAILURE = 1
     scsBAD_ALLOC,                           /// <summary>SC_STATUS_BADALLOC = 2
+    scsOUTSIDE_DOCUMENT,                    /// <summary>SC_STATUS_OUTSIDE_DOCUMENT = 3
     scsWARN_START,                          /// <summary>SC_STATUS_WARN_START = 1000
     scsREG_EX                               /// <summary>SC_STATUS_WARN_REGEX = 1001
   );
@@ -839,12 +840,12 @@ type
   TDSciModificationFlagsSet = set of TDSciModificationFlags;
 
   TDSciUpdate = (
-    scuNONE,                                /// <summary>SC_UPDATE_NONE = $0
     scuCONTENT,                             /// <summary>SC_UPDATE_CONTENT = $1
     scuSELECTION,                           /// <summary>SC_UPDATE_SELECTION = $2
     scuV_SCROLL,                            /// <summary>SC_UPDATE_V_SCROLL = $4
     scuH_SCROLL                             /// <summary>SC_UPDATE_H_SCROLL = $8
   );
+  TDSciUpdateSet = set of TDSciUpdate;
 
   TDSciFocusChange = (
     scfcCHANGE,                             /// <summary>SCEN_CHANGE = 768
@@ -3149,6 +3150,7 @@ const
   SC_STATUS_OK = 0;
   SC_STATUS_FAILURE = 1;
   SC_STATUS_BADALLOC = 2;
+  SC_STATUS_OUTSIDE_DOCUMENT = 3;
   SC_STATUS_WARN_START = 1000;
   SC_STATUS_WARN_REGEX = 1001;
 
@@ -7106,8 +7108,8 @@ function TDSciModificationFlagsSetToInt(AEnum: TDSciModificationFlagsSet): Integ
 function TDSciModificationFlagsSetFromInt(AEnum: Integer): TDSciModificationFlagsSet;
 function TDSciUpdateToInt(AEnum: TDSciUpdate): Integer;
 function TDSciUpdateFromInt(AEnum: Integer): TDSciUpdate;
-function TDSciUpdateFlagsSetToInt(AEnum: TDSciUpdateFlagsSet): Integer;
-function TDSciUpdateFlagsSetFromInt(AEnum: Integer): TDSciUpdateFlagsSet;
+function TDSciUpdateSetToInt(AEnum: TDSciUpdateSet): Integer;
+function TDSciUpdateSetFromInt(AEnum: Integer): TDSciUpdateSet;
 function TDSciFocusChangeToInt(AEnum: TDSciFocusChange): Integer;
 function TDSciFocusChangeFromInt(AEnum: Integer): TDSciFocusChange;
 function TDSciKeysToInt(AEnum: TDSciKeys): Integer;
@@ -9097,6 +9099,8 @@ begin
     Result := 1;
   scsBAD_ALLOC:                           /// <summary>SC_STATUS_BADALLOC = 2
     Result := 2;
+  scsOUTSIDE_DOCUMENT:                    /// <summary>SC_STATUS_OUTSIDE_DOCUMENT = 3
+    Result := 3;
   scsWARN_START:                          /// <summary>SC_STATUS_WARN_START = 1000
     Result := 1000;
   scsREG_EX:                              /// <summary>SC_STATUS_WARN_REGEX = 1001
@@ -9115,6 +9119,8 @@ begin
     Result := scsFAILURE;                             /// <summary>SC_STATUS_FAILURE = 1
   2:
     Result := scsBAD_ALLOC;                           /// <summary>SC_STATUS_BADALLOC = 2
+  3:
+    Result := scsOUTSIDE_DOCUMENT;                    /// <summary>SC_STATUS_OUTSIDE_DOCUMENT = 3
   1000:
     Result := scsWARN_START;                          /// <summary>SC_STATUS_WARN_START = 1000
   1001:
@@ -9934,8 +9940,6 @@ end;
 function TDSciUpdateToInt(AEnum: TDSciUpdate): Integer;
 begin
   case AEnum of
-  scuNONE:                                /// <summary>SC_UPDATE_NONE = $0
-    Result := $0;
   scuCONTENT:                             /// <summary>SC_UPDATE_CONTENT = $1
     Result := $1;
   scuSELECTION:                           /// <summary>SC_UPDATE_SELECTION = $2
@@ -9945,15 +9949,13 @@ begin
   scuH_SCROLL:                            /// <summary>SC_UPDATE_H_SCROLL = $8
     Result := $8;
   else
-    Result := $0;
+    Result := $1;
   end;
 end;
 
 function TDSciUpdateFromInt(AEnum: Integer): TDSciUpdate;
 begin
   case AEnum of
-  $0:
-    Result := scuNONE;                                /// <summary>SC_UPDATE_NONE = $0
   $1:
     Result := scuCONTENT;                             /// <summary>SC_UPDATE_CONTENT = $1
   $2:
@@ -9963,11 +9965,11 @@ begin
   $8:
     Result := scuH_SCROLL;                            /// <summary>SC_UPDATE_H_SCROLL = $8
   else
-    Result := scuNONE;                                /// <summary>SC_UPDATE_NONE = $0;
+    Result := scuCONTENT;                             /// <summary>SC_UPDATE_CONTENT = $1;
   end;
 end;
 
-function TDSciUpdateFlagsSetToInt(AEnum: TDSciUpdateFlagsSet): Integer;
+function TDSciUpdateSetToInt(AEnum: TDSciUpdateSet): Integer;
 var
   lEnum: TDSciUpdate;
 begin
@@ -9977,7 +9979,7 @@ begin
     Result := Result or TDSciUpdateToInt(lEnum);
 end;
 
-function TDSciUpdateFlagsSetFromInt(AEnum: Integer): TDSciUpdateFlagsSet;
+function TDSciUpdateSetFromInt(AEnum: Integer): TDSciUpdateSet;
 var
   lEnum: TDSciUpdate;
 begin

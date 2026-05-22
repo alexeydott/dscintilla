@@ -1330,7 +1330,7 @@ var
   lEditor: TDScintilla;
   lUpdated: TDSciUpdateFlagsSet;
 begin
-  lUpdated := TDSciUpdateFlagsSetFromInt(AUpdated);
+  lUpdated := TDSciUpdateFlagsSet(TDSciUpdateSetFromInt(AUpdated));
   lEditor := GetEditorComponent(FOwner);
   if lEditor.AutoCActive then
     UpdateAutoComplete;

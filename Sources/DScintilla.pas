@@ -3390,7 +3390,7 @@ begin
         ApplyBraceHighlight(INVALID_POSITION, INVALID_POSITION);
 
       FSettings.NotifyUpdateUI(ASCNotification.updated);
-      DoUpdateUI(TDSciUpdateFlagsSetFromInt(ASCNotification.updated));
+      DoUpdateUI(TDSciUpdateFlagsSet(TDSciUpdateSetFromInt(ASCNotification.updated)));
     end;
 
   SCN_FOCUSIN:

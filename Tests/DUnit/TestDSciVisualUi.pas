@@ -1,4 +1,4 @@
-unit TestDSciVisualUi;
+﻿unit TestDSciVisualUi;
 
 interface
 
@@ -1216,7 +1216,7 @@ begin
     Check((lLanguageCombo <> nil) and IsDescendantOf(lLanguageCombo, lStyleGroup),
       'Language combo should be inside Style Options');
 
-    ActivateSettingsCategory(Self, lDialog, 'Selection && Highlighting');
+    ActivateSettingsCategory(Self, lDialog, 'Selection & Highlighting');
     lSearchHighlightGroup := FindVisibleGroupBoxByCaption(lDialog, 'Search Highlight');
     lHighlightLabel := FindVisibleLabelByCaption(lDialog, 'Highlight color');
     Check((lSearchHighlightGroup <> nil) and (lHighlightLabel <> nil) and
@@ -1301,7 +1301,7 @@ begin
     Check(not SameText(Trim(lStyleGroup.Caption), ''),
       'Style Options caption should stay assigned');
 
-    ActivateSettingsCategory(Self, lDialog, 'Selection && Highlighting');
+    ActivateSettingsCategory(Self, lDialog, 'Selection & Highlighting');
     lSelectionGroup := FindVisibleGroupBoxByCaption(lDialog, 'Selection');
     lSearchHighlightGroup := FindVisibleGroupBoxByCaption(lDialog, 'Search Highlight');
     Check(lSelectionGroup <> nil, 'Selection group should exist');
@@ -1348,7 +1348,7 @@ begin
       Format('Style stack should start below the group box caption area (stack=%d, adjusted=%d)',
         [lStyleStack.Top, lAdjusted.Top]));
 
-    ActivateSettingsCategory(Self, lDialog, 'Selection && Highlighting');
+    ActivateSettingsCategory(Self, lDialog, 'Selection & Highlighting');
     lSelectionGroup := FindVisibleGroupBoxByCaption(lDialog, 'Selection');
     lSearchHighlightGroup := FindVisibleGroupBoxByCaption(lDialog, 'Search Highlight');
     lSelectionStack := FindDescendantControl(lSelectionGroup, TStackPanel) as TStackPanel;
@@ -1400,7 +1400,6 @@ var
   lFoldGutter: TCheckBox;
   lGutterStyleCombo: TComboBox;
   lGutterStyleLabel: TLabel;
-  lLineNumbering: TCheckBox;
   lLineWrapping: TCheckBox;
   lMarginsGroup: TGroupBox;
 begin
@@ -1409,7 +1408,6 @@ begin
     ActivateSettingsCategory(Self, lDialog, 'Wrapping');
 
     lMarginsGroup := FindVisibleGroupBoxByCaption(lDialog, 'Margins');
-    lLineNumbering := FindCheckBoxByCaption(lDialog, 'Line numbering');
     lBookmarkGutter := FindCheckBoxByCaption(lDialog, 'Bookmark gutter');
     lFoldGutter := FindCheckBoxByCaption(lDialog, 'Fold gutter');
     lLineWrapping := FindCheckBoxByCaption(lDialog, 'Line wrapping');
@@ -1417,15 +1415,11 @@ begin
     lGutterStyleCombo := FindFieldForLabel(lGutterStyleLabel, TComboBox) as TComboBox;
 
     Check(lMarginsGroup <> nil, 'Settings dialog should expose a Margins group');
-    Check(lLineNumbering <> nil, 'Margins group should contain the Line numbering checkbox');
     Check(lBookmarkGutter <> nil, 'Margins group should contain the Bookmark gutter checkbox');
     Check(lFoldGutter <> nil, 'Margins group should contain the Fold gutter checkbox');
     Check(lLineWrapping <> nil, 'Margins group should contain the Line wrapping checkbox');
     Check(lGutterStyleLabel <> nil, 'Margins group should expose the Gutter style label');
     Check(lGutterStyleCombo <> nil, 'Margins group should expose the Gutter style combo');
-    Check(lMarginsGroup.ScreenToClient(lLineNumbering.ClientToScreen(Point(0,
-      lLineNumbering.Height))).Y <= lMarginsGroup.ClientHeight,
-      'Line numbering should be visible inside Margins');
     Check(lMarginsGroup.ScreenToClient(lBookmarkGutter.ClientToScreen(Point(0,
       lBookmarkGutter.Height))).Y <= lMarginsGroup.ClientHeight,
       'Bookmark gutter should be visible inside Margins');
@@ -1454,21 +1448,21 @@ var
 begin
   lDialog := TDSciVisualSettingsDialog.Create(nil);
   try
-    ActivateSettingsCategory(Self, lDialog, 'Selection && Highlighting');
+    ActivateSettingsCategory(Self, lDialog, 'Selection & Highlighting');
     lSearchGroup := FindVisibleGroupBoxByCaption(lDialog, 'Search');
     lSearchSync := FindCheckBoxByCaption(lDialog, 'Sync inline search with Find dialog');
-    Check(lSearchGroup <> nil, 'Selection && Highlighting should expose the Search group');
+    Check(lSearchGroup <> nil, 'Selection & Highlighting should expose the Search group');
     Check(lSearchSync <> nil, 'Search group should expose the SearchSync checkbox');
     Check(lSearchSync.Visible, 'SearchSync checkbox should stay visible');
     Check(IsDescendantOf(lSearchSync, lSearchGroup),
       'SearchSync checkbox should live inside the Search group');
 
-    ActivateSettingsCategory(Self, lDialog, 'Folding && Limits');
-    lFileSizeLabel := FindLabelByCaption(lDialog, 'File size limit');
+    ActivateSettingsCategory(Self, lDialog, 'Folding & Limits');
+    lFileSizeLabel := FindLabelByCaption(lDialog, 'File size limit (0=no limit)');
     lFileSizeEdit := FindFieldForLabel(lFileSizeLabel, TSpinEdit) as TSpinEdit;
     lDocumentGroup := FindVisibleGroupBoxByCaption(lDialog, 'Document');
 
-    Check(lDocumentGroup <> nil, 'Folding && Limits should expose the Document group');
+    Check(lDocumentGroup <> nil, 'Folding & Limits should expose the Document group');
     Check(lFileSizeLabel <> nil, 'Document should expose the File size limit label');
     Check(lFileSizeEdit <> nil, 'File size limit should use a spin edit');
     Check(IsDescendantOf(lFileSizeLabel, lDocumentGroup),
@@ -1623,9 +1617,9 @@ begin
     Check(lBackgroundBox.Width >= 80,
       Format('Background preview should keep a usable width (actual=%d)', [lBackgroundBox.Width]));
 
-    ActivateSettingsCategory(Self, lDialog, 'Selection && Highlighting');
+    ActivateSettingsCategory(Self, lDialog, 'Selection & Highlighting');
     lSearchHighlightGroup := FindVisibleGroupBoxByCaption(lDialog, 'Search Highlight');
-    Check(lSearchHighlightGroup <> nil, 'Selection && Highlighting should expose Search Highlight');
+    Check(lSearchHighlightGroup <> nil, 'Selection & Highlighting should expose Search Highlight');
     lHighlightLabel := FindDescendantLabelByCaption(lSearchHighlightGroup, 'Highlight color');
     lTransparencyLabel := FindDescendantLabelByCaption(lSearchHighlightGroup, 'Transparency');
     lOutlineLabel := FindDescendantLabelByCaption(lSearchHighlightGroup, 'Outline');
@@ -1691,7 +1685,7 @@ begin
       Format('Theme selector should stay above Style Options inside the Styles card (theme=%d, style=%d)',
         [lThemeTop, lStyleGroup.ClientToScreen(Point(0, 0)).Y]));
 
-    ActivateSettingsCategory(Self, lDialog, 'Selection && Highlighting');
+    ActivateSettingsCategory(Self, lDialog, 'Selection & Highlighting');
     Check(FindVisibleLabelByCaption(lDialog, 'Theme') = nil,
       'Theme selector should be hidden outside the Styles category');
     lSelectionGroup := FindVisibleGroupBoxByCaption(lDialog, 'Selection');
@@ -1722,23 +1716,23 @@ var
 begin
   lDialog := TDSciVisualSettingsDialog.Create(nil);
   try
-    ActivateSettingsCategory(Self, lDialog, 'Selection && Highlighting');
+    ActivateSettingsCategory(Self, lDialog, 'Selection & Highlighting');
     lCardPanel := FindCardPanel(lDialog);
     lSearchGroup := FindVisibleGroupBoxByCaption(lDialog, 'Search');
     Check(lCardPanel <> nil, 'Settings dialog should expose a TCardPanel');
-    Check(lSearchGroup <> nil, 'Selection && Highlighting should expose the Search group');
+    Check(lSearchGroup <> nil, 'Selection & Highlighting should expose the Search group');
     Check(lCardPanel.ScreenToClient(lSearchGroup.ClientToScreen(Point(0, lSearchGroup.Height))).Y <=
       lCardPanel.ClientHeight,
-      'Selection && Highlighting content should fit vertically inside the active card');
-    CheckChildrenStayWithinParent(Self, lDialog, 'Selection && Highlighting settings');
+      'Selection & Highlighting content should fit vertically inside the active card');
+    CheckChildrenStayWithinParent(Self, lDialog, 'Selection & Highlighting settings');
 
-    ActivateSettingsCategory(Self, lDialog, 'Folding && Limits');
+    ActivateSettingsCategory(Self, lDialog, 'Folding & Limits');
     lPrintingGroup := FindVisibleGroupBoxByCaption(lDialog, 'Printing');
-    Check(lPrintingGroup <> nil, 'Folding && Limits should expose the Printing group');
+    Check(lPrintingGroup <> nil, 'Folding & Limits should expose the Printing group');
     Check(lCardPanel.ScreenToClient(lPrintingGroup.ClientToScreen(Point(0, lPrintingGroup.Height))).Y <=
       lCardPanel.ClientHeight,
-      'Folding && Limits content should fit vertically inside the active card');
-    CheckChildrenStayWithinParent(Self, lDialog, 'Folding && Limits settings');
+      'Folding & Limits content should fit vertically inside the active card');
+    CheckChildrenStayWithinParent(Self, lDialog, 'Folding & Limits settings');
   finally
     lDialog.Hide;
     lDialog.Free;
@@ -1861,7 +1855,7 @@ const
     'Line Wrapping',
     'Margins',
     'Caret',
-    'Copy && Paste',
+    'Copy & Paste',
     'Code Folding',
     'Document',
     'Printing'
@@ -1894,7 +1888,7 @@ const
     'Smart Highlighting',
     'Line Wrapping',
     'Caret',
-    'Copy && Paste',
+    'Copy & Paste',
     'Code Folding'
   );
 begin
@@ -2068,7 +2062,7 @@ var
 begin
   lDialog := TDSciVisualSettingsDialog.Create(nil);
   try
-    ActivateSettingsCategory(Self, lDialog, 'Selection && Highlighting');
+    ActivateSettingsCategory(Self, lDialog, 'Selection & Highlighting');
 
     lHighlightLabel := FindVisibleLabelByCaption(lDialog, 'Highlight color');
     Check(lHighlightLabel <> nil, 'Settings dialog should expose the Highlight color label');

@@ -28,7 +28,7 @@ if not exist "%BCC64X%" (
 )
 
 where ld.exe >nul 2>nul || (
-    echo [ERROR] ld.exe (GNU ld) not found on PATH.
+    echo [ERROR] ld.exe ^(GNU ld^) not found on PATH.
     echo Install Strawberry Perl or add Binutils to PATH.
     exit /b 1
 )
@@ -53,7 +53,7 @@ set "LEX_INC=%LEX_DIR%\include"
 set "BCC_SHIMS=%C_SRC%\bcc_shims"
 
 rem Common compiler flags
-set "CXXFLAGS=-c -std=c++17 -O2 -fno-exceptions -DNDEBUG -DSCI_LEXER -D_CRT_SECURE_NO_WARNINGS"
+set "CXXFLAGS=-c -std=c++17 -O2 -DNDEBUG -DSCI_LEXER -D_CRT_SECURE_NO_WARNINGS"
 set "CXXFLAGS=%CXXFLAGS% -I"%SCI_INC%" -I"%LEX_INC%""
 set "CXXFLAGS=%CXXFLAGS% -I"%SCI_DIR%\src" -I"%SCI_DIR%\win32""
 set "CXXFLAGS=%CXXFLAGS% -I"%LEX_DIR%\src" -I"%LEX_DIR%\lexlib""
