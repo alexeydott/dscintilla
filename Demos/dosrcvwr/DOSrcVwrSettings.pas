@@ -5,7 +5,7 @@ interface
 uses
   System.SysUtils,
   Winapi.Windows,
-  DOpusPluginHelpers;
+  DOpusPluginHelpers, DOpusPluginSupport;
 
 type
   TDOSrcVwrSettings = class
@@ -58,10 +58,13 @@ begin
   if FConfigFilePath <> '' then
     Exit(FConfigFilePath);
 
-  if (FHelper <> nil) and FHelper.GetConfigPath(0, @LBuf[0], MAX_PATH + 1) then
+  if (FHelper <> nil) and FHelper.GetConfigPath(OPUSPATH_CONFIG, @LBuf[0], MAX_PATH + 1) then
     LConfigRoot := TPath.Combine(string(LBuf), 'dosrcvwr')
   else
-    LConfigRoot := TPath.Combine(TPath.GetHomePath, 'dosrcvwr');
+    LConfigRoot := TPath.Combine(
+      TPath.Combine(GetEnvironmentVariable('APPDATA'),
+        'GPSoftware\Directory Opus\ConfigFiles'),
+      'dosrcvwr');
 
   FConfigFilePath := TPath.Combine(LConfigRoot, cSettingsFileName);
 
