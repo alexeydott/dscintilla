@@ -146,6 +146,19 @@ begin
     Result := FindConfigStyle(ADefaultGroup, AName);
 end;
 
+{ Resolves a global widget style by searching only dvskGlobal entries, without
+  falling through to dvskLexer. This ensures per-language overrides cannot
+  hijack global Scintilla widget styles such as the line number margin. }
+function ResolveConfigGlobalStyle(const ADefaultGroup, ACurrentGroup: TDSciVisualStyleGroup;
+  const AName: string): TDSciVisualStyleData;
+begin
+  Result := nil;
+  if ACurrentGroup <> nil then
+    Result := ACurrentGroup.FindStyle(AName, dvskGlobal);
+  if (Result = nil) and (ADefaultGroup <> nil) then
+    Result := ADefaultGroup.FindStyle(AName, dvskGlobal);
+end;
+
 function UsesPlainTextLexer(const AGroup: TDSciVisualStyleGroup): Boolean;
 begin
   Result := Assigned(AGroup) and AGroup.HasLexerID and
@@ -219,28 +232,28 @@ procedure ApplyConfigGlobalStyles(const AEditor: TDScintilla;
 var
   lStyle: TDSciVisualStyleData;
 begin
-  lStyle := ResolveConfigStyle(ADefaultGroup, ACurrentGroup, 'Default Style');
+  lStyle := ResolveConfigGlobalStyle(ADefaultGroup, ACurrentGroup, 'Default Style');
   if lStyle = nil then
-    lStyle := ResolveConfigStyle(ADefaultGroup, ACurrentGroup, 'DEFAULT');
+    lStyle := ResolveConfigGlobalStyle(ADefaultGroup, ACurrentGroup, 'DEFAULT');
 
   AEditor.StyleResetDefault;
   ApplyVisualStyleAttributes(AEditor, STYLE_DEFAULT, lStyle);
   AEditor.StyleClearAll;
 
   ApplyVisualStyleAttributes(AEditor, STYLE_LINENUMBER,
-    ResolveConfigStyle(ADefaultGroup, ACurrentGroup, 'Line number margin'));
+    ResolveConfigGlobalStyle(ADefaultGroup, ACurrentGroup, 'Line number margin'));
   ApplyVisualStyleAttributes(AEditor, STYLE_BRACELIGHT,
-    ResolveConfigStyle(ADefaultGroup, ACurrentGroup, 'Brace highlight style'));
+    ResolveConfigGlobalStyle(ADefaultGroup, ACurrentGroup, 'Brace highlight style'));
   ApplyVisualStyleAttributes(AEditor, STYLE_BRACEBAD,
-    ResolveConfigStyle(ADefaultGroup, ACurrentGroup, 'Bad brace colour'));
+    ResolveConfigGlobalStyle(ADefaultGroup, ACurrentGroup, 'Bad brace colour'));
   ApplyVisualStyleAttributes(AEditor, STYLE_INDENTGUIDE,
-    ResolveConfigStyle(ADefaultGroup, ACurrentGroup, 'Indent guideline style'));
+    ResolveConfigGlobalStyle(ADefaultGroup, ACurrentGroup, 'Indent guideline style'));
   ApplyConfigFoldMarkerColours(AEditor,
-    ResolveConfigStyle(ADefaultGroup, ACurrentGroup, 'Fold'), False);
+    ResolveConfigGlobalStyle(ADefaultGroup, ACurrentGroup, 'Fold'), False);
   ApplyConfigFoldMarkerColours(AEditor,
-    ResolveConfigStyle(ADefaultGroup, ACurrentGroup, 'Fold active'), True);
+    ResolveConfigGlobalStyle(ADefaultGroup, ACurrentGroup, 'Fold active'), True);
 
-  lStyle := ResolveConfigStyle(ADefaultGroup, ACurrentGroup, 'Current line background colour');
+  lStyle := ResolveConfigGlobalStyle(ADefaultGroup, ACurrentGroup, 'Current line background colour');
   if (lStyle <> nil) and lStyle.HasBackColor then
   begin
     AEditor.CaretLineVisible := True;
@@ -249,7 +262,7 @@ begin
   else
     AEditor.CaretLineVisible := False;
 
-  lStyle := ResolveConfigStyle(ADefaultGroup, ACurrentGroup, 'Selected text colour');
+  lStyle := ResolveConfigGlobalStyle(ADefaultGroup, ACurrentGroup, 'Selected text colour');
   if lStyle <> nil then
   begin
     if lStyle.HasForeColor then
@@ -263,7 +276,7 @@ begin
       AEditor.SetSelBack(False, clWhite);
   end;
 
-  lStyle := ResolveConfigStyle(ADefaultGroup, ACurrentGroup, 'Multi-selected text color');
+  lStyle := ResolveConfigGlobalStyle(ADefaultGroup, ACurrentGroup, 'Multi-selected text color');
   if lStyle <> nil then
   begin
     if lStyle.HasForeColor then
@@ -272,25 +285,25 @@ begin
       AEditor.AdditionalSelBack := lStyle.BackColor;
   end;
 
-  lStyle := ResolveConfigStyle(ADefaultGroup, ACurrentGroup, 'Caret colour');
+  lStyle := ResolveConfigGlobalStyle(ADefaultGroup, ACurrentGroup, 'Caret colour');
   if (lStyle <> nil) and lStyle.HasForeColor then
     AEditor.CaretFore := lStyle.ForeColor;
 
-  lStyle := ResolveConfigStyle(ADefaultGroup, ACurrentGroup, 'Multi-edit carets color');
+  lStyle := ResolveConfigGlobalStyle(ADefaultGroup, ACurrentGroup, 'Multi-edit carets color');
   if (lStyle <> nil) and lStyle.HasForeColor then
     AEditor.AdditionalCaretFore := lStyle.ForeColor;
 
-  lStyle := ResolveConfigStyle(ADefaultGroup, ACurrentGroup, 'Edge colour');
+  lStyle := ResolveConfigGlobalStyle(ADefaultGroup, ACurrentGroup, 'Edge colour');
   if (lStyle <> nil) and lStyle.HasForeColor then
     AEditor.EdgeColour := lStyle.ForeColor;
 
-  lStyle := ResolveConfigStyle(ADefaultGroup, ACurrentGroup, 'White space symbol');
+  lStyle := ResolveConfigGlobalStyle(ADefaultGroup, ACurrentGroup, 'White space symbol');
   if (lStyle <> nil) and lStyle.HasForeColor then
     AEditor.SetWhitespaceFore(True, lStyle.ForeColor)
   else
     AEditor.SetWhitespaceFore(False, clBlack);
 
-  lStyle := ResolveConfigStyle(ADefaultGroup, ACurrentGroup, 'Fold margin');
+  lStyle := ResolveConfigGlobalStyle(ADefaultGroup, ACurrentGroup, 'Fold margin');
   if lStyle <> nil then
   begin
     if lStyle.HasBackColor then
@@ -310,9 +323,9 @@ procedure ApplyConfigDefaultStyle(const AEditor: TDScintilla;
 var
   lStyle: TDSciVisualStyleData;
 begin
-  lStyle := ResolveConfigStyle(ADefaultGroup, ACurrentGroup, 'Default Style');
+  lStyle := ResolveConfigGlobalStyle(ADefaultGroup, ACurrentGroup, 'Default Style');
   if lStyle = nil then
-    lStyle := ResolveConfigStyle(ADefaultGroup, ACurrentGroup, 'DEFAULT');
+    lStyle := ResolveConfigGlobalStyle(ADefaultGroup, ACurrentGroup, 'DEFAULT');
   ApplyVisualStyleAttributes(AEditor, STYLE_DEFAULT, lStyle);
 end;
 
@@ -881,7 +894,8 @@ begin
     Exit;
 
   for lStyle in AGroup.Styles do
-    if lStyle.HasStyleID then
+    if lStyle.HasStyleID and
+        not ((lStyle.StyleID >= STYLE_DEFAULT) and (lStyle.StyleID < 128)) then
       ApplyVisualStyleAttributes(AEditor, lStyle.StyleID, lStyle);
 end;
 
