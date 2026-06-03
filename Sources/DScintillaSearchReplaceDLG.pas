@@ -48,20 +48,20 @@ type
     cMinDialogWidth      = 580;
     cMinDialogHeight     = 320;   { compact: was 400 }
     cDialogPadding       = 8;     { compact: was 12  }
-    cSectionGap          = 6;     { compact: was 10  }
+    cSectionGap          = 8;     { compact: was 10  }
     cRowGap              = 4;     { compact: was 8   }
     cButtonHeight        = 28;    { compact: was 34  }
-    cInputHeight         = 24;    { compact: was 30  }
+    cInputHeight         = 25;    { minimum field height at 96 DPI; was 24 }
     cActionPanelWidth    = 180;
     cSelectionGroupWidth = 180;
-    cGroupPadding        = 6;     { compact: was 8   }
+    cGroupPadding        = 5;     { compact: was 8   }
     cCheckHeight         = 20;    { compact: was 24  }
     cMinFieldGap         = 8;
     cSwapButtonWidth     = 50;
     cSmallNavButtonWidth = 75;
     cFindPrevButtonWidth = 40;
   private
-    // ── Find tab ──────────────────────────────────────────────────────────
+    // -- Find tab ----------------------------------------------------------
     FPageControl: TPageControl;
     FFindTab: TTabSheet;
     FRootPanel: TPanel;
@@ -96,7 +96,7 @@ type
     FRegexModeRadio: TRadioButton;
     FRegexDotNewlineCheck: TCheckBox;
 
-    // ── Replace tab ───────────────────────────────────────────────────────
+    // -- Replace tab -------------------------------------------------------
     FReplaceTab: TTabSheet;
     FReplaceRootPanel: TPanel;
     FReplaceActionsPanel: TPanel;
@@ -132,14 +132,14 @@ type
     FReplaceRegexModeRadio: TRadioButton;
     FReplaceRegexDotNewlineCheck: TCheckBox;
 
-    // ── State ─────────────────────────────────────────────────────────────
+    // -- State -------------------------------------------------------------
     FOnExecuteSearch: TDSciFindDialogExecuteEvent;
     FUpdatingLayout: Boolean;
     FReplaceUpdatingLayout: Boolean;
     FReadOnly: Boolean;
     FUpdatingSync: Boolean;
 
-    // ── Internal helpers ──────────────────────────────────────────────────
+    // -- Internal helpers --------------------------------------------------
     function GetSearchConfig: TDSciSearchConfig;
     function MeasureSingleLineTextHeight(AFont: TFont): Integer;
     function MeasureSingleLineTextWidth(AFont: TFont; const AText: string): Integer;
@@ -186,11 +186,12 @@ type
     procedure SetReadOnly(AValue: Boolean);
     procedure UpdateReplaceButtonStates;
 
-    class function Dpi: Integer; static;
-    class function Scale(AValue: Integer): Integer; static;
+    function Dpi: Integer;
+    function Scale(AValue: Integer): Integer;
   protected
     procedure ChangeScale(M, D: Integer; isDpiChange: Boolean); override;
     procedure CreateWnd; override;
+    procedure DoShow; override;
     procedure Resize; override;
   public
     constructor Create(AOwner: TComponent); override;
@@ -217,19 +218,19 @@ implementation
 type
   TGroupBoxAccess = class(TGroupBox);
 
-// ── Class helpers ─────────────────────────────────────────────────────────────
+// -- Class helpers -------------------------------------------------------------
 
-class function TDSciSearchReplaceDialog.Dpi: Integer;
+function TDSciSearchReplaceDialog.Dpi: Integer;
 begin
-  Result := Screen.PixelsPerInch;
+  Result := PixelsPerInch;
 end;
 
-class function TDSciSearchReplaceDialog.Scale(AValue: Integer): Integer;
+function TDSciSearchReplaceDialog.Scale(AValue: Integer): Integer;
 begin
   Result := MulDiv(AValue, Dpi, 96);
 end;
 
-// ── Construction ──────────────────────────────────────────────────────────────
+// -- Construction --------------------------------------------------------------
 
 constructor TDSciSearchReplaceDialog.Create(AOwner: TComponent);
 begin
@@ -316,7 +317,7 @@ begin
   FRootPanel.Align := alClient;
   // Padding set in RefreshLayout
 
-  // ── Top row: [Search label | combo] [▲ ▼] ──────────────────────────────
+  // -- Top row: [Search label | combo] [▲ ▼] ------------------------------
   FTopRowPanel := CreateHostPanel(FRootPanel);
   FTopRowPanel.Align := alTop;
   FTopRowPanel.AlignWithMargins := True;
@@ -368,7 +369,7 @@ begin
   // Margins.Top for vertical centering set in RefreshLayout;
   // Width auto-managed by alTop (fills parent width)
 
-  // ── Body: [Main panel] [Actions panel] ──────────────────────────────────
+  // -- Body: [Main panel] [Actions panel] ----------------------------------
   FBodyPanel := CreateHostPanel(FRootPanel);
   FBodyPanel.Align := alClient;
 
@@ -499,7 +500,7 @@ begin
   FReplaceRootPanel.Align := alClient;
   // Padding set in RefreshReplaceLayout
 
-  // ── Actions panel (right): [▲▼ nav row] + [Replace] + [Replace All] + [Close] ─
+  // -- Actions panel (right): [▲▼ nav row] + [Replace] + [Replace All] + [Close] -
   FReplaceActionsPanel := CreateHostPanel(FReplaceRootPanel);
   FReplaceActionsPanel.Align := alRight;
   FReplaceActionsPanel.AlignWithMargins := True;
@@ -540,11 +541,11 @@ begin
   FReplaceCloseButton.Align := alTop;
   // Heights and margins set in RefreshReplaceLayout
 
-  // ── Body panel ──────────────────────────────────────────────────────────────
+  // -- Body panel --------------------------------------------------------------
   FReplaceBodyPanel := CreateHostPanel(FReplaceRootPanel);
   FReplaceBodyPanel.Align := alClient;
 
-  // ── Fields panel (alTop): holds swap panel (alRight) + combo+result area (alClient) ─
+  // -- Fields panel (alTop): holds swap panel (alRight) + combo+result area (alClient) -
   // FReplaceNavPanel is alRight with no alTop/alBottom siblings, so VCL gives it the
   // full panel height. FReplaceComboResultArea (alClient) fills the remaining width.
   FReplaceFieldsPanel := CreateHostPanel(FReplaceBodyPanel);
@@ -590,11 +591,12 @@ begin
   FReplaceSearchCombo.AutoComplete := False;
   FReplaceSearchCombo.Align := alClient;
   FReplaceSearchCombo.AlignWithMargins := True;
-  // Margins.Left set in RefreshReplaceLayout
+  // Margins set in RefreshReplaceLayout
 
   // Row 2: [Replace with: label | combo] inside FReplaceComboResultArea
   FReplaceRow2Panel := CreateHostPanel(FReplaceComboResultArea);
   FReplaceRow2Panel.Align := alTop;
+  FReplaceRow2Panel.AlignWithMargins := True;
   // Height set in RefreshReplaceLayout (no bottom margin — last row before result panel)
 
   FReplaceWithLabel := TLabel.Create(Self);
@@ -612,9 +614,9 @@ begin
   FReplaceWithCombo.AutoComplete := False;
   FReplaceWithCombo.Align := alClient;
   FReplaceWithCombo.AlignWithMargins := True;
-  // Margins.Left set in RefreshReplaceLayout
+  // Margins set in RefreshReplaceLayout
 
-  // ── Result / status label – alTop panel in FReplaceBodyPanel, directly after
+  // -- Result / status label – alTop panel in FReplaceBodyPanel, directly after
   // FReplaceFieldsPanel. Keeping it outside FReplaceFieldsPanel ensures
   // FReplaceNavPanel (alRight) always gets the full two-row height.
   FReplaceResultPanel := CreateHostPanel(FReplaceBodyPanel);
@@ -630,7 +632,7 @@ begin
   FReplaceResultLabel.WordWrap := False;
   FReplaceResultLabel.Caption := '0 matches';
 
-  // ── Groups row: Search Options (left) + Scope (right) side-by-side ──────────
+  // -- Groups row: Search Options (left) + Scope (right) side-by-side ----------
   FReplaceGroupsRowPanel := CreateHostPanel(FReplaceBodyPanel);
   FReplaceGroupsRowPanel.Align := alTop;
   FReplaceGroupsRowPanel.AlignWithMargins := True;
@@ -644,7 +646,7 @@ begin
   FReplaceScopeGroup := CreateGroupSection(FReplaceGroupsRowPanel, 'Scope');
   FReplaceInSelectionCheck := CreateCheckBox(FReplaceScopeGroup, 'In selection');
 
-  // ── Search Mode group ────────────────────────────────────────────────────────
+  // -- Search Mode group --------------------------------------------------------
   FReplaceSearchModeGroup := CreateGroupSection(FReplaceBodyPanel, 'Search Mode');
   FReplaceSearchModeGroup.Align := alTop;
 
@@ -675,7 +677,7 @@ begin
   SetReplaceSearchMode(dsmNormal);
 end;
 
-// ── Window lifecycle ──────────────────────────────────────────────────────────
+// -- Window lifecycle ----------------------------------------------------------
 
 procedure TDSciSearchReplaceDialog.CreateWnd;
 begin
@@ -698,7 +700,16 @@ begin
   RefreshReplaceLayout;
 end;
 
-// ── Text measurement ──────────────────────────────────────────────────────────
+procedure TDSciSearchReplaceDialog.DoShow;
+begin
+  inherited DoShow;
+  // Re-run layout after the form becomes visible so child HWNDs are allocated
+  // and FSelectionGroup.ClientRect.Top reflects the actual themed caption height.
+  RefreshLayout;
+  RefreshReplaceLayout;
+end;
+
+// -- Text measurement ----------------------------------------------------------
 
 function TDSciSearchReplaceDialog.MeasureSingleLineTextWidth(AFont: TFont;
   const AText: string): Integer;
@@ -744,7 +755,7 @@ begin
   end;
 end;
 
-// ── Layout helpers ────────────────────────────────────────────────────────────
+// -- Layout helpers ------------------------------------------------------------
 
 procedure TDSciSearchReplaceDialog.LayoutCheckBox(AControl: TButtonControl;
   ALeft, ATop, AWidth, AHeight: Integer);
@@ -768,8 +779,7 @@ var
 begin
   lPadding := Scale(cGroupPadding);
   lRowGap := Scale(cRowGap);
-  lRowHeight := Max(Scale(cCheckHeight),
-    MeasureSingleLineTextHeight(Font) + Scale(4));
+  lRowHeight := Scale(cCheckHeight);
 
   lContentRect := AGroup.ClientRect;
   TGroupBoxAccess(AGroup).AdjustClientRect(lContentRect);
@@ -790,7 +800,7 @@ begin
   AGroup.Height := AFinalHeight;
 end;
 
-// ── Find tab layout ───────────────────────────────────────────────────────────
+// -- Find tab layout -----------------------------------------------------------
 
 procedure TDSciSearchReplaceDialog.RefreshLayout;
 var
@@ -812,7 +822,9 @@ var
   lSelectionGroupLeft: Integer;
   lSelectionGroupWidth: Integer;
   lNeededRootHeight: Integer;
+  lNeededReplaceRootHeight: Integer;
   lTopRowHeight: Integer;
+  lGroupCaptionHeight: Integer;
 begin
   if FUpdatingLayout then
     Exit;
@@ -826,8 +838,10 @@ begin
     lPadding           := Scale(cDialogPadding);
     lSectionGap        := Scale(cSectionGap);
     lButtonGap         := Scale(cRowGap);
-    lInputHeight       := Scale(cInputHeight);
     lActionButtonHeight:= Scale(cButtonHeight);
+    // Use the actual Windows-determined combo height; clamp to at least cInputHeight
+    // so early calls (before Windows resizes the combo) still get a sensible minimum.
+    lInputHeight       := Max(Scale(cInputHeight), FSearchCombo.Height);
     lLabelHeight       := MeasureSingleLineTextHeight(Font);
     lLabelWidth        := MeasureSingleLineTextWidth(Font, FSearchLabel.Caption) + lButtonGap;
     lNavButtonWidth    := Scale(cSmallNavButtonWidth);
@@ -835,14 +849,17 @@ begin
     lTopRowHeight      := Max(lInputHeight, lActionButtonHeight);
     lResultHeight      := lLabelHeight + Scale(4);
 
-    // ── Root panel inner padding ───────────────────────────────────────────
+    // -- Root panel inner padding -------------------------------------------
     FRootPanel.Padding.Left   := lPadding;
     FRootPanel.Padding.Top    := lPadding;
     FRootPanel.Padding.Right  := lPadding;
     FRootPanel.Padding.Bottom := lPadding;
 
-    // ── Top row ────────────────────────────────────────────────────────────
+    // -- Top row ------------------------------------------------------------
     FTopRowPanel.Height         := lTopRowHeight;
+    FTopRowPanel.Margins.Top    := 0;
+    FTopRowPanel.Margins.Left   := 0;
+    FTopRowPanel.Margins.Right  := 0;
     FTopRowPanel.Margins.Bottom := lSectionGap;
 
     // Navigation panel (▲ ▼): fixed width, gap from search panel
@@ -863,30 +880,58 @@ begin
     // Label host: width drives FSearchLabel (alClient + tlCenter = no manual centering)
     FSearchLabelHost.Width := lLabelWidth;
 
-    // Combo: alTop + AlignWithMargins; Margins.Top centers it vertically
-    FSearchFieldHost.Margins.Left := Scale(cMinFieldGap);
-    FSearchCombo.Margins.Top := (lTopRowHeight - lInputHeight) div 2;
+    // Combo: alTop + AlignWithMargins; Margins.Top centers it vertically;
+    // all other margins are zeroed to avoid VCL constraining the natural combo height.
+    // Height is set explicitly so it matches cInputHeight even if the VCL default differs.
+    FSearchFieldHost.Margins.Left   := Scale(cMinFieldGap);
+    FSearchFieldHost.Margins.Top    := 0;
+    FSearchFieldHost.Margins.Bottom := 0;
+    FSearchFieldHost.Margins.Right  := 0;
+    FSearchCombo.Height := lInputHeight;
+    FSearchCombo.Margins.Top    := (lTopRowHeight - lInputHeight) div 2;
+    FSearchCombo.Margins.Bottom := 0;
+    FSearchCombo.Margins.Left   := 0;
+    FSearchCombo.Margins.Right  := 0;
     // Width auto-managed by Align=alTop inside FSearchFieldHost
 
-    // ── Actions panel (right of body) ──────────────────────────────────────
+    // -- Actions panel (right of body) --------------------------------------
     FActionsPanel.Width        := Scale(cActionPanelWidth);
+    FActionsPanel.Margins.Top    := 0;
+    FActionsPanel.Margins.Bottom := 0;
+    FActionsPanel.Margins.Right  := 0;
     FActionsPanel.Margins.Left := lButtonGap;
 
-    // Spacer height = result label area; aligns Count button with groups row
-    FActionsSpacer.Height := lResultHeight + lSectionGap;
+    // Spacer height = result label area + groupbox caption; aligns Count button
+    // with the client area of the Scope group (below its caption bar).
+    // Force handle creation so ClientRect.Top reflects the themed caption height.
+    FSelectionGroup.HandleNeeded;
+    lGroupCaptionHeight := FSelectionGroup.ClientRect.Top;
+    FActionsSpacer.Height := lResultHeight + lSectionGap + lGroupCaptionHeight;
 
     // Buttons: Align=alTop; only height and bottom margin needed
     FCountButton.Height         := lActionButtonHeight;
+    FCountButton.Margins.Top    := 0;
+    FCountButton.Margins.Left   := 0;
+    FCountButton.Margins.Right  := 0;
     FCountButton.Margins.Bottom := lButtonGap;
     FFindAllButton.Height         := lActionButtonHeight;
+    FFindAllButton.Margins.Top    := 0;
+    FFindAllButton.Margins.Left   := 0;
+    FFindAllButton.Margins.Right  := 0;
     FFindAllButton.Margins.Bottom := lButtonGap;
     FMarkAllButton.Height         := lActionButtonHeight;
+    FMarkAllButton.Margins.Top    := 0;
+    FMarkAllButton.Margins.Left   := 0;
+    FMarkAllButton.Margins.Right  := 0;
     FMarkAllButton.Margins.Bottom := lButtonGap;
     FCloseButton.Height := lActionButtonHeight;
     // Width auto-managed by Align=alTop; Y position auto-managed by VCL stacking
 
-    // ── Main panel: alTop stack ─────────────────────────────────────────────
+    // -- Main panel: alTop stack ---------------------------------------------
     FResultLabel.Height         := lResultHeight;
+    FResultLabel.Margins.Top    := 0;
+    FResultLabel.Margins.Left   := 0;
+    FResultLabel.Margins.Right  := 0;
     FResultLabel.Margins.Bottom := lSectionGap;
 
     // Groups row: Options (left) + Scope (right), manual side-by-side layout
@@ -908,6 +953,9 @@ begin
     FOptionsGroup.SetBounds(0, 0, Max(0, lSelectionGroupLeft - lButtonGap), lGroupHeight);
 
     FGroupsRowPanel.Height         := Max(lGroupHeight, lSelectionGroupHeight);
+    FGroupsRowPanel.Margins.Top    := 0;
+    FGroupsRowPanel.Margins.Left   := 0;
+    FGroupsRowPanel.Margins.Right  := 0;
     FGroupsRowPanel.Margins.Bottom := lSectionGap;
     // FSearchModeGroup is Align=alTop; VCL positions it after FGroupsRowPanel
 
@@ -916,7 +964,7 @@ begin
       Scale(110), lModeGroupHeight);
     // FSearchModeGroup.Height already set by LayoutGroupBoxContent
 
-    // ── Form height check ──────────────────────────────────────────────────
+    // -- Form height check --------------------------------------------------
     // FRootPanel content = top-row + sectionGap + alTop stack in FMainPanel + padding*2
     lNeededRootHeight :=
       (lTopRowHeight + lSectionGap) +
@@ -924,6 +972,17 @@ begin
       FGroupsRowPanel.Height + lSectionGap +
       lModeGroupHeight +
       lPadding * 2;
+
+    // Replace tab has 2 combo rows instead of 1 search row+result label,
+    // so it needs more vertical space.  Expand ONCE to the maximum of both tabs
+    // here; RefreshReplaceLayout only does layout, never expands ClientHeight.
+    lNeededReplaceRootHeight :=
+      (lActionButtonHeight * 2 + lButtonGap + lSectionGap) +  // fields panel + margin
+      lResultHeight + lSectionGap +                           // result panel + margin
+      FGroupsRowPanel.Height + lSectionGap +                   // groups row (same as find)
+      lModeGroupHeight +                                       // mode group (same as find)
+      lPadding * 2;
+    lNeededRootHeight := Max(lNeededRootHeight, lNeededReplaceRootHeight);
 
     Constraints.MinHeight := Max(Scale(cMinDialogHeight),
       Height - FRootPanel.ClientHeight + lNeededRootHeight);
@@ -938,22 +997,26 @@ begin
   end;
 end;
 
-// ── Replace tab layout ────────────────────────────────────────────────────────
+// -- Replace tab layout --------------------------------------------------------
 
 procedure TDSciSearchReplaceDialog.RefreshReplaceLayout;
 var
-  lAdditionalClientHeight: Integer;
   lActionButtonHeight: Integer;
   lButtonGap: Integer;
+  lComboBotMargin: Integer;
+  lComboTopMargin: Integer;
+  lFieldRowHeight: Integer;
   lFieldsPanelHeight: Integer;
   lFindPrevW: Integer;
   lFindNextW: Integer;
   lGroupHeight: Integer;
+  lInputHeight: Integer;
+  lLabelHeight: Integer;
   lLabelWidth: Integer;
   lModeGroupHeight: Integer;
   lNavRowWidth: Integer;
-  lNeededRootHeight: Integer;
   lPadding: Integer;
+  lResultHeight: Integer;
   lScopeGroupHeight: Integer;
   lScopeGroupLeft: Integer;
   lScopeGroupWidth: Integer;
@@ -974,6 +1037,15 @@ begin
     lSectionGap         := Scale(cSectionGap);
     lButtonGap          := Scale(cRowGap);
     lActionButtonHeight := Scale(cButtonHeight);
+    // Use the actual Windows-determined combo height so centering is always correct;
+    // clamp to at least cInputHeight to guard against early calls before the window
+    // has been resized by Windows.
+    lInputHeight        := Max(Scale(cInputHeight), FReplaceSearchCombo.Height);
+    lFieldRowHeight     := Max(lInputHeight, lActionButtonHeight);
+    lComboTopMargin     := (lFieldRowHeight - lInputHeight) div 2;
+    lComboBotMargin     := lFieldRowHeight - lInputHeight - lComboTopMargin;
+    lLabelHeight        := MeasureSingleLineTextHeight(Font);
+    lResultHeight       := lLabelHeight + Scale(4);
     lSwapW              := Scale(cSwapButtonWidth);
     lFindPrevW          := Scale(cFindPrevButtonWidth);
 
@@ -983,14 +1055,17 @@ begin
       MeasureSingleLineTextWidth(Font, FReplaceWithLabel.Caption)
     ) + Scale(cMinFieldGap);
 
-    // ── Root panel padding ──────────────────────────────────────────────────
+    // -- Root panel padding --------------------------------------------------
     FReplaceRootPanel.Padding.Left   := lPadding;
     FReplaceRootPanel.Padding.Top    := lPadding;
     FReplaceRootPanel.Padding.Right  := lPadding;
     FReplaceRootPanel.Padding.Bottom := lPadding;
 
-    // ── Actions panel (right): nav row + action buttons ─────────────────────
+    // -- Actions panel (right): nav row + action buttons ---------------------
     FReplaceActionsPanel.Width        := Scale(cActionPanelWidth);
+    FReplaceActionsPanel.Margins.Top    := 0;
+    FReplaceActionsPanel.Margins.Bottom := 0;
+    FReplaceActionsPanel.Margins.Right  := 0;
     FReplaceActionsPanel.Margins.Left := lButtonGap;
 
     lNavRowWidth := Scale(cActionPanelWidth);
@@ -998,6 +1073,9 @@ begin
 
     // Nav row: [Find Previous (small)] [Find Next (wider)]
     FReplaceNavRowPanel.Height         := lActionButtonHeight;
+    FReplaceNavRowPanel.Margins.Top    := 0;
+    FReplaceNavRowPanel.Margins.Left   := 0;
+    FReplaceNavRowPanel.Margins.Right  := 0;
     FReplaceNavRowPanel.Margins.Bottom := lButtonGap;
     FReplaceFindPreviousButton.SetBounds(0, 0, lFindPrevW, lActionButtonHeight);
     FReplaceFindNextButton.SetBounds(lFindPrevW + lButtonGap, 0, lFindNextW,
@@ -1005,16 +1083,25 @@ begin
 
     // Action buttons
     FReplaceButton.Height            := lActionButtonHeight;
+    FReplaceButton.Margins.Top       := 0;
+    FReplaceButton.Margins.Left      := 0;
+    FReplaceButton.Margins.Right     := 0;
     FReplaceButton.Margins.Bottom    := lButtonGap;
     FReplaceAllButton.Height         := lActionButtonHeight;
+    FReplaceAllButton.Margins.Top    := 0;
+    FReplaceAllButton.Margins.Left   := 0;
+    FReplaceAllButton.Margins.Right  := 0;
     FReplaceAllButton.Margins.Bottom := lButtonGap;
     FReplaceCloseButton.Height       := lActionButtonHeight;
 
-    // ── Fields panel (alTop): two combo rows + swap panel (alRight) ─────────
+    // -- Fields panel (alTop): two combo rows + swap panel (alRight) ---------
     // FReplaceResultPanel is a sibling in FReplaceBodyPanel (not inside here)
     // so FReplaceNavPanel (alRight) always gets the full two-row height.
-    lFieldsPanelHeight := (lActionButtonHeight + lButtonGap) + lActionButtonHeight;
+    lFieldsPanelHeight := (lFieldRowHeight + lButtonGap) + lFieldRowHeight;
     FReplaceFieldsPanel.Height         := lFieldsPanelHeight;
+    FReplaceFieldsPanel.Margins.Top    := 0;
+    FReplaceFieldsPanel.Margins.Left   := 0;
+    FReplaceFieldsPanel.Margins.Right  := 0;
     FReplaceFieldsPanel.Margins.Bottom := lSectionGap;
 
     // Swap panel (alRight, spans full lFieldsPanelHeight): center swap button in the two-row combo area
@@ -1023,32 +1110,46 @@ begin
     FReplaceNavPanel.Margins.Top    := 0;   // zero so it spans the full fields-panel height
     FReplaceNavPanel.Margins.Bottom := 0;
     // Combo area height = row1 + gap + row2; center = (comboAreaH + buttonH) / 2 from top
-    FSwapButton.SetBounds(0, (lActionButtonHeight + lButtonGap) div 2,
+    FSwapButton.SetBounds(0, (lFieldRowHeight + lButtonGap) div 2,
       lSwapW, lActionButtonHeight);
 
-    // Row 1 (Find what) — zero out all side/top margins so rows span the same width
-    FReplaceRow1Panel.Height         := lActionButtonHeight;
+    // Row 1 (Find what): alTop combos, centered via Margins.Top, all other margins zeroed
+    // so default TMargins (3px on every side) can never squeeze or clip the combo border.
+    FReplaceRow1Panel.Height         := lFieldRowHeight;
     FReplaceRow1Panel.Margins.Top    := 0;
     FReplaceRow1Panel.Margins.Left   := 0;
     FReplaceRow1Panel.Margins.Right  := 0;
     FReplaceRow1Panel.Margins.Bottom := lButtonGap;
     FReplaceSearchLabel.Width        := lLabelWidth;
-    FReplaceSearchCombo.Margins.Left := Scale(cMinFieldGap);
+    FReplaceSearchCombo.Margins.Top    := lComboTopMargin;
+    FReplaceSearchCombo.Margins.Bottom := lComboBotMargin;
+    FReplaceSearchCombo.Margins.Left   := Scale(cMinFieldGap);
+    FReplaceSearchCombo.Margins.Right  := 0;
 
     // Row 2 (Replace with)
-    FReplaceRow2Panel.Height         := lActionButtonHeight;
+    FReplaceRow2Panel.Height         := lFieldRowHeight;
+    FReplaceRow2Panel.Margins.Top    := 0;
+    FReplaceRow2Panel.Margins.Left   := 0;
+    FReplaceRow2Panel.Margins.Right  := 0;
     FReplaceRow2Panel.Margins.Bottom := 0;
     FReplaceWithLabel.Width          := lLabelWidth;
+    FReplaceWithCombo.Margins.Top    := lComboTopMargin;
+    FReplaceWithCombo.Margins.Bottom := lComboBotMargin;
     FReplaceWithCombo.Margins.Left   := Scale(cMinFieldGap);
+    FReplaceWithCombo.Margins.Right  := 0;
+    DSciLog(Format('[DSCI-DIALOG] RefreshReplaceLayout lLabelWidth=%d lFieldRowHeight=%d lInputHeight=%d', [lLabelWidth, lFieldRowHeight, lInputHeight]), cDSciLogDebug);
+    DSciLog(Format('[DSCI-DIALOG] Row1Panel L=%d T=%d W=%d H=%d  Label W=%d  Combo L=%d W=%d MrgL=%d', [FReplaceRow1Panel.Left, FReplaceRow1Panel.Top, FReplaceRow1Panel.Width, FReplaceRow1Panel.Height, FReplaceSearchLabel.Width, FReplaceSearchCombo.Left, FReplaceSearchCombo.Width, FReplaceSearchCombo.Margins.Left]), cDSciLogDebug);
+    DSciLog(Format('[DSCI-DIALOG] Row2Panel L=%d T=%d W=%d H=%d  Label W=%d  Combo L=%d W=%d MrgL=%d', [FReplaceRow2Panel.Left, FReplaceRow2Panel.Top, FReplaceRow2Panel.Width, FReplaceRow2Panel.Height, FReplaceWithLabel.Width, FReplaceWithCombo.Left, FReplaceWithCombo.Width, FReplaceWithCombo.Margins.Left]), cDSciLogDebug);
+    DSciLog(Format('[DSCI-DIALOG] ComboResultArea L=%d T=%d W=%d H=%d', [FReplaceComboResultArea.Left, FReplaceComboResultArea.Top, FReplaceComboResultArea.Width, FReplaceComboResultArea.Height]), cDSciLogDebug);
 
-    // ── Result panel (alTop in FReplaceBodyPanel, after FReplaceFieldsPanel) ──
-    FReplaceResultPanel.Height          := lActionButtonHeight;
+    // -- Result panel (alTop in FReplaceBodyPanel, after FReplaceFieldsPanel) --
+    FReplaceResultPanel.Height          := lResultHeight;
     FReplaceResultPanel.Margins.Top     := 0;
     FReplaceResultPanel.Margins.Bottom  := lSectionGap;
     FReplaceResultPanel.Margins.Left    := 0;
     FReplaceResultPanel.Margins.Right   := 0;
 
-    // ── Groups row: Options (left) + Scope (right), manual side-by-side ─────
+    // -- Groups row: Options (left) + Scope (right), manual side-by-side -----
     lScopeGroupWidth := Scale(cSelectionGroupWidth);
     lScopeGroupLeft  := Max(0, FReplaceBodyPanel.ClientWidth - lScopeGroupWidth);
 
@@ -1066,29 +1167,18 @@ begin
       lGroupHeight);
 
     FReplaceGroupsRowPanel.Height         := Max(lGroupHeight, lScopeGroupHeight);
+    FReplaceGroupsRowPanel.Margins.Top    := 0;
+    FReplaceGroupsRowPanel.Margins.Left   := 0;
+    FReplaceGroupsRowPanel.Margins.Right  := 0;
     FReplaceGroupsRowPanel.Margins.Bottom := lSectionGap;
 
-    // ── Search Mode group ────────────────────────────────────────────────────
+    // -- Search Mode group ----------------------------------------------------
     LayoutGroupBoxContent(FReplaceSearchModeGroup,
       [FReplaceNormalModeRadio, FReplaceExtendedModeRadio, FReplaceRegexModeRadio,
        FReplaceRegexDotNewlineCheck],
       Scale(110), lModeGroupHeight);
 
     UpdateReplaceButtonStates;
-
-    // ── Form height check ────────────────────────────────────────────────────
-    lNeededRootHeight :=
-      lFieldsPanelHeight + lSectionGap +              // fields panel (rows) + Margins.Bottom
-      lActionButtonHeight + lSectionGap +             // result panel + Margins.Bottom
-      FReplaceGroupsRowPanel.Height + lSectionGap +   // groups row + gap
-      lModeGroupHeight +                              // mode group
-      lPadding * 2;                                   // root padding
-
-    Constraints.MinHeight := Max(Scale(cMinDialogHeight),
-      Height - FReplaceRootPanel.ClientHeight + lNeededRootHeight);
-    lAdditionalClientHeight := lNeededRootHeight - FReplaceRootPanel.ClientHeight;
-    if lAdditionalClientHeight > 0 then
-      ClientHeight := ClientHeight + lAdditionalClientHeight;
 
     DSciLog(Format('Replace dialog layout refreshed (%d x %d)',
       [ClientWidth, ClientHeight]), cDSciLogDebug);
@@ -1097,7 +1187,7 @@ begin
   end;
 end;
 
-// ── Search config accessors ───────────────────────────────────────────────────
+// -- Search config accessors ---------------------------------------------------
 
 function TDSciSearchReplaceDialog.GetSearchConfig: TDSciSearchConfig;
 begin
@@ -1138,7 +1228,7 @@ begin
   end;
 end;
 
-// ── Mode setters ──────────────────────────────────────────────────────────────
+// -- Mode setters --------------------------------------------------------------
 
 procedure TDSciSearchReplaceDialog.SetSearchMode(AMode: TDSciSearchMode);
 begin
@@ -1157,7 +1247,7 @@ begin
   FReplaceRegexDotNewlineCheck.Enabled := AMode = dsmRegularExpression;
 end;
 
-// ── ReadOnly ──────────────────────────────────────────────────────────────────
+// -- ReadOnly ------------------------------------------------------------------
 
 procedure TDSciSearchReplaceDialog.SetReadOnly(AValue: Boolean);
 begin
@@ -1177,7 +1267,7 @@ begin
   FReplaceAllButton.Enabled := not FReadOnly;
 end;
 
-// ── Tab synchronization ───────────────────────────────────────────────────────
+// -- Tab synchronization -------------------------------------------------------
 
 procedure TDSciSearchReplaceDialog.SyncFindToReplace;
 var
@@ -1251,7 +1341,7 @@ begin
   end;
 end;
 
-// ── Action dispatch ───────────────────────────────────────────────────────────
+// -- Action dispatch -----------------------------------------------------------
 
 procedure TDSciSearchReplaceDialog.DispatchAction(AAction: TDSciFindDialogAction);
 begin
@@ -1259,7 +1349,7 @@ begin
     FOnExecuteSearch(Self, SearchConfig, AAction);
 end;
 
-// ── Find tab button handlers ──────────────────────────────────────────────────
+// -- Find tab button handlers --------------------------------------------------
 
 procedure TDSciSearchReplaceDialog.FindNextButtonClick(Sender: TObject);
 begin
@@ -1291,7 +1381,7 @@ begin
   Hide;
 end;
 
-// ── Replace tab button handlers ───────────────────────────────────────────────
+// -- Replace tab button handlers -----------------------------------------------
 
 procedure TDSciSearchReplaceDialog.SwapButtonClick(Sender: TObject);
 var
@@ -1352,7 +1442,7 @@ begin
     FRegexDotNewlineCheck.Enabled := FRegexModeRadio.Checked;
 end;
 
-// ── Dialog-level keyboard / close ─────────────────────────────────────────────
+// -- Dialog-level keyboard / close ---------------------------------------------
 
 procedure TDSciSearchReplaceDialog.DialogClose(Sender: TObject; var Action: TCloseAction);
 begin
@@ -1379,7 +1469,7 @@ begin
   end;
 end;
 
-// ── Public API ────────────────────────────────────────────────────────────────
+// -- Public API ----------------------------------------------------------------
 
 procedure TDSciSearchReplaceDialog.AddSearchHistory(const AText: string);
 var

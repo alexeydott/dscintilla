@@ -2282,6 +2282,7 @@ end;
 
 procedure TDScintilla.RefreshManagedStatusBar;
 begin
+  RebuildStatusBarLexerMenu;
   RefreshStatusBar;
 end;
 
@@ -2472,9 +2473,11 @@ var
   lMarginIndex: Integer;
   lTextAreaStart: Integer;
 begin
-  Result := SmallPointToPoint(AMessage.Pos);
-  if (Result.X >= 0) and (Result.Y >= 0) then
+  // Keyboard-triggered WM_CONTEXTMENU sends the sentinel (-1, -1); any other
+  // position (including negative screen coordinates) is a real mouse location.
+  if not ((AMessage.Pos.X = -1) and (AMessage.Pos.Y = -1)) then
   begin
+    Result := SmallPointToPoint(AMessage.Pos);
     Windows.ScreenToClient(Handle, Result);
     Exit;
   end;
@@ -3130,7 +3133,7 @@ begin
   lMenu := ActiveContextMenu;
   if (lMenu <> nil) and not IsPointInMarginArea(lClientPoint) then
     ShowContextMenu(lMenu, lPoint)
-  else if IsPointInMarginArea(lClientPoint) and (FGutterContextMenu <> nil) then
+  else if FDefaultContextMenuEnabled and IsPointInMarginArea(lClientPoint) and (FGutterContextMenu <> nil) then
     ShowContextMenu(FGutterContextMenu, lPoint);
 
   AMessage.Result := 1;
@@ -3157,7 +3160,7 @@ begin
        BoolToStr(lMenu <> nil, True)]), cDSciLogDebug);
     if (lMenu <> nil) and not IsPointInMarginArea(lClientPoint) then
       ShowContextMenu(lMenu, lScreenPoint)
-    else if IsPointInMarginArea(lClientPoint) and (FGutterContextMenu <> nil) then
+    else if FDefaultContextMenuEnabled and IsPointInMarginArea(lClientPoint) and (FGutterContextMenu <> nil) then
       ShowContextMenu(FGutterContextMenu, lScreenPoint);
   end;
 

@@ -17,7 +17,7 @@
   <CopyPaste MultiPaste="no" ConvertEolOnPaste="yes"/>
   <Printing Magnification="0"/>
   <CodeFolding Lines="no" Text="" TextStyle="0"/>
-  <Logging ToFile="no" ToDOpus="no" Level="1"/>
+  <Logging ToFile="no" Level="1"/>
   <Styles>
     <Style name="actionscript" ext="as mx text" desc="ActionScript" lexer="3">
       <WordStyles>
