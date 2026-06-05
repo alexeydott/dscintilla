@@ -48,6 +48,8 @@ type
     FScintilla: TDScintilla;
     FFocusInCount: Integer;
     FFocusOutCount: Integer;
+    procedure CheckDefaultStyleMatchesConfig(const AEditor: TDScintilla;
+      const AConfigFileName, AMessage: string);
     procedure HandleFocusIn(Sender: TObject);
     procedure HandleFocusOut(Sender: TObject);
   public
@@ -67,9 +69,16 @@ type
     procedure TestGeneratedPropertiesIncludeXmlDocumentation;
     procedure TestGeneratedPublicPropertiesKeepSparseSetterPairs;
     procedure TestLexerLanguagePublicApi;
+    procedure TestLexerLanguageUsesKnownConfigAliases;
     procedure TestLexillaRawExportCall;
     procedure TestLexillaStringApiUsesSharedDll;
     procedure TestSettingsConfigFileActivatesLexerForNamedLanguage;
+    procedure TestSettingsConfigFileAppliesNotepadPlusStyleFlags;
+    procedure TestSettingsConfigFileKeepsGlobalStylesOutOfLexerStyles;
+    procedure TestSettingsGlobalOverrideFontWinsAfterDefaultAndLexerStyles;
+    procedure TestSettingsThemeColorStyleControlsInheritedColours;
+    procedure TestSettingsThemeMergeClearsInheritedColours;
+    procedure TestSettingsXmlSgmlKeywordsDoNotMakeTagsUnknown;
     procedure TestSettingsResolveLanguageByExtension;
     procedure TestSettingsLegacyImportApisRaiseNotSupported;
     procedure TestSettingsConfigSurvivesRecreateWnd;
@@ -310,6 +319,32 @@ begin
   ForceDirectories(lBaseDir);
   Result := TPath.Combine(lBaseDir, TPath.GetRandomFileName);
   ForceDirectories(Result);
+end;
+
+procedure TTestDScintillaTyped.CheckDefaultStyleMatchesConfig(
+  const AEditor: TDScintilla; const AConfigFileName, AMessage: string);
+var
+  lConfig: TDSciVisualConfig;
+  lDefaultGroup: TDSciVisualStyleGroup;
+  lDefaultStyle: TDSciVisualStyleData;
+begin
+  lConfig := TDSciVisualConfig.Create;
+  try
+    lConfig.LoadFromFile(AConfigFileName);
+    lDefaultGroup := lConfig.StyleOverrides.FindGroup('default');
+    Check(lDefaultGroup <> nil, 'Default style group must exist in config');
+    lDefaultStyle := lDefaultGroup.FindStyle('Default Style', dvskGlobal);
+    Check(lDefaultStyle <> nil, 'Default Style must exist in config');
+
+    if lDefaultStyle.HasForeColor then
+      CheckEquals(Integer(lDefaultStyle.ForeColor), Integer(AEditor.StyleFore[STYLE_DEFAULT]),
+        AMessage + ': foreground');
+    if lDefaultStyle.HasBackColor then
+      CheckEquals(Integer(lDefaultStyle.BackColor), Integer(AEditor.StyleBack[STYLE_DEFAULT]),
+        AMessage + ': background');
+  finally
+    lConfig.Free;
+  end;
 end;
 
 function ContextMenuLParam(const APoint: TPoint): LPARAM;
@@ -638,6 +673,61 @@ begin
   CheckEquals('cpp', FScintilla.LexerLanguage);
 end;
 
+procedure TTestDScintillaTyped.TestLexerLanguageUsesKnownConfigAliases;
+var
+  lConfigFileName: string;
+  lTempDirectory: string;
+begin
+  lTempDirectory := CreateWritableTempDir;
+  try
+    lConfigFileName := TPath.Combine(lTempDirectory, 'lexer-aliases.config.xml');
+    TFile.WriteAllText(lConfigFileName,
+      '<?xml version="1.0" encoding="UTF-8"?>' + sLineBreak +
+      '<Config>' + sLineBreak +
+      '  <Styles>' + sLineBreak +
+      '    <Style name="default" ext="*">' + sLineBreak +
+      '      <WordStyles>' + sLineBreak +
+      '        <WordStyle name="Default Style" styleID="32" fgColor="111111" bgColor="222222"/>' + sLineBreak +
+      '      </WordStyles>' + sLineBreak +
+      '    </Style>' + sLineBreak +
+      '    <Style name="d" ext="d" lexer="16">' + sLineBreak +
+      '      <WordStyles>' + sLineBreak +
+      '        <WordStyle name="INSTRUCTION WORD" styleID="6" keywordClass="instre1"><Keywords id="0">module import</Keywords></WordStyle>' + sLineBreak +
+      '      </WordStyles>' + sLineBreak +
+      '    </Style>' + sLineBreak +
+      '    <Style name="r" ext="r" lexer="22">' + sLineBreak +
+      '      <WordStyles>' + sLineBreak +
+      '        <WordStyle name="INSTRUCTION WORD" styleID="2" keywordClass="instre1"><Keywords id="0">if else function</Keywords></WordStyle>' + sLineBreak +
+      '      </WordStyles>' + sLineBreak +
+      '    </Style>' + sLineBreak +
+      '    <Style name="typescript" ext="ts">' + sLineBreak +
+      '      <WordStyles>' + sLineBreak +
+      '        <WordStyle name="INSTRUCTION WORD" styleID="5" keywordClass="instre1"><Keywords id="0">let const type</Keywords></WordStyle>' + sLineBreak +
+      '        <WordStyle name="TYPE WORD" styleID="16" keywordClass="type1"><Keywords id="2">number string boolean</Keywords></WordStyle>' + sLineBreak +
+      '      </WordStyles>' + sLineBreak +
+      '    </Style>' + sLineBreak +
+      '  </Styles>' + sLineBreak +
+      '</Config>', TEncoding.UTF8);
+
+    FScintilla.Settings.LoadConfigFile(lConfigFileName);
+
+    FScintilla.Settings.ApplyLanguage('d');
+    Check(SameText('D', FScintilla.LexerLanguage),
+      'Known D group should override stale lexer=16/diff metadata');
+
+    FScintilla.Settings.ApplyLanguage('r');
+    CheckEquals('r', FScintilla.LexerLanguage,
+      'Known R group should override stale lexer=22/ruby metadata');
+
+    FScintilla.Settings.ApplyLanguage('typescript');
+    CheckEquals('cpp', FScintilla.LexerLanguage,
+      'Known TypeScript group should map to the C-family runtime lexer');
+  finally
+    if DirectoryExists(lTempDirectory) then
+      TDirectory.Delete(lTempDirectory, True);
+  end;
+end;
+
 procedure TTestDScintillaTyped.TestFocusNotifications;
 begin
   FFocusInCount := 0;
@@ -804,6 +894,336 @@ begin
     'Config-backed language activation should still initialize the lexer');
 end;
 
+procedure TTestDScintillaTyped.TestSettingsConfigFileAppliesNotepadPlusStyleFlags;
+var
+  lConfigFileName: string;
+  lTempDirectory: string;
+begin
+  lTempDirectory := CreateWritableTempDir;
+  try
+    lConfigFileName := TPath.Combine(lTempDirectory, 'style-flags.config.xml');
+    TFile.WriteAllText(lConfigFileName,
+      '<?xml version="1.0" encoding="UTF-8"?>' + sLineBreak +
+      '<Config>' + sLineBreak +
+      '  <Styles>' + sLineBreak +
+      '    <Style name="default" ext="*">' + sLineBreak +
+      '      <WordStyles>' + sLineBreak +
+      '        <WordStyle name="Default Style" styleID="32" fgColor="F8F8F2" bgColor="282A36"/>' + sLineBreak +
+      '      </WordStyles>' + sLineBreak +
+      '    </Style>' + sLineBreak +
+      '    <Style name="xml" ext="xml" lexer="5">' + sLineBreak +
+      '      <WordStyles>' + sLineBreak +
+      '        <WordStyle name="ITALIC" styleID="1" fontStyle="1"/>' + sLineBreak +
+      '        <WordStyle name="BOLD" styleID="2" fontStyle="2"/>' + sLineBreak +
+      '        <WordStyle name="UNDERLINE_EOL" styleID="3" fontStyle="4" eolFill="1"/>' + sLineBreak +
+      '      </WordStyles>' + sLineBreak +
+      '    </Style>' + sLineBreak +
+      '  </Styles>' + sLineBreak +
+      '</Config>', TEncoding.UTF8);
+
+    FScintilla.Settings.LoadConfigFile(lConfigFileName);
+    FScintilla.Settings.ApplyLanguage('xml');
+
+    Check(FScintilla.StyleItalic[1], 'fontStyle=1 should map to Italic');
+    Check(not FScintilla.StyleBold[1], 'fontStyle=1 must not map to Bold');
+    Check(FScintilla.StyleBold[2], 'fontStyle=2 should map to Bold');
+    Check(not FScintilla.StyleItalic[2], 'fontStyle=2 must not map to Italic');
+    Check(FScintilla.StyleUnderline[3], 'fontStyle=4 should map to Underline');
+    Check(FScintilla.StyleEOLFilled[3], 'eolFill=1 should be applied to the style');
+  finally
+    if DirectoryExists(lTempDirectory) then
+      TDirectory.Delete(lTempDirectory, True);
+  end;
+end;
+
+procedure TTestDScintillaTyped.TestSettingsConfigFileKeepsGlobalStylesOutOfLexerStyles;
+var
+  lConfigFileName: string;
+  lTempDirectory: string;
+begin
+  lTempDirectory := CreateWritableTempDir;
+  try
+    lConfigFileName := TPath.Combine(lTempDirectory, 'global-style-boundary.config.xml');
+    TFile.WriteAllText(lConfigFileName,
+      '<?xml version="1.0" encoding="UTF-8"?>' + sLineBreak +
+      '<Config>' + sLineBreak +
+      '  <Styles>' + sLineBreak +
+      '    <Style name="default" ext="*">' + sLineBreak +
+      '      <WordStyles>' + sLineBreak +
+      '        <WordStyle name="Default Style" styleID="32" fgColor="111111" bgColor="222222" fontName="Courier New" fontSize="10"/>' + sLineBreak +
+      '        <WordStyle name="Global override" styleID="0" fgColor="FF0000" bgColor="00FF00" fontName="Consolas" fontSize="12"/>' + sLineBreak +
+      '        <WordStyle name="Mark Style 5" styleID="21" bgColor="123456"/>' + sLineBreak +
+      '      </WordStyles>' + sLineBreak +
+      '    </Style>' + sLineBreak +
+      '    <Style name="xml" ext="xml" lexer="5">' + sLineBreak +
+      '      <WordStyles>' + sLineBreak +
+      '        <WordStyle name="VALID_HIGH_LEXER_STYLE" styleID="40" fgColor="BADA55" bgColor="101010"/>' + sLineBreak +
+      '      </WordStyles>' + sLineBreak +
+      '    </Style>' + sLineBreak +
+      '  </Styles>' + sLineBreak +
+      '</Config>', TEncoding.UTF8);
+
+    FScintilla.Settings.LoadConfigFile(lConfigFileName);
+    FScintilla.Settings.ApplyLanguage('xml');
+
+    CheckEquals(Integer(TColor(RGB($FF, $00, $00))), Integer(FScintilla.StyleFore[0]),
+      'Default-group Global override should apply as the base lexer style layer');
+    CheckEquals(Integer(TColor(RGB($00, $FF, $00))), Integer(FScintilla.StyleBack[21]),
+      'Default-group widget styles must not be applied as lexer styles by matching styleID=0');
+    Check(SameText('Consolas', FScintilla.StyleFont[40]),
+      'Global override font should be inherited by lexer styles without an explicit font');
+    CheckEquals(12, FScintilla.StyleSize[40],
+      'Global override font size should be inherited by lexer styles without an explicit size');
+    CheckEquals(Integer(TColor(RGB($BA, $DA, $55))), Integer(FScintilla.StyleFore[40]),
+      'Lexer style IDs in the Scintilla global-style numeric range must still be applied');
+    CheckEquals(Integer(TColor(RGB($10, $10, $10))), Integer(FScintilla.StyleBack[40]),
+      'Lexer style attributes should override the global override base layer');
+  finally
+    if DirectoryExists(lTempDirectory) then
+      TDirectory.Delete(lTempDirectory, True);
+  end;
+end;
+
+procedure TTestDScintillaTyped.TestSettingsGlobalOverrideFontWinsAfterDefaultAndLexerStyles;
+var
+  lConfigFileName: string;
+  lTempDirectory: string;
+begin
+  lTempDirectory := CreateWritableTempDir;
+  try
+    lConfigFileName := TPath.Combine(lTempDirectory, 'global-font-override.config.xml');
+    TFile.WriteAllText(lConfigFileName,
+      '<?xml version="1.0" encoding="UTF-8"?>' + sLineBreak +
+      '<Config>' + sLineBreak +
+      '  <Styles>' + sLineBreak +
+      '    <Style name="default" ext="*">' + sLineBreak +
+      '      <WordStyles>' + sLineBreak +
+      '        <WordStyle name="Default Style" styleID="32" fontName="Courier New" fontSize="9"/>' + sLineBreak +
+      '        <WordStyle name="Global override" styleID="0" fontName="Consolas" fontSize="13"/>' + sLineBreak +
+      '      </WordStyles>' + sLineBreak +
+      '    </Style>' + sLineBreak +
+      '    <Style name="xml" ext="xml" lexer="5">' + sLineBreak +
+      '      <WordStyles>' + sLineBreak +
+      '        <WordStyle name="DEFAULT" styleID="0" fontName="Courier New" fontSize="8"/>' + sLineBreak +
+      '        <WordStyle name="TAG" styleID="1" fontName="Courier New" fontSize="8"/>' + sLineBreak +
+      '      </WordStyles>' + sLineBreak +
+      '    </Style>' + sLineBreak +
+      '  </Styles>' + sLineBreak +
+      '</Config>', TEncoding.UTF8);
+
+    FScintilla.Settings.LoadConfigFile(lConfigFileName);
+    FScintilla.Settings.ApplyLanguage('xml');
+
+    Check(SameText('Consolas', FScintilla.StyleFont[STYLE_DEFAULT]),
+      'Global override font should win over the final Default Style pass');
+    CheckEquals(13, FScintilla.StyleSize[STYLE_DEFAULT],
+      'Global override font size should win over the final Default Style pass');
+    Check(SameText('Consolas', FScintilla.StyleFont[0]),
+      'Global override font should win over explicit lexer DEFAULT font names');
+    CheckEquals(13, FScintilla.StyleSize[0],
+      'Global override font size should win over explicit lexer DEFAULT sizes');
+    Check(SameText('Consolas', FScintilla.StyleFont[1]),
+      'Global override font should win over explicit lexer token font names');
+    CheckEquals(13, FScintilla.StyleSize[1],
+      'Global override font size should win over explicit lexer token sizes');
+  finally
+    if DirectoryExists(lTempDirectory) then
+      TDirectory.Delete(lTempDirectory, True);
+  end;
+end;
+
+procedure TTestDScintillaTyped.TestSettingsThemeColorStyleControlsInheritedColours;
+var
+  lGroup: TDSciVisualStyleGroup;
+  lModel: TDSciVisualStyleModel;
+  lStyle: TDSciVisualStyleData;
+  lThemeFileName: string;
+  lTempDirectory: string;
+begin
+  lTempDirectory := CreateWritableTempDir;
+  try
+    lThemeFileName := TPath.Combine(lTempDirectory, 'color-style.xml');
+    TFile.WriteAllText(lThemeFileName,
+      '<?xml version="1.0" encoding="UTF-8"?>' + sLineBreak +
+      '<NotepadPlus>' + sLineBreak +
+      '  <LexerStyles>' + sLineBreak +
+      '    <LexerType name="sample" desc="Sample" ext="sample">' + sLineBreak +
+      '      <WordsStyle name="INHERIT_BOTH" styleID="0" fgColor="112233" bgColor="445566" colorStyle="0"/>' + sLineBreak +
+      '      <WordsStyle name="OWN_FORE" styleID="1" fgColor="112233" bgColor="445566" colorStyle="1"/>' + sLineBreak +
+      '      <WordsStyle name="OWN_BACK" styleID="2" fgColor="112233" bgColor="445566" colorStyle="2"/>' + sLineBreak +
+      '      <WordsStyle name="OWN_BOTH" styleID="3" fgColor="112233" bgColor="445566"/>' + sLineBreak +
+      '    </LexerType>' + sLineBreak +
+      '  </LexerStyles>' + sLineBreak +
+      '</NotepadPlus>', TEncoding.UTF8);
+
+    lModel := LoadThemeStyleModelFromFile(lThemeFileName);
+    try
+      lGroup := lModel.FindGroup('sample');
+      Check(lGroup <> nil, 'Theme lexer group should be loaded');
+
+      lStyle := lGroup.FindStyle('INHERIT_BOTH', dvskLexer);
+      Check(lStyle <> nil, 'INHERIT_BOTH style should be loaded');
+      Check(not lStyle.HasForeColor, 'colorStyle=0 should inherit foreground');
+      Check(not lStyle.HasBackColor, 'colorStyle=0 should inherit background');
+
+      lStyle := lGroup.FindStyle('OWN_FORE', dvskLexer);
+      Check(lStyle <> nil, 'OWN_FORE style should be loaded');
+      Check(lStyle.HasForeColor, 'colorStyle=1 should keep foreground');
+      Check(not lStyle.HasBackColor, 'colorStyle=1 should inherit background');
+
+      lStyle := lGroup.FindStyle('OWN_BACK', dvskLexer);
+      Check(lStyle <> nil, 'OWN_BACK style should be loaded');
+      Check(not lStyle.HasForeColor, 'colorStyle=2 should inherit foreground');
+      Check(lStyle.HasBackColor, 'colorStyle=2 should keep background');
+
+      lStyle := lGroup.FindStyle('OWN_BOTH', dvskLexer);
+      Check(lStyle <> nil, 'OWN_BOTH style should be loaded');
+      Check(lStyle.HasForeColor, 'Missing colorStyle should keep foreground');
+      Check(lStyle.HasBackColor, 'Missing colorStyle should keep background');
+    finally
+      lModel.Free;
+    end;
+  finally
+    if DirectoryExists(lTempDirectory) then
+      TDirectory.Delete(lTempDirectory, True);
+  end;
+end;
+
+procedure TTestDScintillaTyped.TestSettingsThemeMergeClearsInheritedColours;
+var
+  lBaseGroup: TDSciVisualStyleGroup;
+  lCurrentLineStyle: TDSciVisualStyleData;
+  lGlobalGroup: TDSciVisualStyleGroup;
+  lGlobalOverrideCount: Integer;
+  lModel: TDSciVisualStyleModel;
+  lOverlay: TDSciVisualStyleModel;
+  lStyle: TDSciVisualStyleData;
+  lThemeFileName: string;
+  lTempDirectory: string;
+begin
+  lTempDirectory := CreateWritableTempDir;
+  try
+    lThemeFileName := TPath.Combine(lTempDirectory, 'merge-color-style.xml');
+    TFile.WriteAllText(lThemeFileName,
+      '<?xml version="1.0" encoding="UTF-8"?>' + sLineBreak +
+      '<NotepadPlus>' + sLineBreak +
+      '  <LexerStyles>' + sLineBreak +
+      '    <LexerType name="sample" desc="Sample" ext="sample">' + sLineBreak +
+      '      <WordsStyle name="TOKEN" styleID="1" fgColor="112233" bgColor="445566" colorStyle="1"/>' + sLineBreak +
+      '    </LexerType>' + sLineBreak +
+      '  </LexerStyles>' + sLineBreak +
+      '  <GlobalStyles>' + sLineBreak +
+      '    <WidgetStyle name="Global override" styleID="0" fontName="Consolas" fontSize="12"/>' + sLineBreak +
+      '  </GlobalStyles>' + sLineBreak +
+      '</NotepadPlus>', TEncoding.UTF8);
+
+    lModel := TDSciVisualStyleModel.Create;
+    try
+      lBaseGroup := lModel.EnsureGroup('sample');
+      lStyle := lBaseGroup.EnsureStyle('TOKEN', dvskLexer);
+      lStyle.StyleID := 1;
+      lStyle.HasStyleID := True;
+      lStyle.ForeColor := TColor(RGB($AA, $BB, $CC));
+      lStyle.HasForeColor := True;
+      lStyle.BackColor := TColor(RGB($FF, $FF, $FF));
+      lStyle.HasBackColor := True;
+
+      lGlobalGroup := lModel.EnsureGroup('default');
+      lCurrentLineStyle := lGlobalGroup.EnsureStyle('Current line background colour',
+        dvskGlobal);
+      lCurrentLineStyle.StyleID := 0;
+      lCurrentLineStyle.HasStyleID := True;
+      lCurrentLineStyle.BackColor := TColor(RGB($01, $02, $03));
+      lCurrentLineStyle.HasBackColor := True;
+
+      lStyle := lGlobalGroup.EnsureStyle('Global override', dvskGlobal);
+      lStyle.StyleID := 0;
+      lStyle.HasStyleID := True;
+      lStyle.FontName := 'Courier New';
+      lStyle.HasFontName := True;
+
+      lOverlay := LoadThemeStyleModelFromFile(lThemeFileName);
+      try
+        MergeModel(lModel, lOverlay);
+      finally
+        lOverlay.Free;
+      end;
+
+      lStyle := lBaseGroup.FindStyle('TOKEN', dvskLexer);
+      Check(lStyle <> nil, 'Merged lexer style should still exist');
+      Check(lStyle.HasForeColor, 'colorStyle=1 should keep the theme foreground');
+      CheckEquals(Integer(TColor(RGB($11, $22, $33))), Integer(lStyle.ForeColor),
+        'Theme foreground should replace the base foreground');
+      Check(not lStyle.HasBackColor,
+        'colorStyle=1 should clear the old base background during merge');
+
+      lGlobalOverrideCount := 0;
+      for lStyle in lGlobalGroup.Styles do
+        if SameText(lStyle.Name, 'Global override') then
+          Inc(lGlobalOverrideCount);
+      CheckEquals(1, lGlobalOverrideCount,
+        'Global styles with styleID=0 should merge by name before styleID');
+
+      lStyle := lGlobalGroup.FindStyle('Global override', dvskGlobal);
+      Check(lStyle <> nil, 'Global override should still be addressable by name');
+      Check(SameText('Consolas', lStyle.FontName),
+        'Global override font should be merged onto the named global style');
+      CheckEquals(12, lStyle.FontSize,
+        'Global override font size should be merged onto the named global style');
+      Check(lGlobalGroup.FindStyle('Current line background colour', dvskGlobal) =
+        lCurrentLineStyle, 'Other styleID=0 global styles should not be renamed');
+    finally
+      lModel.Free;
+    end;
+  finally
+    if DirectoryExists(lTempDirectory) then
+      TDirectory.Delete(lTempDirectory, True);
+  end;
+end;
+
+procedure TTestDScintillaTyped.TestSettingsXmlSgmlKeywordsDoNotMakeTagsUnknown;
+var
+  lConfigFileName: string;
+  lTempDirectory: string;
+begin
+  lTempDirectory := CreateWritableTempDir;
+  try
+    lConfigFileName := TPath.Combine(lTempDirectory, 'xml-sgml-keywords.config.xml');
+    TFile.WriteAllText(lConfigFileName,
+      '<?xml version="1.0" encoding="UTF-8"?>' + sLineBreak +
+      '<Config>' + sLineBreak +
+      '  <Styles>' + sLineBreak +
+      '    <Style name="default" ext="*">' + sLineBreak +
+      '      <WordStyles>' + sLineBreak +
+      '        <WordStyle name="Default Style" styleID="32" fgColor="F8F8F2" bgColor="282A36"/>' + sLineBreak +
+      '      </WordStyles>' + sLineBreak +
+      '    </Style>' + sLineBreak +
+      '    <Style name="xml" ext="xml" lexer="5">' + sLineBreak +
+      '      <WordStyles>' + sLineBreak +
+      '        <WordStyle name="TAG" styleID="1" fgColor="FF79C6"/>' + sLineBreak +
+      '        <WordStyle name="TAGUNKNOWN" styleID="2" fgColor="56987A"/>' + sLineBreak +
+      '        <WordStyle name="SGMLCOMMAND" styleID="22" fgColor="BD93F9" keywordClass="instre1">' + sLineBreak +
+      '          <Keywords id="0">ATTLIST DOCTYPE ELEMENT ENTITY NOTATION</Keywords>' + sLineBreak +
+      '        </WordStyle>' + sLineBreak +
+      '      </WordStyles>' + sLineBreak +
+      '    </Style>' + sLineBreak +
+      '  </Styles>' + sLineBreak +
+      '</Config>', TEncoding.UTF8);
+
+    FScintilla.Settings.LoadConfigFile(lConfigFileName);
+    FScintilla.Settings.ApplyLanguage('xml');
+    FScintilla.SetText('<Config Name="Dracula"/>');
+    FScintilla.Colourise(0, -1);
+
+    CheckEquals('xml', FScintilla.LexerLanguage);
+    CheckEquals(SCE_H_TAG, FScintilla.StyleAt[1],
+      'SGML/DTD keywords must use XML word list 5; word list 0 must stay empty so normal XML tags are not TAGUNKNOWN');
+  finally
+    if DirectoryExists(lTempDirectory) then
+      TDirectory.Delete(lTempDirectory, True);
+  end;
+end;
+
 procedure TTestDScintillaTyped.TestSettingsLegacyImportApisRaiseNotSupported;
 var
   lLanguagesFileName: string;
@@ -869,8 +1289,9 @@ begin
   FScintilla.HandleNeeded;
 
   CheckEquals('cpp', FScintilla.Settings.CurrentLanguage);
-  CheckEquals(Integer(TColor(RGB($C3, $BE, $98))), Integer(FScintilla.StyleFore[STYLE_DEFAULT]));
-  CheckEquals(Integer(TColor(RGB($1A, $0F, $0B))), Integer(FScintilla.StyleBack[STYLE_DEFAULT]));
+  CheckDefaultStyleMatchesConfig(FScintilla,
+    TPath.Combine(ResolveSettingsDir, 'DScintilla.config.xml'),
+    'Recreated config should preserve default style');
 end;
 
 procedure TTestDScintillaTyped.TestSettingsClearLanguageResetsLexerState;
@@ -939,8 +1360,8 @@ begin
 
   FScintilla.Settings.ApplyLanguageForFileName('sample.cpp');
   CheckEquals('cpp', FScintilla.Settings.CurrentLanguage);
-  CheckEquals(Integer(TColor(RGB($C3, $BE, $98))), Integer(FScintilla.StyleFore[STYLE_DEFAULT]));
-  CheckEquals(Integer(TColor(RGB($1A, $0F, $0B))), Integer(FScintilla.StyleBack[STYLE_DEFAULT]));
+  CheckDefaultStyleMatchesConfig(FScintilla, lConfigFileName,
+    'Config-backed settings should apply the default style');
 
   FScintilla.SetText(SampleText);
   FScintilla.Colourise(0, -1);
@@ -974,8 +1395,8 @@ begin
 
     CheckEquals(lOriginalConfigFileName, FScintilla.Settings.ConfigFileName);
     CheckEquals('cpp', FScintilla.Settings.ResolveLanguageNameByFileName('sample.cpp'));
-    CheckEquals(Integer(TColor(RGB($C3, $BE, $98))), Integer(FScintilla.StyleFore[STYLE_DEFAULT]));
-    CheckEquals(Integer(TColor(RGB($1A, $0F, $0B))), Integer(FScintilla.StyleBack[STYLE_DEFAULT]));
+    CheckDefaultStyleMatchesConfig(FScintilla, lConfigFileName,
+      'Invalid config load should keep previous default style');
   finally
     if FileExists(lInvalidConfigFileName) then
       SysUtils.DeleteFile(lInvalidConfigFileName);
@@ -999,7 +1420,8 @@ begin
     CheckEquals(ExpandFileName(lConfigFileName), FScintilla.Settings.ConfigFileName);
     CheckEquals(4, FScintilla.TabWidth);
     CheckEquals('cpp', FScintilla.Settings.ResolveLanguageNameByFileName('sample.cpp'));
-    CheckEquals(Integer(TColor(RGB($2A, $21, $1C))), Integer(FScintilla.StyleBack[STYLE_DEFAULT]));
+    CheckDefaultStyleMatchesConfig(FScintilla, lConfigFileName,
+      'Embedded default copy should apply its default style');
   finally
     if DirectoryExists(lTempDirectory) then
       TDirectory.Delete(lTempDirectory, True);
@@ -1290,8 +1712,7 @@ begin
       'Malformed optional sidecars must not stop config-backed language activation');
     CheckEquals(16, FScintilla.StyleAt[0],
       'Malformed optional sidecars must not prevent lexer styling from being applied');
-    CheckEquals(Integer(TColor(RGB($1A, $0F, $0B))),
-      Integer(FScintilla.StyleBack[STYLE_DEFAULT]),
+    CheckDefaultStyleMatchesConfig(FScintilla, lConfigFileName,
       'Malformed optional sidecars must not prevent editor config application');
   finally
     if DirectoryExists(lTempDirectory) then

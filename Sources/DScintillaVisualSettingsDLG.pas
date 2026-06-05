@@ -2940,6 +2940,7 @@ end;
 
 procedure TDSciVisualSettingsDialog.LoadSelectedStyleControls;
 var
+  lFontIndex: Integer;
   lEffectiveStyle: TDSciVisualStyleData;
   lGroup: TDSciVisualStyleGroup;
   lOverride: TDSciVisualStyleData;
@@ -2962,8 +2963,13 @@ begin
     try
       FForegroundBox.Color := clWhite;
       FBackgroundBox.Color := clBlack;
-      if lEffectiveStyle.FontName <> '' then
-        FFontNameCombo.ItemIndex := FFontNameCombo.Items.IndexOf(lEffectiveStyle.FontName)
+      if lEffectiveStyle.HasFontName and (lEffectiveStyle.FontName <> '') then
+      begin
+        lFontIndex := FFontNameCombo.Items.IndexOf(lEffectiveStyle.FontName);
+        if lFontIndex < 0 then
+          lFontIndex := FFontNameCombo.Items.Add(lEffectiveStyle.FontName);
+        FFontNameCombo.ItemIndex := lFontIndex;
+      end
       else
         FFontNameCombo.ItemIndex := -1;
       if lEffectiveStyle.HasFontSize then
@@ -2974,8 +2980,8 @@ begin
         FForegroundBox.Color := lEffectiveStyle.ForeColor;
       if lEffectiveStyle.HasBackColor then
         FBackgroundBox.Color := lEffectiveStyle.BackColor;
-      FBoldCheck.Checked := lEffectiveStyle.HasFontStyle and ((lEffectiveStyle.FontStyle and 1) <> 0);
-      FItalicCheck.Checked := lEffectiveStyle.HasFontStyle and ((lEffectiveStyle.FontStyle and 2) <> 0);
+      FBoldCheck.Checked := lEffectiveStyle.HasFontStyle and ((lEffectiveStyle.FontStyle and 2) <> 0);
+      FItalicCheck.Checked := lEffectiveStyle.HasFontStyle and ((lEffectiveStyle.FontStyle and 1) <> 0);
       FUnderlineCheck.Checked := lEffectiveStyle.HasFontStyle and ((lEffectiveStyle.FontStyle and 4) <> 0);
       FExtensionsEdit.Text := lGroup.Extensions;
       if (lOverrideGroup <> nil) and (lOverrideGroup.Extensions <> '') then
@@ -3153,12 +3159,13 @@ begin
   lOverride.HasBackColor := True;
   lOverride.BackColor := FBackgroundBox.Color;
   lOverride.FontName := Trim(FFontNameCombo.Text);
+  lOverride.HasFontName := lOverride.FontName <> '';
   lOverride.HasFontSize := True;
   lOverride.FontSize := FFontSizeEdit.Value;
   lFontStyle := 0;
-  if FBoldCheck.Checked then
-    lFontStyle := lFontStyle or 1;
   if FItalicCheck.Checked then
+    lFontStyle := lFontStyle or 1;
+  if FBoldCheck.Checked then
     lFontStyle := lFontStyle or 2;
   if FUnderlineCheck.Checked then
     lFontStyle := lFontStyle or 4;

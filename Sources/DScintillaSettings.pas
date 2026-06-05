@@ -126,6 +126,91 @@ begin
   Result := StartsText('substyle', AKeywordClass);
 end;
 
+function GroupNameMatches(const AGroupName: string;
+  const ANames: array of string): Boolean;
+var
+  lName: string;
+begin
+  for lName in ANames do
+    if SameText(AGroupName, lName) then
+      Exit(True);
+  Result := False;
+end;
+
+function ResolveKnownConfigLexerID(const AGroupName: string;
+  out ALexerID: Integer): Boolean;
+begin
+  Result := True;
+  if GroupNameMatches(AGroupName, ['c', 'cpp', 'cs', 'go', 'java',
+     'javascript', 'javascript.js', 'objc', 'rc', 'swift', 'typescript']) then
+    ALexerID := SCLEX_CPP
+  else if SameText(AGroupName, 'html') then
+    ALexerID := SCLEX_HTML
+  else if SameText(AGroupName, 'xml') then
+    ALexerID := SCLEX_XML
+  else
+    Result := False;
+end;
+
+function ResolveConfigGroupLexerID(const AGroup: TDSciVisualStyleGroup;
+  out ALexerID: Integer): Boolean;
+begin
+  Result := Assigned(AGroup) and ResolveKnownConfigLexerID(AGroup.Name,
+    ALexerID);
+  if Result then
+    Exit;
+
+  Result := Assigned(AGroup) and AGroup.HasLexerID;
+  if Result then
+    ALexerID := AGroup.LexerID;
+end;
+
+function UsesCppKeywordLists(const AGroup: TDSciVisualStyleGroup): Boolean;
+var
+  lLexerID: Integer;
+begin
+  Result := ResolveConfigGroupLexerID(AGroup, lLexerID) and
+    (lLexerID = SCLEX_CPP);
+end;
+
+function UsesHtmlXmlKeywordLists(const AGroup: TDSciVisualStyleGroup): Boolean;
+var
+  lLexerID: Integer;
+begin
+  Result := ResolveConfigGroupLexerID(AGroup, lLexerID) and
+    ((lLexerID = SCLEX_HTML) or (lLexerID = SCLEX_XML));
+end;
+
+function ResolveConfigKeywordIndex(const AGroup: TDSciVisualStyleGroup;
+  const AStyle: TDSciVisualStyleData; ADefaultIndex: Integer): Integer;
+const
+  cCppSecondaryKeywordList = 1;
+  cCppDocKeywordList = 2;
+  cCppGlobalClassKeywordList = 3;
+  cCppTaskMarkerKeywordList = 5;
+  cHtmlXmlSgmlKeywordList = 5;
+begin
+  Result := ADefaultIndex;
+
+  if UsesCppKeywordLists(AGroup) and Assigned(AStyle) and AStyle.HasStyleID then
+    case AStyle.StyleID of
+      SCE_C_WORD:
+        Exit(0);
+      SCE_C_WORD2:
+        Exit(cCppSecondaryKeywordList);
+      SCE_C_COMMENTDOCKEYWORD:
+        Exit(cCppDocKeywordList);
+      SCE_C_GLOBALCLASS:
+        Exit(cCppGlobalClassKeywordList);
+      SCE_C_TASKMARKER:
+        Exit(cCppTaskMarkerKeywordList);
+    end;
+
+  if UsesHtmlXmlKeywordLists(AGroup) and Assigned(AStyle) and
+     AStyle.HasStyleID and (AStyle.StyleID = SCE_H_SGML_COMMAND) then
+    Result := cHtmlXmlSgmlKeywordList;
+end;
+
 function FindConfigStyle(const AGroup: TDSciVisualStyleGroup;
   const AName: string): TDSciVisualStyleData;
 begin
@@ -167,6 +252,10 @@ end;
 
 procedure ApplyVisualStyleAttributes(const AEditor: TDScintilla; AStyleID: Integer;
   const AEntry: TDSciVisualStyleData);
+const
+  cNotepadStyleItalic = 1;
+  cNotepadStyleBold = 2;
+  cNotepadStyleUnderline = 4;
 begin
   if AEntry = nil then
     Exit;
@@ -175,16 +264,30 @@ begin
     AEditor.StyleFore[AStyleID] := AEntry.ForeColor;
   if AEntry.HasBackColor then
     AEditor.StyleBack[AStyleID] := AEntry.BackColor;
-  if AEntry.FontName <> '' then
+  if AEntry.HasFontName and (AEntry.FontName <> '') then
     AEditor.StyleFont[AStyleID] := AEntry.FontName;
   if AEntry.HasFontSize then
     AEditor.StyleSize[AStyleID] := AEntry.FontSize;
+  if AEntry.HasEOLFill then
+    AEditor.StyleEOLFilled[AStyleID] := AEntry.EOLFill <> 0;
   if AEntry.HasFontStyle then
   begin
-    AEditor.StyleBold[AStyleID] := (AEntry.FontStyle and 1) <> 0;
-    AEditor.StyleItalic[AStyleID] := (AEntry.FontStyle and 2) <> 0;
-    AEditor.StyleUnderline[AStyleID] := (AEntry.FontStyle and 4) <> 0;
+    AEditor.StyleItalic[AStyleID] := (AEntry.FontStyle and cNotepadStyleItalic) <> 0;
+    AEditor.StyleBold[AStyleID] := (AEntry.FontStyle and cNotepadStyleBold) <> 0;
+    AEditor.StyleUnderline[AStyleID] := (AEntry.FontStyle and cNotepadStyleUnderline) <> 0;
   end;
+end;
+
+procedure ApplyVisualStyleFontAttributes(const AEditor: TDScintilla; AStyleID: Integer;
+  const AEntry: TDSciVisualStyleData);
+begin
+  if AEntry = nil then
+    Exit;
+
+  if AEntry.HasFontName and (AEntry.FontName <> '') then
+    AEditor.StyleFont[AStyleID] := AEntry.FontName;
+  if AEntry.HasFontSize then
+    AEditor.StyleSize[AStyleID] := AEntry.FontSize;
 end;
 
 procedure ApplyConfigFoldMarkerColours(const AEditor: TDScintilla;
@@ -227,6 +330,36 @@ begin
     end;
 end;
 
+procedure ApplyConfigGlobalOverride(const AEditor: TDScintilla;
+  const ADefaultGroup, ACurrentGroup: TDSciVisualStyleGroup);
+var
+  lStyle: TDSciVisualStyleData;
+  lStyleID: Integer;
+begin
+  lStyle := ResolveConfigGlobalStyle(ADefaultGroup, ACurrentGroup,
+    'Global override');
+  if lStyle = nil then
+    Exit;
+
+  for lStyleID := 0 to STYLE_MAX do
+    ApplyVisualStyleAttributes(AEditor, lStyleID, lStyle);
+end;
+
+procedure ApplyConfigGlobalOverrideFonts(const AEditor: TDScintilla;
+  const ADefaultGroup, ACurrentGroup: TDSciVisualStyleGroup);
+var
+  lStyle: TDSciVisualStyleData;
+  lStyleID: Integer;
+begin
+  lStyle := ResolveConfigGlobalStyle(ADefaultGroup, ACurrentGroup,
+    'Global override');
+  if lStyle = nil then
+    Exit;
+
+  for lStyleID := 0 to STYLE_MAX do
+    ApplyVisualStyleFontAttributes(AEditor, lStyleID, lStyle);
+end;
+
 procedure ApplyConfigGlobalStyles(const AEditor: TDScintilla;
   const ADefaultGroup, ACurrentGroup: TDSciVisualStyleGroup);
 var
@@ -239,6 +372,7 @@ begin
   AEditor.StyleResetDefault;
   ApplyVisualStyleAttributes(AEditor, STYLE_DEFAULT, lStyle);
   AEditor.StyleClearAll;
+  ApplyConfigGlobalOverride(AEditor, ADefaultGroup, ACurrentGroup);
 
   ApplyVisualStyleAttributes(AEditor, STYLE_LINENUMBER,
     ResolveConfigGlobalStyle(ADefaultGroup, ACurrentGroup, 'Line number margin'));
@@ -894,8 +1028,7 @@ begin
     Exit;
 
   for lStyle in AGroup.Styles do
-    if lStyle.HasStyleID and
-        not ((lStyle.StyleID >= STYLE_DEFAULT) and (lStyle.StyleID < 128)) then
+    if lStyle.HasStyleID and (lStyle.Kind = dvskLexer) then
       ApplyVisualStyleAttributes(AEditor, lStyle.StyleID, lStyle);
 end;
 
@@ -912,6 +1045,7 @@ end;
 procedure ApplyConfigKeywords(const AEditor: TDScintilla;
   const AGroup: TDSciVisualStyleGroup);
 var
+  lEffectiveKeywordIndex: Integer;
   lKeywordIndex: Integer;
   lStyle: TDSciVisualStyleData;
 begin
@@ -933,14 +1067,16 @@ begin
     end;
 
     if lStyle.HasKeywordsID then
-      lKeywordIndex := Max(lKeywordIndex, lStyle.KeywordsID);
+      lEffectiveKeywordIndex := lStyle.KeywordsID
+    else
+      lEffectiveKeywordIndex := lKeywordIndex;
+    lEffectiveKeywordIndex := ResolveConfigKeywordIndex(AGroup, lStyle,
+      lEffectiveKeywordIndex);
 
-    if lStyle.HasKeywordsID and (lStyle.KeywordsID <= KEYWORDSET_MAX) then
-      AEditor.KeyWords[lStyle.KeywordsID] := lStyle.KeywordsText
-    else if lKeywordIndex <= KEYWORDSET_MAX then
-      AEditor.KeyWords[lKeywordIndex] := lStyle.KeywordsText;
+    if lEffectiveKeywordIndex <= KEYWORDSET_MAX then
+      AEditor.KeyWords[lEffectiveKeywordIndex] := lStyle.KeywordsText;
 
-    Inc(lKeywordIndex);
+    lKeywordIndex := Max(lKeywordIndex, lEffectiveKeywordIndex + 1);
   end;
 end;
 
@@ -1429,6 +1565,7 @@ begin
   lEditor.Colourise(0, -1);
 
   ApplyConfigDefaultStyle(lEditor, lConfigDefaultGroup, lConfigGroup);
+  ApplyConfigGlobalOverrideFonts(lEditor, lConfigDefaultGroup, lConfigGroup);
   ApplyConfigEditorOptions(lEditor, lConfig);
   lEditor.RefreshManagedStatusBar;
 end;

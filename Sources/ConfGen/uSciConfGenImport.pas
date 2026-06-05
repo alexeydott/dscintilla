@@ -15,8 +15,16 @@ uses
   System.Classes, System.IOUtils, System.Math, System.StrUtils, System.Variants,
   System.Win.ComObj,
   Vcl.Graphics,
+  DScintillaTypes,
   Winapi.ActiveX, Winapi.Windows,
   Xml.XMLDoc, Xml.XMLIntf, Xml.xmldom, Xml.omnixmldom;
+
+const
+  cCppSecondaryKeywordList = 1;
+  cCppDocKeywordList = 2;
+  cCppGlobalClassKeywordList = 3;
+  cCppTaskMarkerKeywordList = 5;
+  cHtmlXmlSgmlKeywordList = 5;
 
 type
   TDSciLegacyStyleData = class
@@ -28,10 +36,13 @@ type
     KeywordsID: Integer;
     HasKeywordsID: Boolean;
     HasForeColor: Boolean;
+    ClearForeColor: Boolean;
     ForeColor: TColor;
     HasBackColor: Boolean;
+    ClearBackColor: Boolean;
     BackColor: TColor;
     FontName: string;
+    HasFontName: Boolean;
     HasFontStyle: Boolean;
     FontStyle: Integer;
     HasFontSize: Boolean;
@@ -186,8 +197,7 @@ begin
     Exit(dvskLexer);
 
   if SameText(AGroupName, 'default') and
-     not SameText(GetNodeAttribute(AStyleNode, 'name'), 'DEFAULT') and
-     not SameText(GetNodeAttribute(AStyleNode, 'name'), 'Global override') then
+     not SameText(GetNodeAttribute(AStyleNode, 'name'), 'DEFAULT') then
     Exit(dvskGlobal);
 
   Result := dvskLexer;
@@ -203,10 +213,13 @@ begin
   Result.KeywordsID := ASource.KeywordsID;
   Result.HasKeywordsID := ASource.HasKeywordsID;
   Result.HasForeColor := ASource.HasForeColor;
+  Result.ClearForeColor := ASource.ClearForeColor;
   Result.ForeColor := ASource.ForeColor;
   Result.HasBackColor := ASource.HasBackColor;
+  Result.ClearBackColor := ASource.ClearBackColor;
   Result.BackColor := ASource.BackColor;
   Result.FontName := ASource.FontName;
+  Result.HasFontName := ASource.HasFontName;
   Result.HasFontStyle := ASource.HasFontStyle;
   Result.FontStyle := ASource.FontStyle;
   Result.HasFontSize := ASource.HasFontSize;
@@ -215,6 +228,20 @@ begin
   Result.HasEOLFill := ASource.HasEOLFill;
   Result.KeywordClass := ASource.KeywordClass;
   Result.KeywordsText := ASource.KeywordsText;
+end;
+
+procedure ApplyNotepadColorStyle(const ANode: IXMLNode; AStyle: TDSciLegacyStyleData);
+var
+  lColorStyle: Integer;
+begin
+  if (AStyle = nil) or
+      not ParseOptionalInt(GetNodeAttribute(ANode, 'colorStyle'), lColorStyle) then
+    Exit;
+
+  AStyle.ClearForeColor := (lColorStyle and 1) = 0;
+  AStyle.ClearBackColor := (lColorStyle and 2) = 0;
+  AStyle.HasForeColor := AStyle.HasForeColor and ((lColorStyle and 1) <> 0);
+  AStyle.HasBackColor := AStyle.HasBackColor and ((lColorStyle and 2) <> 0);
 end;
 
 function ParseStyleNode(const ANode: IXMLNode; AKind: TDSciVisualStyleKind): TDSciLegacyStyleData;
@@ -229,7 +256,9 @@ begin
   Result.HasKeywordsID := ParseOptionalInt(GetNodeAttribute(ANode, 'id'), Result.KeywordsID);
   Result.HasForeColor := ParseHexColor(GetNodeAttribute(ANode, 'fgColor'), Result.ForeColor);
   Result.HasBackColor := ParseHexColor(GetNodeAttribute(ANode, 'bgColor'), Result.BackColor);
+  ApplyNotepadColorStyle(ANode, Result);
   Result.FontName := Trim(GetNodeAttribute(ANode, 'fontName'));
+  Result.HasFontName := Result.FontName <> '';
   Result.HasFontStyle := ParseOptionalInt(GetNodeAttribute(ANode, 'fontStyle'), Result.FontStyle);
   Result.HasFontSize := ParseOptionalInt(GetNodeAttribute(ANode, 'fontSize'), Result.FontSize);
   Result.HasEOLFill := ParseOptionalInt(GetNodeAttribute(ANode, 'eolFill'), Result.EOLFill);
@@ -263,18 +292,25 @@ begin
     ATarget.KeywordsID := AOverlay.KeywordsID;
     ATarget.HasKeywordsID := True;
   end;
+  if AOverlay.ClearForeColor then
+    ATarget.HasForeColor := False;
   if AOverlay.HasForeColor then
   begin
     ATarget.ForeColor := AOverlay.ForeColor;
     ATarget.HasForeColor := True;
   end;
+  if AOverlay.ClearBackColor then
+    ATarget.HasBackColor := False;
   if AOverlay.HasBackColor then
   begin
     ATarget.BackColor := AOverlay.BackColor;
     ATarget.HasBackColor := True;
   end;
-  if AOverlay.FontName <> '' then
+  if AOverlay.HasFontName and (AOverlay.FontName <> '') then
+  begin
     ATarget.FontName := AOverlay.FontName;
+    ATarget.HasFontName := True;
+  end;
   if AOverlay.HasFontStyle then
   begin
     ATarget.FontStyle := AOverlay.FontStyle;
@@ -321,16 +357,87 @@ begin
 
     for lOverlayStyle in lOverlayGroup.Styles do
     begin
-      if lOverlayStyle.HasStyleID then
-        lExistingStyle := lTargetGroup.FindStyleByID(lOverlayStyle.StyleID, lOverlayStyle.Kind)
-      else
-        lExistingStyle := nil;
-      if lExistingStyle = nil then
+      if lOverlayStyle.Kind = dvskGlobal then
+      begin
         lExistingStyle := lTargetGroup.FindStyle(lOverlayStyle.Name, lOverlayStyle.Kind);
+        if (lExistingStyle = nil) and lOverlayStyle.HasStyleID then
+          lExistingStyle := lTargetGroup.FindStyleByID(lOverlayStyle.StyleID,
+            lOverlayStyle.Kind);
+      end
+      else
+      begin
+        if lOverlayStyle.HasStyleID then
+          lExistingStyle := lTargetGroup.FindStyleByID(lOverlayStyle.StyleID,
+            lOverlayStyle.Kind)
+        else
+          lExistingStyle := nil;
+        if lExistingStyle = nil then
+          lExistingStyle := lTargetGroup.FindStyle(lOverlayStyle.Name,
+            lOverlayStyle.Kind);
+      end;
       if lExistingStyle = nil then
         lTargetGroup.Styles.Add(lOverlayStyle.Clone)
       else
         OverlayStyle(lExistingStyle, lOverlayStyle);
+    end;
+  end;
+end;
+
+procedure MergeSeedStyleAdditions(ATarget, ASeed: TDSciVisualStyleModel);
+var
+  lExistingStyle: TDSciVisualStyleData;
+  lSeedGroup: TDSciVisualStyleGroup;
+  lSeedStyle: TDSciVisualStyleData;
+  lTargetGroup: TDSciVisualStyleGroup;
+begin
+  if (ATarget = nil) or (ASeed = nil) then
+    Exit;
+
+  for lSeedGroup in ASeed.Groups do
+  begin
+    lTargetGroup := ATarget.FindGroup(lSeedGroup.Name);
+    if lTargetGroup = nil then
+    begin
+      lTargetGroup := TDSciVisualStyleGroup.Create;
+      lTargetGroup.Assign(lSeedGroup);
+      ATarget.Groups.Add(lTargetGroup);
+      Continue;
+    end;
+
+    if (lTargetGroup.Description = '') and (lSeedGroup.Description <> '') then
+      lTargetGroup.Description := lSeedGroup.Description;
+    if (lTargetGroup.Extensions = '') and (lSeedGroup.Extensions <> '') then
+      lTargetGroup.Extensions := lSeedGroup.Extensions;
+    if not lTargetGroup.HasLexerID and lSeedGroup.HasLexerID then
+    begin
+      lTargetGroup.LexerID := lSeedGroup.LexerID;
+      lTargetGroup.HasLexerID := True;
+    end;
+
+    for lSeedStyle in lSeedGroup.Styles do
+    begin
+      if lSeedStyle.Kind = dvskGlobal then
+      begin
+        lExistingStyle := lTargetGroup.FindStyle(lSeedStyle.Name,
+          lSeedStyle.Kind);
+        if (lExistingStyle = nil) and lSeedStyle.HasStyleID then
+          lExistingStyle := lTargetGroup.FindStyleByID(lSeedStyle.StyleID,
+            lSeedStyle.Kind);
+      end
+      else
+      begin
+        if lSeedStyle.HasStyleID then
+          lExistingStyle := lTargetGroup.FindStyleByID(lSeedStyle.StyleID,
+            lSeedStyle.Kind)
+        else
+          lExistingStyle := nil;
+        if lExistingStyle = nil then
+          lExistingStyle := lTargetGroup.FindStyle(lSeedStyle.Name,
+            lSeedStyle.Kind);
+      end;
+
+      if lExistingStyle = nil then
+        lTargetGroup.Styles.Add(lSeedStyle.Clone);
     end;
   end;
 end;
@@ -535,19 +642,177 @@ begin
   end;
 end;
 
-function KeywordClassToIndex(const AKeywordClass: string; ADefaultIndex: Integer): Integer;
+function GroupNameMatches(const AGroupName: string;
+  const ANames: array of string): Boolean;
+var
+  lName: string;
+begin
+  for lName in ANames do
+    if SameText(AGroupName, lName) then
+      Exit(True);
+  Result := False;
+end;
+
+function ResolveKnownLexerID(const AGroupName: string; out ALexerID: Integer): Boolean;
+begin
+  Result := True;
+
+  if GroupNameMatches(AGroupName, ['c', 'cpp', 'cs', 'go', 'java',
+     'javascript', 'javascript.js', 'objc', 'rc', 'swift', 'typescript']) then
+    ALexerID := SCLEX_CPP
+  else if SameText(AGroupName, 'asn1') then
+    ALexerID := SCLEX_ASN1
+  else if SameText(AGroupName, 'avs') then
+    ALexerID := SCLEX_AVS
+  else if SameText(AGroupName, 'baanc') then
+    ALexerID := SCLEX_BAAN
+  else if SameText(AGroupName, 'blitzbasic') then
+    ALexerID := SCLEX_BLITZBASIC
+  else if SameText(AGroupName, 'csound') then
+    ALexerID := SCLEX_CSOUND
+  else if SameText(AGroupName, 'd') then
+    ALexerID := SCLEX_D
+  else if SameText(AGroupName, 'erlang') then
+    ALexerID := SCLEX_ERLANG
+  else if SameText(AGroupName, 'escript') then
+    ALexerID := SCLEX_ESCRIPT
+  else if SameText(AGroupName, 'forth') then
+    ALexerID := SCLEX_FORTH
+  else if SameText(AGroupName, 'fortran77') then
+    ALexerID := SCLEX_F77
+  else if SameText(AGroupName, 'freebasic') then
+    ALexerID := SCLEX_FREEBASIC
+  else if SameText(AGroupName, 'gdscript') then
+    ALexerID := SCLEX_GDSCRIPT
+  else if SameText(AGroupName, 'hollywood') then
+    ALexerID := SCLEX_HOLLYWOOD
+  else if SameText(AGroupName, 'html') then
+    ALexerID := SCLEX_HTML
+  else if SameText(AGroupName, 'json') then
+    ALexerID := SCLEX_JSON
+  else if SameText(AGroupName, 'mmixal') then
+    ALexerID := SCLEX_MMIXAL
+  else if SameText(AGroupName, 'mssql') then
+    ALexerID := SCLEX_MSSQL
+  else if SameText(AGroupName, 'nim') then
+    ALexerID := SCLEX_NIM
+  else if SameText(AGroupName, 'nncrontab') then
+    ALexerID := SCLEX_NNCRONTAB
+  else if SameText(AGroupName, 'oscript') then
+    ALexerID := SCLEX_OSCRIPT
+  else if SameText(AGroupName, 'purebasic') then
+    ALexerID := SCLEX_PUREBASIC
+  else if SameText(AGroupName, 'r') then
+    ALexerID := SCLEX_R
+  else if SameText(AGroupName, 'raku') then
+    ALexerID := SCLEX_RAKU
+  else if SameText(AGroupName, 'rebol') then
+    ALexerID := SCLEX_REBOL
+  else if SameText(AGroupName, 'rust') then
+    ALexerID := SCLEX_RUST
+  else if SameText(AGroupName, 'sas') then
+    ALexerID := SCLEX_SAS
+  else if SameText(AGroupName, 'spice') then
+    ALexerID := SCLEX_SPICE
+  else if SameText(AGroupName, 'toml') then
+    ALexerID := SCLEX_TOML
+  else if SameText(AGroupName, 'visualprolog') then
+    ALexerID := SCLEX_VISUALPROLOG
+  else if SameText(AGroupName, 'xml') then
+    ALexerID := SCLEX_XML
+  else
+    Result := False;
+end;
+
+function UsesCppKeywordLists(const AGroup: TDSciVisualStyleGroup): Boolean;
+begin
+  Result := Assigned(AGroup) and AGroup.HasLexerID and
+    (AGroup.LexerID = SCLEX_CPP);
+end;
+
+function UsesHtmlXmlKeywordLists(const AGroup: TDSciVisualStyleGroup): Boolean;
+begin
+  Result := Assigned(AGroup) and AGroup.HasLexerID and
+    ((AGroup.LexerID = SCLEX_HTML) or (AGroup.LexerID = SCLEX_XML));
+end;
+
+function ResolveConfigKeywordIndex(const AGroup: TDSciVisualStyleGroup;
+  const AStyle: TDSciVisualStyleData; ADefaultIndex: Integer): Integer;
 var
   lNumber: Integer;
 begin
-  if StartsText('instre', AKeywordClass) and
-     TryStrToInt(Copy(AKeywordClass, Length('instre') + 1, MaxInt), lNumber) then
+  if UsesCppKeywordLists(AGroup) and Assigned(AStyle) and AStyle.HasStyleID then
+    case AStyle.StyleID of
+      SCE_C_WORD:
+        Exit(0);
+      SCE_C_WORD2:
+        Exit(cCppSecondaryKeywordList);
+      SCE_C_COMMENTDOCKEYWORD:
+        Exit(cCppDocKeywordList);
+      SCE_C_GLOBALCLASS:
+        Exit(cCppGlobalClassKeywordList);
+      SCE_C_TASKMARKER:
+        Exit(cCppTaskMarkerKeywordList);
+    end;
+
+  if UsesHtmlXmlKeywordLists(AGroup) and Assigned(AStyle) and
+     AStyle.HasStyleID and (AStyle.StyleID = SCE_H_SGML_COMMAND) then
+    Exit(cHtmlXmlSgmlKeywordList);
+
+  if Assigned(AStyle) and StartsText('instre', AStyle.KeywordClass) and
+     TryStrToInt(Copy(AStyle.KeywordClass, Length('instre') + 1, MaxInt), lNumber) then
     Exit(Max(0, lNumber - 1));
 
-  if StartsText('type', AKeywordClass) and
-     TryStrToInt(Copy(AKeywordClass, Length('type') + 1, MaxInt), lNumber) then
+  if Assigned(AStyle) and StartsText('type', AStyle.KeywordClass) and
+     TryStrToInt(Copy(AStyle.KeywordClass, Length('type') + 1, MaxInt), lNumber) then
     Exit(lNumber + 1);
 
   Result := ADefaultIndex;
+end;
+
+procedure NormalizeLexerIDs(AModel: TDSciVisualStyleModel);
+var
+  lGroup: TDSciVisualStyleGroup;
+  lLexerID: Integer;
+begin
+  if AModel = nil then
+    Exit;
+
+  for lGroup in AModel.Groups do
+    if ResolveKnownLexerID(lGroup.Name, lLexerID) then
+    begin
+      lGroup.LexerID := lLexerID;
+      lGroup.HasLexerID := True;
+    end;
+end;
+
+procedure NormalizeKeywordIDs(AModel: TDSciVisualStyleModel);
+var
+  lGroup: TDSciVisualStyleGroup;
+  lKeywordID: Integer;
+  lStyle: TDSciVisualStyleData;
+begin
+  if AModel = nil then
+    Exit;
+
+  for lGroup in AModel.Groups do
+    for lStyle in lGroup.Styles do
+      if (Trim(lStyle.KeywordsText) <> '') and
+         not StartsText('substyle', lStyle.KeywordClass) then
+      begin
+        if lStyle.HasKeywordsID then
+          lKeywordID := lStyle.KeywordsID
+        else
+          lKeywordID := 0;
+        lStyle.KeywordsID := ResolveConfigKeywordIndex(lGroup, lStyle, lKeywordID);
+        lStyle.HasKeywordsID := True;
+      end;
+end;
+
+procedure NormalizeImportedStyleModel(AModel: TDSciVisualStyleModel);
+begin
+  NormalizeLexerIDs(AModel);
+  NormalizeKeywordIDs(AModel);
 end;
 
 procedure MergeLanguageKeywordContent(AModel: TDSciVisualStyleModel; const AFileName: string);
@@ -556,6 +821,7 @@ var
   lGroup: TDSciVisualStyleGroup;
   lIndex: Integer;
   lInit: HRESULT;
+  lLanguageExtensions: string;
   lKeywordIndex: Integer;
   lLanguageName: string;
   lLanguageNode: IXMLNode;
@@ -596,8 +862,9 @@ begin
       if lGroup = nil then
         Continue;
 
-      if lGroup.Extensions = '' then
-        lGroup.Extensions := Trim(GetNodeAttribute(lLanguageNode, 'ext'));
+      lLanguageExtensions := Trim(GetNodeAttribute(lLanguageNode, 'ext'));
+      if lLanguageExtensions <> '' then
+        lGroup.Extensions := lLanguageExtensions;
 
       lKeywordIndex := 0;
       for lChildIndex := 0 to lLanguageNode.ChildNodes.Count - 1 do
@@ -612,7 +879,8 @@ begin
             lStyle.KeywordsText := Trim(lNode.Text);
             if not StartsText('substyle', lStyle.KeywordClass) then
             begin
-              lStyle.KeywordsID := KeywordClassToIndex(lStyle.KeywordClass, lKeywordIndex);
+              lStyle.KeywordsID := ResolveConfigKeywordIndex(lGroup, lStyle,
+                lKeywordIndex);
               lStyle.HasKeywordsID := True;
               lKeywordIndex := Max(lKeywordIndex, lStyle.KeywordsID + 1);
             end;
@@ -857,15 +1125,21 @@ begin
           end;
         end;
 
+        lStep := 'normalize lexer ids';
+        NormalizeLexerIDs(lImportedModel);
+
         lStep := 'merge keyword content';
         MergeLanguageKeywordContent(lImportedModel,
           TPath.Combine(lSettingsDirectory, 'langs.model.xml'));
 
         if lSeedConfig.HasStyleOverrides then
         begin
-          lStep := 'merge seed overrides';
-          MergeModel(lImportedModel, lSeedConfig.StyleOverrides);
+          lStep := 'merge seed additions';
+          MergeSeedStyleAdditions(lImportedModel, lSeedConfig.StyleOverrides);
         end;
+
+        lStep := 'normalize imported style model';
+        NormalizeImportedStyleModel(lImportedModel);
 
         lStep := 'commit imported model';
         AConfig.ReplaceStyleModel(lImportedModel, False);

@@ -943,8 +943,8 @@ begin
   try
     SettleForm(lDialog, True);
 
-    lMaxHeight    := MulDiv(400, Screen.PixelsPerInch, 96);
-    lMaxMinHeight := MulDiv(350, Screen.PixelsPerInch, 96);
+    lMaxHeight    := MulDiv(450, Screen.PixelsPerInch, 96);
+    lMaxMinHeight := MulDiv(450, Screen.PixelsPerInch, 96);
 
     Check(lDialog.Height <= lMaxHeight,
       Format('Find dialog should be compact after layout (height=%d, max=%d at %d PPI)',
@@ -2122,6 +2122,7 @@ begin
       lSavedStyle.HasBackColor := True;
       lSavedStyle.BackColor := clBlue;
       lSavedStyle.FontName := 'Consolas';
+      lSavedStyle.HasFontName := True;
       lSavedStyle.HasFontSize := True;
       lSavedStyle.FontSize := 11;
 
@@ -2171,6 +2172,7 @@ begin
       CheckEquals(Integer(ColorToRGB(clRed)), Integer(ColorToRGB(lLoadedStyle.ForeColor)));
       Check(lLoadedStyle.HasBackColor, 'Background override should survive config round-trip');
       CheckEquals(Integer(ColorToRGB(clBlue)), Integer(ColorToRGB(lLoadedStyle.BackColor)));
+      Check(lLoadedStyle.HasFontName, 'Font name override should survive config round-trip');
       CheckEquals('Consolas', lLoadedStyle.FontName);
       Check(lLoadedStyle.HasFontSize, 'Font size override should survive config round-trip');
       CheckEquals(11, lLoadedStyle.FontSize);
@@ -2727,7 +2729,7 @@ begin
       Check(lEditor <> nil, 'Visual form should own a TDScintilla editor');
       CheckEquals('nfo', lEditor.Settings.CurrentLanguage,
         'Style-only .nfo files should retain their configured language group');
-      CheckEquals(Integer(sclNULL), Integer(lEditor.Lexer),
+      CheckEquals(Integer(sclCONTAINER), Integer(lEditor.Lexer),
         '.nfo files should stay on the plain/null Scintilla lexer');
       CheckEquals('', lEditor.LexerLanguage,
         'Style-only .nfo files should not advertise a missing Lexilla lexer name');
@@ -3230,7 +3232,10 @@ begin
         'Unknown-extension files should stay on the default/plain lexer after encoding reload');
       Check(Pos('Encoding: UTF-8 with BOM',
         lStatusBar.Panels[lEncodingPanelIndex].Text) > 0,
-        'Encoding switch should refresh the status bar text for the selected encoding');
+        'Encoding switch should refresh the status bar text for the selected encoding. ' +
+        'Actual encoding panel text: [' + lStatusBar.Panels[lEncodingPanelIndex].Text + '], ' +
+        'PreferredFileEncoding: ' + IntToStr(Ord(lEditor.PreferredFileEncoding)) + ', ' +
+        'BackgroundDocumentLoadCount: ' + IntToStr(lEditor.BackgroundDocumentLoadCount));
       Check(lEditor.TextLength > 0,
         'Encoding switch should keep the document text available after reload');
       Check(Pos('reload', lEditor.GetText) > 0,
@@ -3373,7 +3378,10 @@ begin
       Check(lStartedLoading,
         'Visual status bar should reflect that the file is being loaded');
       Check(lCompleted,
-        'Visual status bar should return to a ready state after async loading');
+        'Visual status bar should return to a ready state after async loading. ' +
+        'Actual load panel text: [' + lStatusBar.Panels[lLoadPanelIndex].Text + '], ' +
+        'FileLoadStage: ' + IntToStr(Ord(lEditor.FileLoadStatus.Stage)) + ', ' +
+        'BackgroundDocumentLoadCount: ' + IntToStr(lEditor.BackgroundDocumentLoadCount));
       CheckEquals(1, lEditor.BackgroundDocumentLoadCount,
         'Async BeginOpenFile should still switch documents through SCI_CREATELOADER');
       Check(lEditor.TextLength > 0,

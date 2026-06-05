@@ -34,10 +34,13 @@ type
     KeywordsID: Integer;
     HasKeywordsID: Boolean;
     HasForeColor: Boolean;
+    ClearForeColor: Boolean;
     ForeColor: TColor;
     HasBackColor: Boolean;
+    ClearBackColor: Boolean;
     BackColor: TColor;
     FontName: string;
+    HasFontName: Boolean;
     HasFontStyle: Boolean;
     FontStyle: Integer;
     HasFontSize: Boolean;
@@ -248,6 +251,7 @@ type
   end;
 
 function LoadThemeStyleModelFromFile(const AFileName: string): TDSciVisualStyleModel;
+procedure MergeModel(ATarget, AOverlay: TDSciVisualStyleModel);
 
 implementation
 
@@ -493,11 +497,25 @@ begin
     Exit(dvskLexer);
 
   if SameText(AGroupName, 'default') and
-     not SameText(GetNodeAttribute(AStyleNode, 'name'), 'DEFAULT') and
-     not SameText(GetNodeAttribute(AStyleNode, 'name'), 'Global override') then
+     not SameText(GetNodeAttribute(AStyleNode, 'name'), 'DEFAULT') then
     Exit(dvskGlobal);
 
   Result := dvskLexer;
+end;
+
+procedure ApplyNotepadColorStyle(const ANode: IXMLNode;
+  AStyle: TDSciVisualStyleData);
+var
+  lColorStyle: Integer;
+begin
+  if (AStyle = nil) or
+      not ParseOptionalInt(GetNodeAttribute(ANode, 'colorStyle'), lColorStyle) then
+    Exit;
+
+  AStyle.ClearForeColor := (lColorStyle and 1) = 0;
+  AStyle.ClearBackColor := (lColorStyle and 2) = 0;
+  AStyle.HasForeColor := AStyle.HasForeColor and ((lColorStyle and 1) <> 0);
+  AStyle.HasBackColor := AStyle.HasBackColor and ((lColorStyle and 2) <> 0);
 end;
 
 function ParseStyleNode(const ANode: IXMLNode;
@@ -512,7 +530,9 @@ begin
   Result.HasKeywordsID := ParseOptionalInt(GetNodeAttribute(ANode, 'id'), Result.KeywordsID);
   Result.HasForeColor := ParseHexColor(GetNodeAttribute(ANode, 'fgColor'), Result.ForeColor);
   Result.HasBackColor := ParseHexColor(GetNodeAttribute(ANode, 'bgColor'), Result.BackColor);
+  ApplyNotepadColorStyle(ANode, Result);
   Result.FontName := Trim(GetNodeAttribute(ANode, 'fontName'));
+  Result.HasFontName := Result.FontName <> '';
   Result.HasFontStyle := ParseOptionalInt(GetNodeAttribute(ANode, 'fontStyle'), Result.FontStyle);
   Result.HasFontSize := ParseOptionalInt(GetNodeAttribute(ANode, 'fontSize'), Result.FontSize);
   Result.HasEOLFill := ParseOptionalInt(GetNodeAttribute(ANode, 'eolFill'), Result.EOLFill);
@@ -881,18 +901,25 @@ begin
     ATarget.KeywordsID := AOverlay.KeywordsID;
     ATarget.HasKeywordsID := True;
   end;
+  if AOverlay.ClearForeColor then
+    ATarget.HasForeColor := False;
   if AOverlay.HasForeColor then
   begin
     ATarget.ForeColor := AOverlay.ForeColor;
     ATarget.HasForeColor := True;
   end;
+  if AOverlay.ClearBackColor then
+    ATarget.HasBackColor := False;
   if AOverlay.HasBackColor then
   begin
     ATarget.BackColor := AOverlay.BackColor;
     ATarget.HasBackColor := True;
   end;
-  if AOverlay.FontName <> '' then
+  if AOverlay.HasFontName and (AOverlay.FontName <> '') then
+  begin
     ATarget.FontName := AOverlay.FontName;
+    ATarget.HasFontName := True;
+  end;
   if AOverlay.HasFontStyle then
   begin
     ATarget.FontStyle := AOverlay.FontStyle;
@@ -912,6 +939,23 @@ begin
     ATarget.KeywordClass := AOverlay.KeywordClass;
   if AOverlay.KeywordsText <> '' then
     ATarget.KeywordsText := AOverlay.KeywordsText;
+end;
+
+procedure OverlayStyleFontAttributes(ATarget, AOverlay: TDSciVisualStyleData);
+begin
+  if (ATarget = nil) or (AOverlay = nil) then
+    Exit;
+
+  if AOverlay.HasFontName and (AOverlay.FontName <> '') then
+  begin
+    ATarget.FontName := AOverlay.FontName;
+    ATarget.HasFontName := True;
+  end;
+  if AOverlay.HasFontSize then
+  begin
+    ATarget.FontSize := AOverlay.FontSize;
+    ATarget.HasFontSize := True;
+  end;
 end;
 
 procedure MergeModel(ATarget, AOverlay: TDSciVisualStyleModel);
@@ -939,12 +983,25 @@ begin
 
     for lOverlayStyle in lOverlayGroup.Styles do
     begin
-      if lOverlayStyle.HasStyleID then
-        lExistingStyle := lTargetGroup.FindStyleByID(lOverlayStyle.StyleID, lOverlayStyle.Kind)
+      if lOverlayStyle.Kind = dvskGlobal then
+      begin
+        lExistingStyle := lTargetGroup.FindStyle(lOverlayStyle.Name,
+          lOverlayStyle.Kind);
+        if (lExistingStyle = nil) and lOverlayStyle.HasStyleID then
+          lExistingStyle := lTargetGroup.FindStyleByID(lOverlayStyle.StyleID,
+            lOverlayStyle.Kind);
+      end
       else
-        lExistingStyle := nil;
-      if lExistingStyle = nil then
-        lExistingStyle := lTargetGroup.FindStyle(lOverlayStyle.Name, lOverlayStyle.Kind);
+      begin
+        if lOverlayStyle.HasStyleID then
+          lExistingStyle := lTargetGroup.FindStyleByID(lOverlayStyle.StyleID,
+            lOverlayStyle.Kind)
+        else
+          lExistingStyle := nil;
+        if lExistingStyle = nil then
+          lExistingStyle := lTargetGroup.FindStyle(lOverlayStyle.Name,
+            lOverlayStyle.Kind);
+      end;
       if lExistingStyle = nil then
         lTargetGroup.Styles.Add(lOverlayStyle.Clone)
       else
@@ -1054,7 +1111,7 @@ begin
     Result.Attributes['fgColor'] := ColorToHex(AStyle.ForeColor);
   if AStyle.HasBackColor then
     Result.Attributes['bgColor'] := ColorToHex(AStyle.BackColor);
-  if AStyle.FontName <> '' then
+  if AStyle.HasFontName and (AStyle.FontName <> '') then
     Result.Attributes['fontName'] := AStyle.FontName;
   if AStyle.HasFontStyle then
     Result.Attributes['fontStyle'] := AStyle.FontStyle;
@@ -1090,10 +1147,13 @@ begin
   KeywordsID := ASource.KeywordsID;
   HasKeywordsID := ASource.HasKeywordsID;
   HasForeColor := ASource.HasForeColor;
+  ClearForeColor := ASource.ClearForeColor;
   ForeColor := ASource.ForeColor;
   HasBackColor := ASource.HasBackColor;
+  ClearBackColor := ASource.ClearBackColor;
   BackColor := ASource.BackColor;
   FontName := ASource.FontName;
+  HasFontName := ASource.HasFontName;
   HasFontStyle := ASource.HasFontStyle;
   FontStyle := ASource.FontStyle;
   HasFontSize := ASource.HasFontSize;
@@ -1242,22 +1302,26 @@ begin
   if (AGroup = nil) or (AStyle = nil) then
     Exit;
 
-  if AStyle.HasStyleID then
+  if AStyle.Kind = dvskGlobal then
   begin
-    Result := AGroup.FindStyleByID(AStyle.StyleID, AStyle.Kind);
-    if (Result = nil) and (AStyle.Kind = dvskGlobal) then
-      Result := AGroup.FindStyleByID(AStyle.StyleID, dvskLexer)
-    else if (Result = nil) and (AStyle.Kind = dvskLexer) then
+    Result := AGroup.FindStyle(AStyle.Name, dvskGlobal);
+    if Result = nil then
+      Result := AGroup.FindStyle(AStyle.Name, dvskLexer);
+    if (Result = nil) and AStyle.HasStyleID then
       Result := AGroup.FindStyleByID(AStyle.StyleID, dvskGlobal);
-  end;
-
-  if Result = nil then
+    if (Result = nil) and AStyle.HasStyleID then
+      Result := AGroup.FindStyleByID(AStyle.StyleID, dvskLexer)
+  end
+  else
   begin
-    Result := AGroup.FindStyle(AStyle.Name, AStyle.Kind);
-    if (Result = nil) and (AStyle.Kind = dvskGlobal) then
-      Result := AGroup.FindStyle(AStyle.Name, dvskLexer)
-    else if (Result = nil) and (AStyle.Kind = dvskLexer) then
+    if AStyle.HasStyleID then
+      Result := AGroup.FindStyleByID(AStyle.StyleID, dvskLexer);
+    if Result = nil then
+      Result := AGroup.FindStyle(AStyle.Name, dvskLexer);
+    if Result = nil then
       Result := AGroup.FindStyle(AStyle.Name, dvskGlobal);
+    if (Result = nil) and AStyle.HasStyleID then
+      Result := AGroup.FindStyleByID(AStyle.StyleID, dvskGlobal);
   end;
 end;
 
@@ -1895,6 +1959,10 @@ begin
     if lStyle <> nil then
       OverlayStyle(Result, lStyle);
   end;
+
+  if lDefaultGroup <> nil then
+    OverlayStyleFontAttributes(Result,
+      lDefaultGroup.FindStyle('Global override', dvskGlobal));
 end;
 
 end.
