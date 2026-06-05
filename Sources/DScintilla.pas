@@ -318,6 +318,7 @@ type
     procedure RefreshManagedStatusBar;
     function GetEffectiveFileSizeLimit: Int64;
     function IsPointInMarginArea(const AClientPoint: TPoint): Boolean;
+    procedure ShowGutterContextMenu(const AScreenPoint: TPoint);
 
     property CurrentFileName: UnicodeString read FCurrentFileName;
     property FileLoadStatus: TDSciFileLoadStatus read FFileLoadStatus;
@@ -3328,6 +3329,16 @@ begin
 
   APopupMenu.PopupComponent := Self;
   ShowPopupMenu(APopupMenu, Handle, AScreenPoint);
+end;
+
+procedure TDScintilla.ShowGutterContextMenu(const AScreenPoint: TPoint);
+begin
+  if FGutterContextMenu = nil then
+    Exit;
+
+  DSciLog(Format('[CTX] ShowGutterContextMenu pos=(%d,%d)',
+    [AScreenPoint.X, AScreenPoint.Y]), cDSciLogDebug);
+  ShowContextMenu(FGutterContextMenu, AScreenPoint);
 end;
 
 procedure TDScintilla.UpdateBraceHighlighting;

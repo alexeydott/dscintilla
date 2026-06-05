@@ -386,18 +386,20 @@ end;
 procedure TDOSrcVwrViewerFrame.EditorMouseUp(Sender: TObject;
   Button: TMouseButton; Shift: TShiftState; X, Y: Integer);
 var
+  LInMargin: Boolean;
   LScreenPt: TPoint;
 begin
   if Button = mbRight then
   begin
-    { TDScintilla.WMRButtonUp shows FGutterContextMenu for margin-area clicks
-      BEFORE calling inherited (which fires this OnMouseUp). Suppress the
-      viewer's own context menu for margin clicks so only one popup appears. }
-    if not FEditor.IsPointInMarginArea(Point(X, Y)) then
-    begin
-      LScreenPt := FEditor.ClientToScreen(Point(X, Y));
+    LScreenPt := FEditor.ClientToScreen(Point(X, Y));
+    LInMargin := FEditor.IsPointInMarginArea(Point(X, Y));
+    LogInfo('[FIX:DOSrcVwrGutterPopup] Right-click pos=(%d,%d) inMargin=%d',
+      [X, Y, Ord(LInMargin)]);
+
+    if LInMargin then
+      FEditor.ShowGutterContextMenu(LScreenPt)
+    else
       ShowEditorContextMenu(LScreenPt);
-    end;
   end;
 end;
 

@@ -259,6 +259,7 @@ uses
   System.IOUtils, System.Math, System.StrUtils, System.SysUtils, System.Variants,
   System.Win.ComObj,
   Winapi.ActiveX, Winapi.Windows,
+  DScintillaLogger,
   Xml.XMLDoc, Xml.XMLIntf, Xml.xmldom, Xml.omnixmldom;
 
 type
@@ -1351,6 +1352,22 @@ begin
   end;
 end;
 
+function IsGlobalOverrideStyle(AStyle: TDSciVisualStyleData): Boolean;
+begin
+  Result := (AStyle <> nil) and (AStyle.Kind = dvskGlobal) and
+    SameText(AStyle.Name, 'Global override');
+end;
+
+procedure PreserveGlobalOverrideStyle(ATarget, ASource: TDSciVisualStyleData);
+begin
+  if not IsGlobalOverrideStyle(ATarget) or not IsGlobalOverrideStyle(ASource) then
+    Exit;
+
+  OverlayStyle(ATarget, ASource);
+  DSciLog('[FIX:ThemeGlobalOverride] Preserved Global override attributes while replacing theme style model.',
+    cDSciLogInfo);
+end;
+
 procedure PreserveGroupMetadata(ATarget, ASource: TDSciVisualStyleGroup);
 begin
   if (ATarget = nil) or (ASource = nil) then
@@ -1649,7 +1666,10 @@ begin
         begin
           lNewStyle := FindMatchingStyle(lNewGroup, lOldStyle);
           if lNewStyle <> nil then
-            PreserveStyleMetadata(lNewStyle, lOldStyle)
+          begin
+            PreserveStyleMetadata(lNewStyle, lOldStyle);
+            PreserveGlobalOverrideStyle(lNewStyle, lOldStyle);
+          end
           else
             lNewGroup.Styles.Add(lOldStyle.Clone);
         end;
