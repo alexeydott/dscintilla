@@ -47,6 +47,10 @@ type
     FontSize: Integer;
     EOLFill: Integer;
     HasEOLFill: Boolean;
+    UpperLineSpacing: Integer;
+    HasUpperLineSpacing: Boolean;
+    LowerLineSpacing: Integer;
+    HasLowerLineSpacing: Boolean;
     KeywordClass: string;
     KeywordsText: string;
 
@@ -251,6 +255,8 @@ type
   end;
 
 function LoadThemeStyleModelFromFile(const AFileName: string): TDSciVisualStyleModel;
+function RefreshConfigStyleModelFromTheme(AConfig: TDSciVisualConfig;
+  const AConfigFileName: string): Boolean;
 procedure MergeModel(ATarget, AOverlay: TDSciVisualStyleModel);
 
 implementation
@@ -440,15 +446,58 @@ begin
   if lToken = '' then
     Exit('');
 
-  if ExtractFileExt(lToken) <> '' then
-    lToken := ExtractFileExt(lToken)
-  else if Pos(PathDelim, lToken) > 0 then
+  if (Pos(PathDelim, lToken) > 0) or (Pos('/', lToken) > 0) then
     lToken := ExtractFileExt(lToken);
+
+  if (lToken <> '') and (lToken[1] = '*') then
+    Delete(lToken, 1, 1);
 
   if (lToken <> '') and (lToken[1] = '.') then
     Delete(lToken, 1, 1);
 
   Result := LowerCase(Trim(lToken));
+end;
+
+function NormalizeFileExtension(const AFileName: string): string;
+begin
+  Result := LowerCase(ExtractFileExt(AFileName));
+  if (Result <> '') and (Result[1] = '.') then
+    Delete(Result, 1, 1);
+end;
+
+function IsCompoundExtensionBoundary(AFileName: string;
+  ATokenStart: Integer): Boolean;
+var
+  lChar: Char;
+begin
+  if ATokenStart <= 1 then
+    Exit(True);
+
+  lChar := AFileName[ATokenStart - 1];
+  Result := not CharInSet(lChar, ['0'..'9', 'A'..'Z', 'a'..'z', '_']);
+end;
+
+function MatchesExtensionToken(const AToken, AFileName,
+  AFileExtension: string): Boolean;
+var
+  lFileName: string;
+  lStart: Integer;
+  lToken: string;
+begin
+  Result := False;
+  lToken := NormalizeExtensionToken(AToken);
+  if lToken = '' then
+    Exit;
+
+  if Pos('.', lToken) = 0 then
+    Exit(SameText(lToken, AFileExtension));
+
+  lFileName := LowerCase(ExtractFileName(AFileName));
+  if not EndsText(lToken, lFileName) then
+    Exit;
+
+  lStart := Length(lFileName) - Length(lToken) + 1;
+  Result := IsCompoundExtensionBoundary(lFileName, lStart);
 end;
 
 function MatchesExtensions(const AExtensions, AFileName: string): Boolean;
@@ -458,7 +507,7 @@ var
   lTokens: TStringList;
 begin
   Result := False;
-  lExtension := NormalizeExtensionToken(AFileName);
+  lExtension := NormalizeFileExtension(AFileName);
   if lExtension = '' then
     Exit;
 
@@ -468,7 +517,7 @@ begin
     lTokens.Delimiter := ' ';
     lTokens.DelimitedText := StringReplace(Trim(AExtensions), #9, ' ', [rfReplaceAll]);
     for lToken in lTokens do
-      if SameText(NormalizeExtensionToken(lToken), lExtension) then
+      if MatchesExtensionToken(lToken, AFileName, lExtension) then
         Exit(True);
   finally
     lTokens.Free;
@@ -523,6 +572,7 @@ function ParseStyleNode(const ANode: IXMLNode;
   AKind: TDSciVisualStyleKind): TDSciVisualStyleData;
 var
   lKeywordNode: IXMLNode;
+  lValue: string;
 begin
   Result := CreateStyleData(AKind);
   Result.Name := GetNodeAttribute(ANode, 'name');
@@ -537,6 +587,14 @@ begin
   Result.HasFontStyle := ParseOptionalInt(GetNodeAttribute(ANode, 'fontStyle'), Result.FontStyle);
   Result.HasFontSize := ParseOptionalInt(GetNodeAttribute(ANode, 'fontSize'), Result.FontSize);
   Result.HasEOLFill := ParseOptionalInt(GetNodeAttribute(ANode, 'eolFill'), Result.EOLFill);
+  lValue := GetNodeAttribute(ANode, 'upperLineSpacing');
+  if lValue = '' then
+    lValue := GetNodeAttribute(ANode, 'UpperLineSpacing');
+  Result.HasUpperLineSpacing := ParseOptionalInt(lValue, Result.UpperLineSpacing);
+  lValue := GetNodeAttribute(ANode, 'lowerLineSpacing');
+  if lValue = '' then
+    lValue := GetNodeAttribute(ANode, 'LowerLineSpacing');
+  Result.HasLowerLineSpacing := ParseOptionalInt(lValue, Result.LowerLineSpacing);
 
   lKeywordNode := FindKeywordNode(ANode);
   if lKeywordNode <> nil then
@@ -936,6 +994,16 @@ begin
     ATarget.EOLFill := AOverlay.EOLFill;
     ATarget.HasEOLFill := True;
   end;
+  if AOverlay.HasUpperLineSpacing and (AOverlay.UpperLineSpacing <> 0) then
+  begin
+    ATarget.UpperLineSpacing := AOverlay.UpperLineSpacing;
+    ATarget.HasUpperLineSpacing := True;
+  end;
+  if AOverlay.HasLowerLineSpacing and (AOverlay.LowerLineSpacing <> 0) then
+  begin
+    ATarget.LowerLineSpacing := AOverlay.LowerLineSpacing;
+    ATarget.HasLowerLineSpacing := True;
+  end;
   if AOverlay.KeywordClass <> '' then
     ATarget.KeywordClass := AOverlay.KeywordClass;
   if AOverlay.KeywordsText <> '' then
@@ -1098,6 +1166,75 @@ begin
   end;
 end;
 
+function ResolveConfigThemeFileName(const AConfigFileName,
+  AThemeName: string): string;
+var
+  lCandidate: string;
+  lConfigDirectory: string;
+  lThemeName: string;
+  lThemesDirectory: string;
+begin
+  Result := '';
+  lThemeName := Trim(AThemeName);
+  if lThemeName = '' then
+    Exit;
+
+  if FileExists(lThemeName) then
+    Exit(ExpandFileName(lThemeName));
+
+  lConfigDirectory := ExtractFileDir(ExpandFileName(AConfigFileName));
+  if lConfigDirectory = '' then
+    Exit;
+
+  lThemesDirectory := TPath.Combine(lConfigDirectory, 'themes');
+  lCandidate := TPath.Combine(lThemesDirectory, lThemeName);
+  if FileExists(lCandidate) then
+    Exit(ExpandFileName(lCandidate));
+
+  if not EndsText('.xml', lThemeName) then
+  begin
+    lCandidate := TPath.Combine(lThemesDirectory, lThemeName + '.xml');
+    if FileExists(lCandidate) then
+      Exit(ExpandFileName(lCandidate));
+  end;
+end;
+
+function RefreshConfigStyleModelFromTheme(AConfig: TDSciVisualConfig;
+  const AConfigFileName: string): Boolean;
+var
+  lThemeFileName: string;
+  lThemeModel: TDSciVisualStyleModel;
+  lThemeName: string;
+begin
+  Result := False;
+  if AConfig = nil then
+    Exit;
+
+  lThemeName := Trim(AConfig.ThemeName);
+  if lThemeName = '' then
+    Exit;
+
+  lThemeFileName := ResolveConfigThemeFileName(AConfigFileName, lThemeName);
+  if lThemeFileName = '' then
+  begin
+    DSciLog(Format('[THEME] Config theme "%s" was not found next to "%s".',
+      [lThemeName, AConfigFileName]), cDSciLogInfo);
+    Exit;
+  end;
+
+  lThemeModel := LoadThemeStyleModelFromFile(lThemeFileName);
+  try
+    MergeModel(lThemeModel, AConfig.StyleOverrides);
+    AConfig.ReplaceStyleModel(lThemeModel, False);
+    AConfig.ThemeName := lThemeName;
+    DSciLog(Format('[THEME] Refreshed config style model from "%s".',
+      [lThemeFileName]), cDSciLogInfo);
+    Result := True;
+  finally
+    lThemeModel.Free;
+  end;
+end;
+
 function WriteStyleNode(AParent: IXMLNode; AStyle: TDSciVisualStyleData;
   const ANodeName: string; AUseNestedKeywords: Boolean = False): IXMLNode;
 var
@@ -1120,6 +1257,10 @@ begin
     Result.Attributes['fontSize'] := AStyle.FontSize;
   if AStyle.HasEOLFill then
     Result.Attributes['eolFill'] := AStyle.EOLFill;
+  if AStyle.HasUpperLineSpacing then
+    Result.Attributes['upperLineSpacing'] := AStyle.UpperLineSpacing;
+  if AStyle.HasLowerLineSpacing then
+    Result.Attributes['lowerLineSpacing'] := AStyle.LowerLineSpacing;
   if AStyle.KeywordClass <> '' then
     Result.Attributes['keywordClass'] := AStyle.KeywordClass;
   if AStyle.KeywordsText <> '' then
@@ -1161,6 +1302,10 @@ begin
   FontSize := ASource.FontSize;
   EOLFill := ASource.EOLFill;
   HasEOLFill := ASource.HasEOLFill;
+  UpperLineSpacing := ASource.UpperLineSpacing;
+  HasUpperLineSpacing := ASource.HasUpperLineSpacing;
+  LowerLineSpacing := ASource.LowerLineSpacing;
+  HasLowerLineSpacing := ASource.HasLowerLineSpacing;
   KeywordClass := ASource.KeywordClass;
   KeywordsText := ASource.KeywordsText;
 end;
@@ -1692,6 +1837,8 @@ begin
     try
       lStep := 'parse xml';
       LoadVisualConfigData(lConfig, AFileName);
+      lStep := 'refresh theme styles';
+      RefreshConfigStyleModelFromTheme(lConfig, AFileName);
       lStep := 'commit parsed config';
       Assign(lConfig);
     except

@@ -64,6 +64,8 @@ type
     FStylePanel: TPanel;
     FFontNamePanel: TPanel;
     FFontSizePanel: TPanel;
+    FStyleUpperLineSpacingPanel: TPanel;
+    FStyleLowerLineSpacingPanel: TPanel;
     FStyleColorsRow: TPanel;
     FFontStylesRow: TPanel;
     FHighlightPanel: TPanel;
@@ -96,6 +98,10 @@ type
     FFontNameCombo: TComboBox;
     FFontSizeLabel: TLabel;
     FFontSizeEdit: TSpinEdit;
+    FStyleUpperLineSpacingLabel: TLabel;
+    FStyleUpperLineSpacingEdit: TSpinEdit;
+    FStyleLowerLineSpacingLabel: TLabel;
+    FStyleLowerLineSpacingEdit: TSpinEdit;
     FForegroundLabel: TLabel;
     FForegroundBox: TPanel;
     FBackgroundLabel: TLabel;
@@ -304,6 +310,11 @@ type
 procedure AddComboIntItem(ACombo: TComboBox; const ACaption: string; AValue: Integer);
 begin
   ACombo.Items.AddObject(ACaption, TObject(NativeInt(AValue)));
+end;
+
+function StyleSupportsLineSpacing(AStyle: TDSciVisualStyleData): Boolean;
+begin
+  Result := AStyle <> nil;
 end;
 
 function ComboSelectedInt(ACombo: TComboBox; ADefault: Integer): Integer;
@@ -1248,6 +1259,16 @@ var
         lInnerTop, Scale(cInputHeight));
       FFontSizeEdit.SetBounds(0, 0, Scale(cSpinWidth), Scale(cInputHeight));
 
+      LayoutLabeledRow(FStyleUpperLineSpacingPanel, FStyleUpperLineSpacingLabel,
+        TPanel(FStyleUpperLineSpacingEdit.Parent), lInnerTop, Scale(cInputHeight));
+      FStyleUpperLineSpacingEdit.SetBounds(0, 0, Scale(cSpinWidth),
+        Scale(cInputHeight));
+
+      LayoutLabeledRow(FStyleLowerLineSpacingPanel, FStyleLowerLineSpacingLabel,
+        TPanel(FStyleLowerLineSpacingEdit.Parent), lInnerTop, Scale(cInputHeight));
+      FStyleLowerLineSpacingEdit.SetBounds(0, 0, Scale(cSpinWidth),
+        Scale(cInputHeight));
+
       LayoutPairedRow(FStyleColorsRow, FForegroundLabel, FBackgroundLabel,
         FForegroundBox, FBackgroundBox, lInnerTop, Scale(cColorPreviewHeight), 0, 0);
       LogPairRowLayout('Style Colors', FForegroundBox.Width, FBackgroundBox.Width);
@@ -1971,6 +1992,26 @@ begin
   FFontSizeEdit.MaxValue := 48;
   FFontSizeEdit.OnChange := StyleControlChange;
 
+  FStyleUpperLineSpacingPanel := CreateLabeledRow(FStyleStack,
+    'Upper line spacing', FStyleUpperLineSpacingLabel, lFieldHost,
+    Scale(cInputHeight));
+  ConfigureVerticalStackChild(FStyleStack, FStyleUpperLineSpacingPanel);
+  FStyleUpperLineSpacingEdit := TSpinEdit.Create(Self);
+  FStyleUpperLineSpacingEdit.Parent := lFieldHost;
+  FStyleUpperLineSpacingEdit.MinValue := -MaxInt;
+  FStyleUpperLineSpacingEdit.MaxValue := MaxInt;
+  FStyleUpperLineSpacingEdit.OnChange := StyleControlChange;
+
+  FStyleLowerLineSpacingPanel := CreateLabeledRow(FStyleStack,
+    'Lower line spacing', FStyleLowerLineSpacingLabel, lFieldHost,
+    Scale(cInputHeight));
+  ConfigureVerticalStackChild(FStyleStack, FStyleLowerLineSpacingPanel);
+  FStyleLowerLineSpacingEdit := TSpinEdit.Create(Self);
+  FStyleLowerLineSpacingEdit.Parent := lFieldHost;
+  FStyleLowerLineSpacingEdit.MinValue := -MaxInt;
+  FStyleLowerLineSpacingEdit.MaxValue := MaxInt;
+  FStyleLowerLineSpacingEdit.OnChange := StyleControlChange;
+
   FStyleColorsRow := CreateHostPanel(FStyleStack);
   ConfigureVerticalStackChild(FStyleStack, FStyleColorsRow);
   FForegroundLabel := TLabel.Create(Self);
@@ -2294,7 +2335,7 @@ begin
   FUpperLineSpacingEdit.Parent := lFieldHost;
   FUpperLineSpacingEdit.Align := alLeft;
   FUpperLineSpacingEdit.Width := Scale(cSpinWidth);
-  FUpperLineSpacingEdit.MinValue := -10;
+  FUpperLineSpacingEdit.MinValue := -MaxInt;
   FUpperLineSpacingEdit.MaxValue := MaxInt;
   FUpperLineSpacingEdit.OnChange := StyleControlChange;
 
@@ -2305,7 +2346,7 @@ begin
   FLowerLineSpacingEdit.Parent := lFieldHost;
   FLowerLineSpacingEdit.Align := alLeft;
   FLowerLineSpacingEdit.Width := Scale(cSpinWidth);
-  FLowerLineSpacingEdit.MinValue := -10;
+  FLowerLineSpacingEdit.MinValue := -MaxInt;
   FLowerLineSpacingEdit.MaxValue := MaxInt;
   FLowerLineSpacingEdit.OnChange := StyleControlChange;
 
@@ -2946,6 +2987,7 @@ var
   lOverride: TDSciVisualStyleData;
   lOverrideGroup: TDSciVisualStyleGroup;
   lStyle: TDSciVisualStyleData;
+  lSupportsLineSpacing: Boolean;
 begin
   lGroup := SelectedLanguage;
   lStyle := SelectedStyle;
@@ -2983,6 +3025,19 @@ begin
       FBoldCheck.Checked := lEffectiveStyle.HasFontStyle and ((lEffectiveStyle.FontStyle and 2) <> 0);
       FItalicCheck.Checked := lEffectiveStyle.HasFontStyle and ((lEffectiveStyle.FontStyle and 1) <> 0);
       FUnderlineCheck.Checked := lEffectiveStyle.HasFontStyle and ((lEffectiveStyle.FontStyle and 4) <> 0);
+      lSupportsLineSpacing := StyleSupportsLineSpacing(lStyle);
+      FStyleUpperLineSpacingLabel.Enabled := lSupportsLineSpacing;
+      FStyleUpperLineSpacingEdit.Enabled := lSupportsLineSpacing;
+      FStyleLowerLineSpacingLabel.Enabled := lSupportsLineSpacing;
+      FStyleLowerLineSpacingEdit.Enabled := lSupportsLineSpacing;
+      if lSupportsLineSpacing and lEffectiveStyle.HasUpperLineSpacing then
+        FStyleUpperLineSpacingEdit.Value := lEffectiveStyle.UpperLineSpacing
+      else
+        FStyleUpperLineSpacingEdit.Value := 0;
+      if lSupportsLineSpacing and lEffectiveStyle.HasLowerLineSpacing then
+        FStyleLowerLineSpacingEdit.Value := lEffectiveStyle.LowerLineSpacing
+      else
+        FStyleLowerLineSpacingEdit.Value := 0;
       FExtensionsEdit.Text := lGroup.Extensions;
       if (lOverrideGroup <> nil) and (lOverrideGroup.Extensions <> '') then
         FExtensionsEdit.Text := lOverrideGroup.Extensions;
@@ -3171,6 +3226,13 @@ begin
     lFontStyle := lFontStyle or 4;
   lOverride.HasFontStyle := True;
   lOverride.FontStyle := lFontStyle;
+  if StyleSupportsLineSpacing(lStyle) then
+  begin
+    lOverride.HasUpperLineSpacing := True;
+    lOverride.UpperLineSpacing := FStyleUpperLineSpacingEdit.Value;
+    lOverride.HasLowerLineSpacing := True;
+    lOverride.LowerLineSpacing := FStyleLowerLineSpacingEdit.Value;
+  end;
 end;
 
 procedure TDSciVisualSettingsDialog.ThemeComboChange(Sender: TObject);

@@ -290,6 +290,89 @@ begin
     AEditor.StyleSize[AStyleID] := AEntry.FontSize;
 end;
 
+procedure ApplyVisualStyleLineSpacing(const AEditor: TDScintilla;
+  const AEntry: TDSciVisualStyleData; const ASourceName: string);
+begin
+  if AEntry = nil then
+    Exit;
+
+  if AEntry.HasUpperLineSpacing and (AEntry.UpperLineSpacing <> 0) then
+  begin
+    AEditor.ExtraAscent := AEntry.UpperLineSpacing;
+    DSciLog(Format('[DSCI-SETTINGS] Applied %s upperLineSpacing=%d.',
+      [ASourceName, AEntry.UpperLineSpacing]), cDSciLogDebug);
+  end;
+  if AEntry.HasLowerLineSpacing and (AEntry.LowerLineSpacing <> 0) then
+  begin
+    AEditor.ExtraDescent := AEntry.LowerLineSpacing;
+    DSciLog(Format('[DSCI-SETTINGS] Applied %s lowerLineSpacing=%d.',
+      [ASourceName, AEntry.LowerLineSpacing]), cDSciLogDebug);
+  end;
+end;
+
+function VisualStyleHasLineSpacing(const AEntry: TDSciVisualStyleData): Boolean;
+begin
+  Result := Assigned(AEntry) and
+    ((AEntry.HasUpperLineSpacing and (AEntry.UpperLineSpacing <> 0)) or
+     (AEntry.HasLowerLineSpacing and (AEntry.LowerLineSpacing <> 0)));
+end;
+
+function FindConfigLexerLineSpacingStyle(
+  const AGroup: TDSciVisualStyleGroup): TDSciVisualStyleData;
+var
+  lStyle: TDSciVisualStyleData;
+begin
+  Result := nil;
+  if AGroup = nil then
+    Exit;
+
+  Result := AGroup.FindStyle('DEFAULT', dvskLexer);
+  if VisualStyleHasLineSpacing(Result) then
+    Exit;
+
+  Result := nil;
+  for lStyle in AGroup.Styles do
+    if (lStyle.Kind = dvskLexer) and VisualStyleHasLineSpacing(lStyle) then
+    begin
+      Result := lStyle;
+      Exit;
+    end;
+end;
+
+procedure ApplyConfigLexerStyleLineSpacing(const AEditor: TDScintilla;
+  const AGroup: TDSciVisualStyleGroup);
+var
+  lSourceName: string;
+  lStyle: TDSciVisualStyleData;
+begin
+  lStyle := FindConfigLexerLineSpacingStyle(AGroup);
+  if lStyle = nil then
+    Exit;
+
+  lSourceName := Trim(AGroup.Name + ' ' + lStyle.Name);
+  ApplyVisualStyleLineSpacing(AEditor, lStyle, lSourceName);
+end;
+
+procedure ApplyConfigStyleLineSpacing(const AEditor: TDScintilla;
+  const ADefaultGroup, ACurrentGroup: TDSciVisualStyleGroup);
+var
+  lStyle: TDSciVisualStyleData;
+begin
+  lStyle := ResolveConfigGlobalStyle(ADefaultGroup, ACurrentGroup, 'Default Style');
+  if lStyle = nil then
+    lStyle := ResolveConfigGlobalStyle(ADefaultGroup, ACurrentGroup, 'DEFAULT');
+  ApplyVisualStyleLineSpacing(AEditor, lStyle, 'Default Style');
+
+  ApplyConfigLexerStyleLineSpacing(AEditor, ADefaultGroup);
+  if (ACurrentGroup <> nil) and
+     ((ADefaultGroup = nil) or not SameText(ACurrentGroup.Name, ADefaultGroup.Name)) then
+    ApplyConfigLexerStyleLineSpacing(AEditor, ACurrentGroup);
+
+  lStyle := ResolveConfigGlobalStyle(ADefaultGroup, ACurrentGroup,
+    'Global override');
+  ApplyVisualStyleLineSpacing(AEditor, lStyle, 'Global override');
+end;
+
 procedure ApplyConfigFoldMarkerColours(const AEditor: TDScintilla;
   const AEntry: TDSciVisualStyleData; AOpenOnly: Boolean);
 const
@@ -1554,6 +1637,7 @@ begin
     lEditor.ClearDocumentStyle;
     lEditor.Colourise(0, -1);
     ApplyConfigEditorOptions(lEditor, lConfig);
+    ApplyConfigStyleLineSpacing(lEditor, lConfigDefaultGroup, lConfigGroup);
     lEditor.RefreshManagedStatusBar;
     Exit;
   end;
@@ -1567,6 +1651,7 @@ begin
   ApplyConfigDefaultStyle(lEditor, lConfigDefaultGroup, lConfigGroup);
   ApplyConfigGlobalOverrideFonts(lEditor, lConfigDefaultGroup, lConfigGroup);
   ApplyConfigEditorOptions(lEditor, lConfig);
+  ApplyConfigStyleLineSpacing(lEditor, lConfigDefaultGroup, lConfigGroup);
   lEditor.RefreshManagedStatusBar;
 end;
 

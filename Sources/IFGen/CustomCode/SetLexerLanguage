@@ -4,10 +4,41 @@ var
   lConfigGroup: TDSciVisualStyleGroup;
   lConfigObject: TObject;
   lDllPath: string;
+  lLexerID: Integer;
   lLexilla: TDLexilla;
   lLexer: TDSciLexer;
   lRuntimeLanguage: UnicodeString;
   lResolvedLanguage: UnicodeString;
+
+  function NameMatches(const AName: UnicodeString;
+    const ANames: array of string): Boolean;
+  var
+    lName: string;
+  begin
+    for lName in ANames do
+      if SameText(AName, lName) then
+        Exit(True);
+    Result := False;
+  end;
+
+  function ResolveKnownLexerID(const AName: UnicodeString;
+    out ALexerID: Integer): Boolean;
+  begin
+    Result := True;
+    if NameMatches(AName, ['c', 'cpp', 'cs', 'go', 'java', 'javascript',
+       'javascript.js', 'objc', 'rc', 'swift', 'typescript']) then
+      ALexerID := SCLEX_CPP
+    else if SameText(AName, 'baanc') then
+      ALexerID := SCLEX_BAAN
+    else if SameText(AName, 'd') then
+      ALexerID := SCLEX_D
+    else if SameText(AName, 'fortran77') then
+      ALexerID := SCLEX_F77
+    else if SameText(AName, 'r') then
+      ALexerID := SCLEX_R
+    else
+      Result := False;
+  end;
 begin
   FRequestedLexerLanguage := Trim(ALanguage);
   lRuntimeLanguage := FRequestedLexerLanguage;
@@ -30,8 +61,13 @@ begin
     lConfigGroup := TDSciVisualConfig(lConfigObject).StyleOverrides.FindGroup(
       FRequestedLexerLanguage);
 
-  if (lConfigGroup <> nil) and lConfigGroup.HasLexerID then
-    if lConfigGroup.LexerID = Integer(sclNULL) then
+  if (lConfigGroup <> nil) and
+     (ResolveKnownLexerID(lConfigGroup.Name, lLexerID) or lConfigGroup.HasLexerID) then
+  begin
+    if not ResolveKnownLexerID(lConfigGroup.Name, lLexerID) then
+      lLexerID := lConfigGroup.LexerID;
+
+    if lLexerID = Integer(sclNULL) then
     begin
       OutputDebugString(PChar('Keeping requested language "' +
         string(FRequestedLexerLanguage) +
@@ -42,22 +78,23 @@ begin
     end
     else
       try
-        lResolvedLanguage := Trim(lLexilla.LexerNameFromID(lConfigGroup.LexerID));
+        lResolvedLanguage := Trim(lLexilla.LexerNameFromID(lLexerID));
         if lResolvedLanguage <> '' then
         begin
           if not SameText(lResolvedLanguage, lRuntimeLanguage) then
             OutputDebugString(PChar('Mapping requested language "' +
               string(FRequestedLexerLanguage) + '" to runtime lexer "' +
               string(lResolvedLanguage) + '" from LexerID ' +
-              IntToStr(lConfigGroup.LexerID) + '.'));
+              IntToStr(lLexerID) + '.'));
           lRuntimeLanguage := lResolvedLanguage;
         end;
       except
         on E: Exception do
           OutputDebugString(PChar('Could not resolve runtime lexer for "' +
             string(FRequestedLexerLanguage) + '" from LexerID ' +
-            IntToStr(lConfigGroup.LexerID) + ': ' + E.Message));
+            IntToStr(lLexerID) + ': ' + E.Message));
       end;
+  end;
 
   // SCI_SETLEXERLANGUAGE (4006) and SCI_LOADLEXERLIBRARY (4007) were
   // removed in Scintilla 5.x and are silently ignored.  Always create a fresh
