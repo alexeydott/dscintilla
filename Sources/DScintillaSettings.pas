@@ -142,9 +142,15 @@ function ResolveKnownConfigLexerID(const AGroupName: string;
 begin
   Result := True;
   if GroupNameMatches(AGroupName, ['c', 'cpp', 'cs', 'go', 'java',
-     'javascript', 'javascript.js', 'objc', 'rc', 'swift', 'typescript']) then
+     'javascript.js', 'objc', 'rc', 'swift', 'typescript']) then
     ALexerID := SCLEX_CPP
+  else if SameText(AGroupName, 'javascript') then
+    ALexerID := SCLEX_HTML
+  else if SameText(AGroupName, 'asp') then
+    ALexerID := SCLEX_HTML
   else if SameText(AGroupName, 'html') then
+    ALexerID := SCLEX_HTML
+  else if SameText(AGroupName, 'php') then
     ALexerID := SCLEX_HTML
   else if SameText(AGroupName, 'xml') then
     ALexerID := SCLEX_XML
@@ -162,7 +168,10 @@ begin
 
   Result := Assigned(AGroup) and AGroup.HasLexerID;
   if Result then
+  begin
     ALexerID := AGroup.LexerID;
+    Exit;
+  end;
 end;
 
 function UsesCppKeywordLists(const AGroup: TDSciVisualStyleGroup): Boolean;
@@ -207,8 +216,21 @@ begin
     end;
 
   if UsesHtmlXmlKeywordLists(AGroup) and Assigned(AStyle) and
-     AStyle.HasStyleID and (AStyle.StyleID = SCE_H_SGML_COMMAND) then
-    Result := cHtmlXmlSgmlKeywordList;
+     AStyle.HasStyleID then
+    case AStyle.StyleID of
+      SCE_H_TAG:
+        Exit(0);
+      SCE_HJ_KEYWORD, SCE_HJA_KEYWORD:
+        Exit(1);
+      SCE_HB_WORD, SCE_HBA_WORD:
+        Exit(2);
+      SCE_HP_WORD, SCE_HPA_WORD:
+        Exit(3);
+      SCE_HPHP_WORD:
+        Exit(4);
+      SCE_H_SGML_COMMAND:
+        Exit(cHtmlXmlSgmlKeywordList);
+    end;
 end;
 
 function FindConfigStyle(const AGroup: TDSciVisualStyleGroup;

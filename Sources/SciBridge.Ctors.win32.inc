@@ -6,6 +6,7 @@
   provides SciStatic_RunConstructors to call them all.
 }
 
+procedure __GLOBAL__I_000100; cdecl; external name '__GLOBAL__I_000100';
 procedure __GLOBAL__sub_I_CaseConvert_cxx; cdecl; external name '__GLOBAL__sub_I_CaseConvert.cxx';
 procedure __GLOBAL__sub_I_DBCS_cxx; cdecl; external name '__GLOBAL__sub_I_DBCS.cxx';
 procedure __GLOBAL__sub_I_LexA68k_cxx; cdecl; external name '__GLOBAL__sub_I_LexA68k.cxx';
@@ -137,6 +138,7 @@ procedure __GLOBAL__sub_I_LexZig_cxx; cdecl; external name '__GLOBAL__sub_I_LexZ
 
 procedure SciStatic_RunConstructors;
 begin
+  __GLOBAL__I_000100;
   __GLOBAL__sub_I_CaseConvert_cxx;
   __GLOBAL__sub_I_DBCS_cxx;
   __GLOBAL__sub_I_LexA68k_cxx;

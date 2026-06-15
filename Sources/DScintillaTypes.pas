@@ -5165,6 +5165,7 @@ const
   SCE_ASM_STRINGEOL = 13;
   SCE_ASM_EXTINSTRUCTION = 14;
   SCE_ASM_COMMENTDIRECTIVE = 15;
+  SCE_ASM_STRINGBACKQUOTE = 16;
 
   /// <summary>Lexical states for SCLEX_FORTRAN</summary>
   SCE_F_DEFAULT = 0;
@@ -6019,6 +6020,7 @@ const
   SCE_PAS_CHARACTER = 12;
   SCE_PAS_OPERATOR = 13;
   SCE_PAS_ASM = 14;
+  SCE_PAS_MULTILINESTRING = 15;
 
   /// <summary>Lexical state for SCLEX_SORCUS</summary>
   SCE_SORCUS_DEFAULT = 0;

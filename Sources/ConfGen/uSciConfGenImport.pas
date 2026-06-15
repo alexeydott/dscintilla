@@ -383,6 +383,9 @@ begin
   end;
 end;
 
+function IsEmbeddedHtmlStyleGroup(const AGroupName: string): Boolean; forward;
+procedure LogConfGenFix(const AMessage: string); forward;
+
 procedure MergeSeedStyleAdditions(ATarget, ASeed: TDSciVisualStyleModel);
 var
   lExistingStyle: TDSciVisualStyleData;
@@ -406,12 +409,20 @@ begin
 
     if (lTargetGroup.Description = '') and (lSeedGroup.Description <> '') then
       lTargetGroup.Description := lSeedGroup.Description;
-    if (lTargetGroup.Extensions = '') and (lSeedGroup.Extensions <> '') then
+    if (lTargetGroup.Extensions = '') and (lSeedGroup.Extensions <> '') and
+       not IsEmbeddedHtmlStyleGroup(lSeedGroup.Name) then
       lTargetGroup.Extensions := lSeedGroup.Extensions;
     if not lTargetGroup.HasLexerID and lSeedGroup.HasLexerID then
     begin
       lTargetGroup.LexerID := lSeedGroup.LexerID;
       lTargetGroup.HasLexerID := True;
+    end;
+
+    if IsEmbeddedHtmlStyleGroup(lSeedGroup.Name) then
+    begin
+      LogConfGenFix('Ignored seed-only styles and extensions for embedded HTML-family group "' +
+        lSeedGroup.Name + '".');
+      Continue;
     end;
 
     for lSeedStyle in lSeedGroup.Styles do
@@ -653,15 +664,29 @@ begin
   Result := False;
 end;
 
+function IsEmbeddedHtmlStyleGroup(const AGroupName: string): Boolean;
+begin
+  Result := SameText(AGroupName, 'javascript');
+end;
+
+procedure LogConfGenFix(const AMessage: string);
+begin
+  OutputDebugString(PChar('[FIX:ConfGenLexerGroups] ' + AMessage));
+end;
+
 function ResolveKnownLexerID(const AGroupName: string; out ALexerID: Integer): Boolean;
 begin
   Result := True;
 
   if GroupNameMatches(AGroupName, ['c', 'cpp', 'cs', 'go', 'java',
-     'javascript', 'javascript.js', 'objc', 'rc', 'swift', 'typescript']) then
+     'javascript.js', 'objc', 'rc', 'swift', 'typescript']) then
     ALexerID := SCLEX_CPP
+  else if SameText(AGroupName, 'javascript') then
+    ALexerID := SCLEX_HTML
   else if SameText(AGroupName, 'asn1') then
     ALexerID := SCLEX_ASN1
+  else if SameText(AGroupName, 'asp') then
+    ALexerID := SCLEX_HTML
   else if SameText(AGroupName, 'avs') then
     ALexerID := SCLEX_AVS
   else if SameText(AGroupName, 'baanc') then
@@ -700,6 +725,8 @@ begin
     ALexerID := SCLEX_NNCRONTAB
   else if SameText(AGroupName, 'oscript') then
     ALexerID := SCLEX_OSCRIPT
+  else if SameText(AGroupName, 'php') then
+    ALexerID := SCLEX_HTML
   else if SameText(AGroupName, 'purebasic') then
     ALexerID := SCLEX_PUREBASIC
   else if SameText(AGroupName, 'r') then
@@ -756,8 +783,21 @@ begin
     end;
 
   if UsesHtmlXmlKeywordLists(AGroup) and Assigned(AStyle) and
-     AStyle.HasStyleID and (AStyle.StyleID = SCE_H_SGML_COMMAND) then
-    Exit(cHtmlXmlSgmlKeywordList);
+     AStyle.HasStyleID then
+    case AStyle.StyleID of
+      SCE_H_TAG:
+        Exit(0);
+      SCE_HJ_KEYWORD, SCE_HJA_KEYWORD:
+        Exit(1);
+      SCE_HB_WORD, SCE_HBA_WORD:
+        Exit(2);
+      SCE_HP_WORD, SCE_HPA_WORD:
+        Exit(3);
+      SCE_HPHP_WORD:
+        Exit(4);
+      SCE_H_SGML_COMMAND:
+        Exit(cHtmlXmlSgmlKeywordList);
+    end;
 
   if Assigned(AStyle) and StartsText('instre', AStyle.KeywordClass) and
      TryStrToInt(Copy(AStyle.KeywordClass, Length('instre') + 1, MaxInt), lNumber) then
@@ -924,7 +964,6 @@ begin
   if not FileExists(AFileName) then
     Exit;
 
-  lInit := RPC_E_CHANGED_MODE;
   try
     lStep := 'initialize com';
     lInit := CoInitializeEx(nil, COINIT_APARTMENTTHREADED);

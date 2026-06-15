@@ -2510,6 +2510,7 @@ var
   lConfigGroup: TDSciVisualStyleGroup;
   lConfigObject: TObject;
   lDllPath: string;
+  lHasConfigLexerID: Boolean;
   lLexerID: Integer;
   lLexilla: TDLexilla;
   lLexer: TDSciLexer;
@@ -2531,17 +2532,27 @@ var
     out ALexerID: Integer): Boolean;
   begin
     Result := True;
-    if NameMatches(AName, ['c', 'cpp', 'cs', 'go', 'java', 'javascript',
+    if NameMatches(AName, ['c', 'cpp', 'cs', 'go', 'java',
        'javascript.js', 'objc', 'rc', 'swift', 'typescript']) then
       ALexerID := SCLEX_CPP
+    else if SameText(AName, 'javascript') then
+      ALexerID := SCLEX_HTML
+    else if SameText(AName, 'asp') then
+      ALexerID := SCLEX_HTML
     else if SameText(AName, 'baanc') then
       ALexerID := SCLEX_BAAN
     else if SameText(AName, 'd') then
       ALexerID := SCLEX_D
     else if SameText(AName, 'fortran77') then
       ALexerID := SCLEX_F77
+    else if SameText(AName, 'html') then
+      ALexerID := SCLEX_HTML
+    else if SameText(AName, 'php') then
+      ALexerID := SCLEX_HTML
     else if SameText(AName, 'r') then
       ALexerID := SCLEX_R
+    else if SameText(AName, 'xml') then
+      ALexerID := SCLEX_XML
     else
       Result := False;
   end;
@@ -2567,12 +2578,21 @@ begin
     lConfigGroup := TDSciVisualConfig(lConfigObject).StyleOverrides.FindGroup(
       FRequestedLexerLanguage);
 
-  if (lConfigGroup <> nil) and
-     (ResolveKnownLexerID(lConfigGroup.Name, lLexerID) or lConfigGroup.HasLexerID) then
+  if lConfigGroup <> nil then
   begin
-    if not ResolveKnownLexerID(lConfigGroup.Name, lLexerID) then
-      lLexerID := lConfigGroup.LexerID;
+    lHasConfigLexerID := ResolveKnownLexerID(lConfigGroup.Name, lLexerID);
+    if not lHasConfigLexerID then
+    begin
+      lHasConfigLexerID := lConfigGroup.HasLexerID;
+      if lHasConfigLexerID then
+        lLexerID := lConfigGroup.LexerID;
+    end;
+  end
+  else
+    lHasConfigLexerID := ResolveKnownLexerID(FRequestedLexerLanguage, lLexerID);
 
+  if lHasConfigLexerID then
+  begin
     if lLexerID = Integer(sclNULL) then
     begin
       OutputDebugString(PChar('Keeping requested language "' +

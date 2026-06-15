@@ -317,7 +317,7 @@ begin
   FRootPanel.Align := alClient;
   // Padding set in RefreshLayout
 
-  // -- Top row: [Search label | combo] [▲ ▼] ------------------------------
+  // -- Top row: [Search label | combo] [^ �] ------------------------------
   FTopRowPanel := CreateHostPanel(FRootPanel);
   FTopRowPanel.Align := alTop;
   FTopRowPanel.AlignWithMargins := True;
@@ -862,7 +862,7 @@ begin
     FTopRowPanel.Margins.Right  := 0;
     FTopRowPanel.Margins.Bottom := lSectionGap;
 
-    // Navigation panel (▲ ▼): fixed width, gap from search panel
+    // Navigation panel: fixed width, gap from search panel
     FNavigationPanel.Width          := lNavigationWidth;
     FNavigationPanel.Margins.Left   := lButtonGap;
     FNavigationPanel.Margins.Top    := 0;
@@ -1254,7 +1254,7 @@ begin
   if FReadOnly = AValue then
     Exit;
   FReadOnly := AValue;
-  DSciLog(Format('[DSCI-DIALOG] ReadOnly → %s.', [BoolToStr(AValue, True)]),
+  DSciLog(Format('[DSCI-DIALOG] ReadOnly -> %s.', [BoolToStr(AValue, True)]),
     cDSciLogDebug);
   UpdateReplaceButtonStates;
 end;
