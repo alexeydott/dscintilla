@@ -76,8 +76,16 @@ type
     procedure TestSettingsConfigFileAppliesNotepadPlusStyleFlags;
     procedure TestSettingsConfigFileKeepsGlobalStylesOutOfLexerStyles;
     procedure TestSettingsGlobalOverrideFontWinsAfterDefaultAndLexerStyles;
+    procedure TestSettingsStyleLineSpacingOverridesEditorOptions;
+    procedure TestSettingsLexerStyleLineSpacingAppliesToEditor;
+    procedure TestSettingsLexerDefaultLineSpacingWinsOverTokenStyles;
+    procedure TestSettingsConfigThemeRefreshesLineSpacingFromThemeFile;
+    procedure TestSettingsConfigThemeRefreshKeepsAlucardGlobalOverrideColours;
+    procedure TestSettingsDraculaThemeProvidesStyleLineSpacing;
+    procedure TestSettingsDraculaThemeLineSpacingSurvivesZeroGlobalOverride;
     procedure TestSettingsThemeColorStyleControlsInheritedColours;
     procedure TestSettingsThemeMergeClearsInheritedColours;
+    procedure TestSettingsReplaceStyleModelKeepsThemeGlobalOverrideColours;
     procedure TestSettingsXmlSgmlKeywordsDoNotMakeTagsUnknown;
     procedure TestSettingsResolveLanguageByExtension;
     procedure TestSettingsLegacyImportApisRaiseNotSupported;
@@ -96,6 +104,7 @@ type
     procedure TestSettingsMalformedSidecarsDoNotAbortConfigApply;
     procedure TestAssignedPopupMenuCanBeEnabledOrDisabled;
     procedure TestAssignedPopupMenuStaysHiddenOverMarginArea;
+    procedure TestGutterContextMenuCanShowWhenDefaultContextMenuDisabled;
     procedure TestAutoBraceHighlightTracksCaret;
     procedure TestCopyWithFormattingPlacesCfHtmlOnClipboard;
     procedure TestDefaultTechnologyUsesDirectWriteRetain;
@@ -1032,6 +1041,383 @@ begin
   end;
 end;
 
+procedure TTestDScintillaTyped.TestSettingsStyleLineSpacingOverridesEditorOptions;
+var
+  lConfigFileName: string;
+  lTempDirectory: string;
+begin
+  lTempDirectory := CreateWritableTempDir;
+  try
+    lConfigFileName := TPath.Combine(lTempDirectory, 'style-line-spacing.config.xml');
+    TFile.WriteAllText(lConfigFileName,
+      '<?xml version="1.0" encoding="UTF-8"?>' + sLineBreak +
+      '<Config>' + sLineBreak +
+      '  <Editor UpperLineSpacing="7" LowerLineSpacing="8"/>' + sLineBreak +
+      '  <Styles>' + sLineBreak +
+      '    <Style name="default" ext="*">' + sLineBreak +
+      '      <WordStyles>' + sLineBreak +
+      '        <WordStyle name="Default Style" styleID="32" upperLineSpacing="2" lowerLineSpacing="-1"/>' + sLineBreak +
+      '        <WordStyle name="Global override" styleID="0" upperLineSpacing="-3" lowerLineSpacing="0"/>' + sLineBreak +
+      '      </WordStyles>' + sLineBreak +
+      '    </Style>' + sLineBreak +
+      '    <Style name="xml" ext="xml" lexer="5">' + sLineBreak +
+      '      <WordStyles>' + sLineBreak +
+      '        <WordStyle name="DEFAULT" styleID="0" upperLineSpacing="99" lowerLineSpacing="99"/>' + sLineBreak +
+      '      </WordStyles>' + sLineBreak +
+      '    </Style>' + sLineBreak +
+      '  </Styles>' + sLineBreak +
+      '</Config>', TEncoding.UTF8);
+
+    FScintilla.Settings.LoadConfigFile(lConfigFileName);
+    FScintilla.Settings.ApplyLanguage('xml');
+
+    CheckEquals(-3, FScintilla.ExtraAscent,
+      'Global override upperLineSpacing should win over Editor and Default Style');
+    CheckEquals(99, FScintilla.ExtraDescent,
+      'A zero Global override lowerLineSpacing should allow the active lexer DEFAULT value');
+  finally
+    if DirectoryExists(lTempDirectory) then
+      TDirectory.Delete(lTempDirectory, True);
+  end;
+end;
+
+procedure TTestDScintillaTyped.TestSettingsLexerStyleLineSpacingAppliesToEditor;
+var
+  lConfigFileName: string;
+  lTempDirectory: string;
+begin
+  lTempDirectory := CreateWritableTempDir;
+  try
+    lConfigFileName := TPath.Combine(lTempDirectory,
+      'lexer-style-line-spacing.config.xml');
+    TFile.WriteAllText(lConfigFileName,
+      '<?xml version="1.0" encoding="UTF-8"?>' + sLineBreak +
+      '<Config>' + sLineBreak +
+      '  <Editor UpperLineSpacing="0" LowerLineSpacing="0"/>' + sLineBreak +
+      '  <Styles>' + sLineBreak +
+      '    <Style name="default" ext="*">' + sLineBreak +
+      '      <WordStyles>' + sLineBreak +
+      '        <WordStyle name="Default Style" styleID="32"/>' + sLineBreak +
+      '        <WordStyle name="Global override" styleID="0"/>' + sLineBreak +
+      '      </WordStyles>' + sLineBreak +
+      '    </Style>' + sLineBreak +
+      '    <Style name="xml" ext="xml" lexer="5">' + sLineBreak +
+      '      <WordStyles>' + sLineBreak +
+      '        <WordStyle name="DEFAULT" styleID="0"/>' + sLineBreak +
+      '        <WordStyle name="TAG" styleID="1" upperLineSpacing="2" lowerLineSpacing="3"/>' + sLineBreak +
+      '      </WordStyles>' + sLineBreak +
+      '    </Style>' + sLineBreak +
+      '  </Styles>' + sLineBreak +
+      '</Config>', TEncoding.UTF8);
+
+    FScintilla.Settings.LoadConfigFile(lConfigFileName);
+    FScintilla.Settings.ApplyLanguage('xml');
+
+    CheckEquals(2, FScintilla.ExtraAscent,
+      'Active lexer style upperLineSpacing should apply to SCI_SETEXTRAASCENT');
+    CheckEquals(3, FScintilla.ExtraDescent,
+      'Active lexer style lowerLineSpacing should apply to SCI_SETEXTRADESCENT');
+  finally
+    if DirectoryExists(lTempDirectory) then
+      TDirectory.Delete(lTempDirectory, True);
+  end;
+end;
+
+procedure TTestDScintillaTyped.TestSettingsLexerDefaultLineSpacingWinsOverTokenStyles;
+var
+  lConfigFileName: string;
+  lTempDirectory: string;
+begin
+  lTempDirectory := CreateWritableTempDir;
+  try
+    lConfigFileName := TPath.Combine(lTempDirectory,
+      'lexer-default-line-spacing.config.xml');
+    TFile.WriteAllText(lConfigFileName,
+      '<?xml version="1.0" encoding="UTF-8"?>' + sLineBreak +
+      '<Config>' + sLineBreak +
+      '  <Editor UpperLineSpacing="0" LowerLineSpacing="0"/>' + sLineBreak +
+      '  <Styles>' + sLineBreak +
+      '    <Style name="default" ext="*">' + sLineBreak +
+      '      <WordStyles>' + sLineBreak +
+      '        <WordStyle name="Default Style" styleID="32"/>' + sLineBreak +
+      '        <WordStyle name="Global override" styleID="0"/>' + sLineBreak +
+      '      </WordStyles>' + sLineBreak +
+      '    </Style>' + sLineBreak +
+      '    <Style name="python" ext="py" lexer="2">' + sLineBreak +
+      '      <WordStyles>' + sLineBreak +
+      '        <WordStyle name="DEFAULT" styleID="0" upperLineSpacing="10" lowerLineSpacing="10"/>' + sLineBreak +
+      '        <WordStyle name="COMMENT LINE" styleID="1" upperLineSpacing="1" lowerLineSpacing="1"/>' + sLineBreak +
+      '        <WordStyle name="STRING" styleID="3" upperLineSpacing="2" lowerLineSpacing="2"/>' + sLineBreak +
+      '      </WordStyles>' + sLineBreak +
+      '    </Style>' + sLineBreak +
+      '  </Styles>' + sLineBreak +
+      '</Config>', TEncoding.UTF8);
+
+    FScintilla.Settings.LoadConfigFile(lConfigFileName);
+    FScintilla.Settings.ApplyLanguage('python');
+
+    CheckEquals(10, FScintilla.ExtraAscent,
+      'Lexer DEFAULT upperLineSpacing should not be overwritten by token styles');
+    CheckEquals(10, FScintilla.ExtraDescent,
+      'Lexer DEFAULT lowerLineSpacing should not be overwritten by token styles');
+  finally
+    if DirectoryExists(lTempDirectory) then
+      TDirectory.Delete(lTempDirectory, True);
+  end;
+end;
+
+procedure TTestDScintillaTyped.TestSettingsConfigThemeRefreshesLineSpacingFromThemeFile;
+var
+  lConfigFileName: string;
+  lGlobalOverrideStyle: TDSciVisualStyleData;
+  lLoadedConfig: TDSciVisualConfig;
+  lPythonDefaultStyle: TDSciVisualStyleData;
+  lTempDirectory: string;
+  lThemesDirectory: string;
+begin
+  lTempDirectory := CreateWritableTempDir;
+  try
+    lThemesDirectory := TPath.Combine(lTempDirectory, 'themes');
+    ForceDirectories(lThemesDirectory);
+    TFile.Copy(TPath.Combine(ResolveSettingsDir, 'themes\Dracula.xml'),
+      TPath.Combine(lThemesDirectory, 'Dracula.xml'), True);
+
+    lConfigFileName := TPath.Combine(lTempDirectory,
+      'stale-dracula-line-spacing.config.xml');
+    TFile.WriteAllText(lConfigFileName,
+      '<?xml version="1.0" encoding="UTF-8"?>' + sLineBreak +
+      '<Config>' + sLineBreak +
+      '  <Theme Name="Dracula"/>' + sLineBreak +
+      '  <Editor UpperLineSpacing="0" LowerLineSpacing="0"/>' + sLineBreak +
+      '  <Styles>' + sLineBreak +
+      '    <Style name="default" ext="*">' + sLineBreak +
+      '      <WordStyles>' + sLineBreak +
+      '        <WordStyle name="Default Style" styleID="32" upperLineSpacing="0" lowerLineSpacing="0"/>' + sLineBreak +
+      '        <WordStyle name="Global override" styleID="0" upperLineSpacing="0" lowerLineSpacing="0"/>' + sLineBreak +
+      '      </WordStyles>' + sLineBreak +
+      '    </Style>' + sLineBreak +
+      '    <Style name="python" ext="py" lexer="2">' + sLineBreak +
+      '      <WordStyles>' + sLineBreak +
+      '        <WordStyle name="DEFAULT" styleID="0" upperLineSpacing="0" lowerLineSpacing="0"/>' + sLineBreak +
+      '      </WordStyles>' + sLineBreak +
+      '    </Style>' + sLineBreak +
+      '  </Styles>' + sLineBreak +
+      '</Config>', TEncoding.UTF8);
+
+    lLoadedConfig := TDSciVisualConfig.Create;
+    try
+      lLoadedConfig.LoadFromFile(lConfigFileName);
+      lPythonDefaultStyle := lLoadedConfig.FindStyleOverride('python',
+        'DEFAULT', dvskLexer);
+      Check(lPythonDefaultStyle <> nil,
+        'Theme refresh should keep the Python DEFAULT style');
+      Check(lPythonDefaultStyle.HasUpperLineSpacing,
+        'Theme refresh should restore upperLineSpacing from Dracula');
+      CheckEquals(10, lPythonDefaultStyle.UpperLineSpacing);
+      Check(lPythonDefaultStyle.HasLowerLineSpacing,
+        'Theme refresh should restore lowerLineSpacing from Dracula');
+      CheckEquals(10, lPythonDefaultStyle.LowerLineSpacing);
+
+      lGlobalOverrideStyle := lLoadedConfig.FindStyleOverride('default',
+        'Global override', dvskGlobal);
+      Check(lGlobalOverrideStyle <> nil,
+        'Theme refresh should keep the Global override style');
+      Check(not lGlobalOverrideStyle.HasUpperLineSpacing,
+        'Theme refresh should not invent Global override upperLineSpacing');
+      Check(not lGlobalOverrideStyle.HasLowerLineSpacing,
+        'Theme refresh should not invent Global override lowerLineSpacing');
+    finally
+      lLoadedConfig.Free;
+    end;
+
+    FScintilla.Settings.LoadConfigFile(lConfigFileName);
+    FScintilla.Settings.ApplyLanguage('python');
+    CheckEquals(10, FScintilla.ExtraAscent,
+      'Runtime load should apply refreshed Dracula Python DEFAULT upperLineSpacing');
+    CheckEquals(10, FScintilla.ExtraDescent,
+      'Runtime load should apply refreshed Dracula Python DEFAULT lowerLineSpacing');
+  finally
+    if DirectoryExists(lTempDirectory) then
+      TDirectory.Delete(lTempDirectory, True);
+  end;
+end;
+
+procedure TTestDScintillaTyped.TestSettingsConfigThemeRefreshKeepsAlucardGlobalOverrideColours;
+var
+  lConfigFileName: string;
+  lGlobalOverrideStyle: TDSciVisualStyleData;
+  lLoadedConfig: TDSciVisualConfig;
+  lTempDirectory: string;
+  lThemesDirectory: string;
+begin
+  lTempDirectory := CreateWritableTempDir;
+  try
+    lThemesDirectory := TPath.Combine(lTempDirectory, 'themes');
+    ForceDirectories(lThemesDirectory);
+    TFile.Copy(TPath.Combine(ResolveSettingsDir, 'themes\Alucard.xml'),
+      TPath.Combine(lThemesDirectory, 'Alucard.xml'), True);
+
+    lConfigFileName := TPath.Combine(lTempDirectory,
+      'stale-alucard-global-override.config.xml');
+    TFile.WriteAllText(lConfigFileName,
+      '<?xml version="1.0" encoding="UTF-8"?>' + sLineBreak +
+      '<Config>' + sLineBreak +
+      '  <Theme Name="Alucard"/>' + sLineBreak +
+      '  <Styles>' + sLineBreak +
+      '    <Style name="default" ext="*">' + sLineBreak +
+      '      <WordStyles>' + sLineBreak +
+      '        <WordStyle name="Global override" styleID="0" fgColor="F8F8F2" bgColor="282A36" fontName="Source Code Pro" fontSize="10"/>' + sLineBreak +
+      '      </WordStyles>' + sLineBreak +
+      '    </Style>' + sLineBreak +
+      '  </Styles>' + sLineBreak +
+      '</Config>', TEncoding.UTF8);
+
+    lLoadedConfig := TDSciVisualConfig.Create;
+    try
+      lLoadedConfig.LoadFromFile(lConfigFileName);
+      lGlobalOverrideStyle := lLoadedConfig.FindStyleOverride('default',
+        'Global override', dvskGlobal);
+      Check(lGlobalOverrideStyle <> nil,
+        'Theme refresh should keep the Global override style');
+      Check(lGlobalOverrideStyle.HasForeColor,
+        'Theme refresh should keep Alucard Global override foreground');
+      CheckEquals(Integer(TColor(RGB($1F, $1F, $1F))),
+        Integer(lGlobalOverrideStyle.ForeColor),
+        'Stale Dracula foreground must not override Alucard Global override');
+      Check(lGlobalOverrideStyle.HasBackColor,
+        'Theme refresh should keep Alucard Global override background');
+      CheckEquals(Integer(TColor(RGB($FF, $FB, $EB))),
+        Integer(lGlobalOverrideStyle.BackColor),
+        'Stale Dracula background must not override Alucard Global override');
+      Check(SameText('Source Code Pro', lGlobalOverrideStyle.FontName),
+        'Config font family should still be preserved');
+      CheckEquals(10, lGlobalOverrideStyle.FontSize,
+        'Config font size should still be preserved');
+    finally
+      lLoadedConfig.Free;
+    end;
+
+    FScintilla.Settings.LoadConfigFile(lConfigFileName);
+    FScintilla.Settings.ApplyLanguage('json');
+
+    CheckEquals(Integer(TColor(RGB($FF, $FB, $EB))), Integer(FScintilla.StyleBack[4]),
+      'JSON token backgrounds should inherit the refreshed Alucard Global override');
+    CheckEquals(Integer(TColor(RGB($03, $6A, $96))), Integer(FScintilla.StyleFore[4]),
+      'JSON token foregrounds should still come from the Alucard lexer style');
+  finally
+    if DirectoryExists(lTempDirectory) then
+      TDirectory.Delete(lTempDirectory, True);
+  end;
+end;
+
+procedure TTestDScintillaTyped.TestSettingsDraculaThemeProvidesStyleLineSpacing;
+var
+  lDefaultGroup: TDSciVisualStyleGroup;
+  lDefaultStyle: TDSciVisualStyleData;
+  lGlobalOverrideStyle: TDSciVisualStyleData;
+  lPythonCommentStyle: TDSciVisualStyleData;
+  lPythonDefaultStyle: TDSciVisualStyleData;
+  lPythonGroup: TDSciVisualStyleGroup;
+  lThemeModel: TDSciVisualStyleModel;
+begin
+  lThemeModel := LoadThemeStyleModelFromFile(
+    TPath.Combine(ResolveSettingsDir, 'themes\Dracula.xml'));
+  try
+    lDefaultGroup := lThemeModel.FindGroup('default');
+    Check(lDefaultGroup <> nil, 'Dracula theme should expose the default group');
+
+    lDefaultStyle := lDefaultGroup.FindStyle('Default Style', dvskGlobal);
+    Check(lDefaultStyle <> nil, 'Dracula theme should expose Default Style');
+    Check(not lDefaultStyle.HasUpperLineSpacing,
+      'Default Style should not parse upperLineSpacing when Dracula omits it');
+    Check(not lDefaultStyle.HasLowerLineSpacing,
+      'Default Style should not parse lowerLineSpacing when Dracula omits it');
+
+    lGlobalOverrideStyle := lDefaultGroup.FindStyle('Global override', dvskGlobal);
+    Check(lGlobalOverrideStyle <> nil,
+      'Dracula theme should expose Global override');
+    Check(not lGlobalOverrideStyle.HasUpperLineSpacing,
+      'Global override should not parse upperLineSpacing when Dracula omits it');
+    Check(not lGlobalOverrideStyle.HasLowerLineSpacing,
+      'Global override should not parse lowerLineSpacing when Dracula omits it');
+
+    lPythonGroup := lThemeModel.FindGroup('python');
+    Check(lPythonGroup <> nil, 'Dracula theme should expose the Python group');
+    lPythonDefaultStyle := lPythonGroup.FindStyle('DEFAULT', dvskLexer);
+    Check(lPythonDefaultStyle <> nil,
+      'Dracula Python group should expose the lexer DEFAULT style');
+    Check(lPythonDefaultStyle.HasUpperLineSpacing,
+      'Python DEFAULT should parse upperLineSpacing from Dracula');
+    CheckEquals(10, lPythonDefaultStyle.UpperLineSpacing);
+    Check(lPythonDefaultStyle.HasLowerLineSpacing,
+      'Python DEFAULT should parse lowerLineSpacing from Dracula');
+    CheckEquals(10, lPythonDefaultStyle.LowerLineSpacing);
+
+    lPythonCommentStyle := lPythonGroup.FindStyle('COMMENT LINE', dvskLexer);
+    Check(lPythonCommentStyle <> nil,
+      'Dracula Python group should expose a non-default lexer style with line spacing');
+    Check(lPythonCommentStyle.HasUpperLineSpacing,
+      'Python COMMENT LINE should parse upperLineSpacing from Dracula');
+    CheckEquals(15, lPythonCommentStyle.UpperLineSpacing);
+    Check(lPythonCommentStyle.HasLowerLineSpacing,
+      'Python COMMENT LINE should parse lowerLineSpacing from Dracula');
+    CheckEquals(21, lPythonCommentStyle.LowerLineSpacing);
+  finally
+    lThemeModel.Free;
+  end;
+end;
+
+procedure TTestDScintillaTyped.TestSettingsDraculaThemeLineSpacingSurvivesZeroGlobalOverride;
+var
+  lConfig: TDSciVisualConfig;
+  lConfigFileName: string;
+  lGlobalOverrideStyle: TDSciVisualStyleData;
+  lTempDirectory: string;
+  lThemeModel: TDSciVisualStyleModel;
+begin
+  lTempDirectory := CreateWritableTempDir;
+  try
+    lConfigFileName := TPath.Combine(lTempDirectory,
+      'dracula-zero-global-override.config.xml');
+
+    lConfig := TDSciVisualConfig.Create;
+    try
+      lConfig.LoadFromFile(TPath.Combine(ResolveSettingsDir,
+        'DScintilla.config.xml'));
+      lGlobalOverrideStyle := lConfig.EnsureStyleOverride('default',
+        'Global override', dvskGlobal);
+      lGlobalOverrideStyle.HasUpperLineSpacing := True;
+      lGlobalOverrideStyle.UpperLineSpacing := 0;
+      lGlobalOverrideStyle.HasLowerLineSpacing := True;
+      lGlobalOverrideStyle.LowerLineSpacing := 0;
+
+      lThemeModel := LoadThemeStyleModelFromFile(
+        TPath.Combine(ResolveSettingsDir, 'themes\Dracula.xml'));
+      try
+        lConfig.ReplaceStyleModel(lThemeModel, True);
+        lConfig.ThemeName := 'Dracula';
+      finally
+        lThemeModel.Free;
+      end;
+
+      lConfig.SaveToFile(lConfigFileName);
+    finally
+      lConfig.Free;
+    end;
+
+    FScintilla.Settings.LoadConfigFile(lConfigFileName);
+    FScintilla.Settings.ApplyLanguage('python');
+
+    CheckEquals(10, FScintilla.ExtraAscent,
+      'Dracula Python DEFAULT upperLineSpacing should survive stale zero Global override');
+    CheckEquals(10, FScintilla.ExtraDescent,
+      'Dracula Python DEFAULT lowerLineSpacing should survive stale zero Global override');
+  finally
+    if DirectoryExists(lTempDirectory) then
+      TDirectory.Delete(lTempDirectory, True);
+  end;
+end;
+
 procedure TTestDScintillaTyped.TestSettingsThemeColorStyleControlsInheritedColours;
 var
   lGroup: TDSciVisualStyleGroup;
@@ -1178,6 +1564,54 @@ begin
   finally
     if DirectoryExists(lTempDirectory) then
       TDirectory.Delete(lTempDirectory, True);
+  end;
+end;
+
+procedure TTestDScintillaTyped.TestSettingsReplaceStyleModelKeepsThemeGlobalOverrideColours;
+var
+  lConfig: TDSciVisualConfig;
+  lGlobalOverrideStyle: TDSciVisualStyleData;
+  lThemeModel: TDSciVisualStyleModel;
+begin
+  lConfig := TDSciVisualConfig.Create;
+  try
+    lGlobalOverrideStyle := lConfig.EnsureStyleOverride('default',
+      'Global override', dvskGlobal);
+    lGlobalOverrideStyle.StyleID := 0;
+    lGlobalOverrideStyle.HasStyleID := True;
+    lGlobalOverrideStyle.ForeColor := TColor(RGB($F8, $F8, $F2));
+    lGlobalOverrideStyle.HasForeColor := True;
+    lGlobalOverrideStyle.BackColor := TColor(RGB($28, $2A, $36));
+    lGlobalOverrideStyle.HasBackColor := True;
+    lGlobalOverrideStyle.FontName := 'Source Code Pro';
+    lGlobalOverrideStyle.HasFontName := True;
+    lGlobalOverrideStyle.FontSize := 10;
+    lGlobalOverrideStyle.HasFontSize := True;
+
+    lThemeModel := LoadThemeStyleModelFromFile(
+      TPath.Combine(ResolveSettingsDir, 'themes\Alucard.xml'));
+    try
+      lConfig.ReplaceStyleModel(lThemeModel, True);
+    finally
+      lThemeModel.Free;
+    end;
+
+    lGlobalOverrideStyle := lConfig.FindStyleOverride('default',
+      'Global override', dvskGlobal);
+    Check(lGlobalOverrideStyle <> nil,
+      'Replacing the style model should keep the Global override style');
+    CheckEquals(Integer(TColor(RGB($1F, $1F, $1F))),
+      Integer(lGlobalOverrideStyle.ForeColor),
+      'Theme switching must use the new theme Global override foreground');
+    CheckEquals(Integer(TColor(RGB($FF, $FB, $EB))),
+      Integer(lGlobalOverrideStyle.BackColor),
+      'Theme switching must use the new theme Global override background');
+    Check(SameText('Source Code Pro', lGlobalOverrideStyle.FontName),
+      'Theme switching should still preserve config font family');
+    CheckEquals(10, lGlobalOverrideStyle.FontSize,
+      'Theme switching should still preserve config font size');
+  finally
+    lConfig.Free;
   end;
 end;
 
@@ -1779,6 +2213,29 @@ begin
     FScintilla.PopupMenu := nil;
     lPopupMenu.Free;
   end;
+end;
+
+procedure TTestDScintillaTyped.TestGutterContextMenuCanShowWhenDefaultContextMenuDisabled;
+var
+  lAccess: TDScintillaAccess;
+  lPoint: TPoint;
+begin
+  lAccess := TDScintillaAccess(FScintilla);
+  FScintilla.UseDefaultContextMenu := False;
+  FScintilla.UseAssignedPopupMenu := False;
+  FScintilla.Margins := 1;
+  FScintilla.MarginWidthN[0] := 24;
+  lAccess.ResetContextMenuForTest;
+
+  lPoint := FScintilla.ClientToScreen(Point(8, 10));
+  FScintilla.ShowGutterContextMenu(lPoint);
+
+  CheckEquals(1, lAccess.ContextMenuShowCount,
+    'Explicit gutter popup should not depend on the default text context menu');
+  Check(FindMenuItemByCaption(lAccess.LastContextMenu, 'Lexer') <> nil,
+    'Gutter popup should expose lexer selection');
+  Check(FindMenuItemByCaption(lAccess.LastContextMenu, 'Encoding') <> nil,
+    'Gutter popup should expose encoding selection');
 end;
 
 procedure TTestDScintillaTyped.TestAutoBraceHighlightTracksCaret;

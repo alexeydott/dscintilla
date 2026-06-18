@@ -257,7 +257,8 @@ type
 function LoadThemeStyleModelFromFile(const AFileName: string): TDSciVisualStyleModel;
 function RefreshConfigStyleModelFromTheme(AConfig: TDSciVisualConfig;
   const AConfigFileName: string): Boolean;
-procedure MergeModel(ATarget, AOverlay: TDSciVisualStyleModel);
+procedure MergeModel(ATarget, AOverlay: TDSciVisualStyleModel;
+  APreserveThemeGlobalOverrideColors: Boolean = False);
 
 implementation
 
@@ -1027,7 +1028,65 @@ begin
   end;
 end;
 
-procedure MergeModel(ATarget, AOverlay: TDSciVisualStyleModel);
+procedure OverlayStyleNonColorAttributes(ATarget, AOverlay: TDSciVisualStyleData);
+begin
+  if (ATarget = nil) or (AOverlay = nil) then
+    Exit;
+
+  if AOverlay.HasStyleID then
+  begin
+    ATarget.StyleID := AOverlay.StyleID;
+    ATarget.HasStyleID := True;
+  end;
+  if AOverlay.HasKeywordsID then
+  begin
+    ATarget.KeywordsID := AOverlay.KeywordsID;
+    ATarget.HasKeywordsID := True;
+  end;
+  if AOverlay.HasFontName and (AOverlay.FontName <> '') then
+  begin
+    ATarget.FontName := AOverlay.FontName;
+    ATarget.HasFontName := True;
+  end;
+  if AOverlay.HasFontStyle then
+  begin
+    ATarget.FontStyle := AOverlay.FontStyle;
+    ATarget.HasFontStyle := True;
+  end;
+  if AOverlay.HasFontSize then
+  begin
+    ATarget.FontSize := AOverlay.FontSize;
+    ATarget.HasFontSize := True;
+  end;
+  if AOverlay.HasEOLFill then
+  begin
+    ATarget.EOLFill := AOverlay.EOLFill;
+    ATarget.HasEOLFill := True;
+  end;
+  if AOverlay.HasUpperLineSpacing and (AOverlay.UpperLineSpacing <> 0) then
+  begin
+    ATarget.UpperLineSpacing := AOverlay.UpperLineSpacing;
+    ATarget.HasUpperLineSpacing := True;
+  end;
+  if AOverlay.HasLowerLineSpacing and (AOverlay.LowerLineSpacing <> 0) then
+  begin
+    ATarget.LowerLineSpacing := AOverlay.LowerLineSpacing;
+    ATarget.HasLowerLineSpacing := True;
+  end;
+  if AOverlay.KeywordClass <> '' then
+    ATarget.KeywordClass := AOverlay.KeywordClass;
+  if AOverlay.KeywordsText <> '' then
+    ATarget.KeywordsText := AOverlay.KeywordsText;
+end;
+
+function IsGlobalOverrideStyle(AStyle: TDSciVisualStyleData): Boolean;
+begin
+  Result := (AStyle <> nil) and (AStyle.Kind = dvskGlobal) and
+    SameText(AStyle.Name, 'Global override');
+end;
+
+procedure MergeModel(ATarget, AOverlay: TDSciVisualStyleModel;
+  APreserveThemeGlobalOverrideColors: Boolean);
 var
   lExistingStyle: TDSciVisualStyleData;
   lOverlayGroup: TDSciVisualStyleGroup;
@@ -1073,6 +1132,14 @@ begin
       end;
       if lExistingStyle = nil then
         lTargetGroup.Styles.Add(lOverlayStyle.Clone)
+      else if APreserveThemeGlobalOverrideColors and
+              IsGlobalOverrideStyle(lExistingStyle) and
+              IsGlobalOverrideStyle(lOverlayStyle) then
+      begin
+        OverlayStyleNonColorAttributes(lExistingStyle, lOverlayStyle);
+        DSciLog('[FIX:ThemeGlobalOverride] Kept theme Global override colors while preserving config non-color attributes.',
+          cDSciLogInfo);
+      end
       else
         OverlayStyle(lExistingStyle, lOverlayStyle);
     end;
@@ -1224,7 +1291,7 @@ begin
 
   lThemeModel := LoadThemeStyleModelFromFile(lThemeFileName);
   try
-    MergeModel(lThemeModel, AConfig.StyleOverrides);
+    MergeModel(lThemeModel, AConfig.StyleOverrides, True);
     AConfig.ReplaceStyleModel(lThemeModel, False);
     AConfig.ThemeName := lThemeName;
     DSciLog(Format('[THEME] Refreshed config style model from "%s".',
@@ -1497,19 +1564,13 @@ begin
   end;
 end;
 
-function IsGlobalOverrideStyle(AStyle: TDSciVisualStyleData): Boolean;
-begin
-  Result := (AStyle <> nil) and (AStyle.Kind = dvskGlobal) and
-    SameText(AStyle.Name, 'Global override');
-end;
-
 procedure PreserveGlobalOverrideStyle(ATarget, ASource: TDSciVisualStyleData);
 begin
   if not IsGlobalOverrideStyle(ATarget) or not IsGlobalOverrideStyle(ASource) then
     Exit;
 
-  OverlayStyle(ATarget, ASource);
-  DSciLog('[FIX:ThemeGlobalOverride] Preserved Global override attributes while replacing theme style model.',
+  OverlayStyleNonColorAttributes(ATarget, ASource);
+  DSciLog('[FIX:ThemeGlobalOverride] Preserved Global override non-color attributes while replacing theme style model.',
     cDSciLogInfo);
 end;
 

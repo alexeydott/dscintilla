@@ -20,6 +20,7 @@ type
     procedure TestReplaceTabCombosHaveEqualWidth;
     procedure TestVisualCatalogUsesConfigSnapshot;
     procedure TestVisualCatalogLoadsLanguageExtensions;
+    procedure TestVisualConfigResolvesCompoundExtensionsBeforeSimpleExtensions;
     procedure TestSettingsDialogDoesNotNeedVerticalScrollWhenShown;
     procedure TestSettingsDialogDoesNotUseScrollContainer;
     procedure TestSettingsDialogExtensionsUseEditWithHint;
@@ -27,6 +28,7 @@ type
     procedure TestSettingsDialogStacksStartBelowGroupBoxCaptions;
     procedure TestSettingsDialogLayoutDoesNotOverlapWhenScaled;
     procedure TestSettingsDialogGroupBoxesContainControls;
+    procedure TestSettingsDialogShowsDraculaPythonStyleLineSpacing;
     procedure TestSettingsDialogMiscCheckBoxesAreVisible;
     procedure TestSettingsDialogOptionPairRowsAlign;
     procedure TestSettingsDialogSectionOrder;
@@ -1160,6 +1162,41 @@ begin
   end;
 end;
 
+procedure TTestDSciVisualUi.TestVisualConfigResolvesCompoundExtensionsBeforeSimpleExtensions;
+var
+  lConfig: TDSciVisualConfig;
+  lGroup: TDSciVisualStyleGroup;
+begin
+  lConfig := TDSciVisualConfig.Create;
+  try
+    lGroup := lConfig.StyleOverrides.EnsureGroup('javascript');
+    lGroup.Extensions := 'js js.txt';
+    lGroup := lConfig.StyleOverrides.EnsureGroup('cmake');
+    lGroup.Extensions := 'cmake txt';
+    lGroup := lConfig.StyleOverrides.EnsureGroup('minified_css');
+    lGroup.Extensions := 'min.css';
+    lGroup := lConfig.StyleOverrides.EnsureGroup('css');
+    lGroup.Extensions := 'css';
+    lGroup := lConfig.StyleOverrides.EnsureGroup('tar_archive');
+    lGroup.Extensions := 'tar.gz';
+    lGroup := lConfig.StyleOverrides.EnsureGroup('gzip');
+    lGroup.Extensions := 'gz';
+
+    CheckEquals('cmake', lConfig.ResolveLanguageByFileName('CMakeLists.txt'));
+    CheckEquals('javascript', lConfig.ResolveLanguageByFileName('CMakeLists,js.txt'));
+    CheckEquals('javascript', lConfig.ResolveLanguageByFileName('sample.js.txt'));
+    CheckEquals('javascript', lConfig.ResolveLanguageByFileName('js.txt'));
+    CheckEquals('cmake', lConfig.ResolveLanguageByFileName('notjs.txt'));
+    CheckEquals('minified_css', lConfig.ResolveLanguageByFileName('bundle.min.css'));
+    CheckEquals('css', lConfig.ResolveLanguageByFileName('plain.css'));
+    CheckEquals('css', lConfig.ResolveLanguageByFileName('notmin.css'));
+    CheckEquals('tar_archive', lConfig.ResolveLanguageByFileName('package.tar.gz'));
+    CheckEquals('gzip', lConfig.ResolveLanguageByFileName('notar.gz'));
+  finally
+    lConfig.Free;
+  end;
+end;
+
 procedure TTestDSciVisualUi.TestSettingsDialogDoesNotNeedVerticalScrollWhenShown;
 var
   lButtonTop: Integer;
@@ -1200,6 +1237,7 @@ var
   lLineWrapping: TCheckBox;
   lSearchHighlightGroup: TGroupBox;
   lStyleGroup: TGroupBox;
+  lStyleUpperLineSpacingLabel: TLabel;
 begin
   lDialog := TDSciVisualSettingsDialog.Create(nil);
   try
@@ -1209,12 +1247,17 @@ begin
     lStyleGroup := FindVisibleGroupBoxByCaption(lDialog, 'Style Options');
     lExtensionsLabel := FindLabelByCaption(lDialog, 'Extensions');
     lLanguageCombo := FindFieldForLabel(FindLabelByCaption(lDialog, 'Language'), TComboBox) as TComboBox;
+    lStyleUpperLineSpacingLabel := FindVisibleLabelByCaption(lDialog,
+      'Upper line spacing');
 
     Check(lStyleGroup <> nil, 'Style Options must be a TGroupBox');
     Check((lExtensionsLabel <> nil) and IsDescendantOf(lExtensionsLabel, lStyleGroup),
       'Extensions label should be inside Style Options');
     Check((lLanguageCombo <> nil) and IsDescendantOf(lLanguageCombo, lStyleGroup),
       'Language combo should be inside Style Options');
+    Check((lStyleUpperLineSpacingLabel <> nil) and
+      IsDescendantOf(lStyleUpperLineSpacingLabel, lStyleGroup),
+      'Style line spacing controls should be inside Style Options');
 
     ActivateSettingsCategory(Self, lDialog, 'Selection & Highlighting');
     lSearchHighlightGroup := FindVisibleGroupBoxByCaption(lDialog, 'Search Highlight');
@@ -1232,6 +1275,133 @@ begin
   finally
     lDialog.Hide;
     lDialog.Free;
+  end;
+end;
+
+procedure TTestDSciVisualUi.TestSettingsDialogShowsDraculaPythonStyleLineSpacing;
+var
+  lConfig: TDSciVisualConfig;
+  lConfigFileName: string;
+  lDialog: TDSciVisualSettingsDialog;
+  lIndex: Integer;
+  lLanguageCombo: TComboBox;
+  lLowerEdit: TSpinEdit;
+  lLowerLabel: TLabel;
+  lStyleCombo: TComboBox;
+  lTempDir: string;
+  lThemesDirectory: string;
+  lUpperEdit: TSpinEdit;
+  lUpperLabel: TLabel;
+begin
+  lTempDir := CreateWritableTempDir;
+  try
+    lThemesDirectory := TPath.Combine(lTempDir, 'themes');
+    ForceDirectories(lThemesDirectory);
+    TFile.Copy(TPath.Combine(ResolveSettingsDir, 'themes\Dracula.xml'),
+      TPath.Combine(lThemesDirectory, 'Dracula.xml'), True);
+
+    lConfigFileName := TPath.Combine(lTempDir, 'dracula-ui.config.xml');
+    TFile.WriteAllText(lConfigFileName,
+      '<?xml version="1.0" encoding="UTF-8"?>' + sLineBreak +
+      '<Config>' + sLineBreak +
+      '  <Theme Name="Dracula"/>' + sLineBreak +
+      '  <Editor UpperLineSpacing="0" LowerLineSpacing="0"/>' + sLineBreak +
+      '  <Styles>' + sLineBreak +
+      '    <Style name="default" ext="*">' + sLineBreak +
+      '      <WordStyles>' + sLineBreak +
+      '        <WordStyle name="Default Style" styleID="32" upperLineSpacing="0" lowerLineSpacing="0"/>' + sLineBreak +
+      '        <WordStyle name="Global override" styleID="0" upperLineSpacing="0" lowerLineSpacing="0"/>' + sLineBreak +
+      '      </WordStyles>' + sLineBreak +
+      '    </Style>' + sLineBreak +
+      '    <Style name="python" ext="py" lexer="2">' + sLineBreak +
+      '      <WordStyles>' + sLineBreak +
+      '        <WordStyle name="DEFAULT" styleID="0" upperLineSpacing="0" lowerLineSpacing="0"/>' + sLineBreak +
+      '        <WordStyle name="COMMENT LINE" styleID="1" upperLineSpacing="0" lowerLineSpacing="0"/>' + sLineBreak +
+      '      </WordStyles>' + sLineBreak +
+      '    </Style>' + sLineBreak +
+      '  </Styles>' + sLineBreak +
+      '</Config>', TEncoding.UTF8);
+
+    lConfig := TDSciVisualConfig.Create;
+    try
+      lConfig.LoadFromFile(lConfigFileName);
+
+      lDialog := TDSciVisualSettingsDialog.Create(nil);
+      try
+        lDialog.ShowSettingsModeless('', lConfigFileName, lConfig);
+        SettleForm(lDialog, True);
+        ActivateSettingsCategory(Self, lDialog, 'Styles');
+
+        lLanguageCombo := FindFieldForLabel(FindLabelByCaption(lDialog,
+          'Language'), TComboBox) as TComboBox;
+        Check(lLanguageCombo <> nil,
+          'Settings dialog should expose the language selector');
+        lIndex := lLanguageCombo.Items.IndexOf('python');
+        Check(lIndex >= 0, 'Dracula settings should expose the Python language');
+        lLanguageCombo.ItemIndex := lIndex;
+        if Assigned(lLanguageCombo.OnChange) then
+          lLanguageCombo.OnChange(lLanguageCombo);
+        SettleForm(lDialog, True);
+
+        lStyleCombo := FindFieldForLabel(FindLabelByCaption(lDialog, 'Style'),
+          TComboBox) as TComboBox;
+        Check(lStyleCombo <> nil,
+          'Settings dialog should expose the style selector');
+        lIndex := lStyleCombo.Items.IndexOf('DEFAULT');
+        Check(lIndex >= 0,
+          'Python settings should expose the lexer DEFAULT style');
+        lStyleCombo.ItemIndex := lIndex;
+        if Assigned(lStyleCombo.OnChange) then
+          lStyleCombo.OnChange(lStyleCombo);
+        SettleForm(lDialog, True);
+
+        lUpperLabel := FindVisibleLabelByCaption(lDialog,
+          'Upper line spacing');
+        lLowerLabel := FindVisibleLabelByCaption(lDialog,
+          'Lower line spacing');
+        lUpperEdit := FindFieldForLabel(lUpperLabel, TSpinEdit) as TSpinEdit;
+        lLowerEdit := FindFieldForLabel(lLowerLabel, TSpinEdit) as TSpinEdit;
+
+        Check(lUpperEdit <> nil,
+          'Python DEFAULT upper line spacing field should exist');
+        Check(lLowerEdit <> nil,
+          'Python DEFAULT lower line spacing field should exist');
+        Check(lUpperEdit.Enabled,
+          'Python DEFAULT upper line spacing field should be editable');
+        Check(lLowerEdit.Enabled,
+          'Python DEFAULT lower line spacing field should be editable');
+        CheckEquals(10, lUpperEdit.Value,
+          'Python DEFAULT should show upperLineSpacing from Dracula');
+        CheckEquals(10, lLowerEdit.Value,
+          'Python DEFAULT should show lowerLineSpacing from Dracula');
+
+        lIndex := lStyleCombo.Items.IndexOf('COMMENT LINE');
+        Check(lIndex >= 0,
+          'Python settings should expose the COMMENT LINE lexer style');
+        lStyleCombo.ItemIndex := lIndex;
+        if Assigned(lStyleCombo.OnChange) then
+          lStyleCombo.OnChange(lStyleCombo);
+        SettleForm(lDialog, True);
+
+        Check(lUpperEdit.Enabled,
+          'Python COMMENT LINE upper line spacing field should be editable');
+        Check(lLowerEdit.Enabled,
+          'Python COMMENT LINE lower line spacing field should be editable');
+        CheckEquals(15, lUpperEdit.Value,
+          'Python COMMENT LINE should show upperLineSpacing from Dracula');
+        CheckEquals(21, lLowerEdit.Value,
+          'Python COMMENT LINE should show lowerLineSpacing from Dracula');
+      finally
+        lDialog.OnClose := nil;
+        lDialog.Hide;
+        lDialog.Free;
+      end;
+    finally
+      lConfig.Free;
+    end;
+  finally
+    if DirectoryExists(lTempDir) then
+      TDirectory.Delete(lTempDir, True);
   end;
 end;
 
@@ -1939,6 +2109,9 @@ procedure TTestDSciVisualUi.TestSciConfGenBuildsConfigAndDefaultResourceSources;
 var
   lConfig: TDSciVisualConfig;
   lConfigFileName: string;
+  lEmbeddedJavascriptGroup: TDSciVisualStyleGroup;
+  lEmbeddedJavascriptKeywordStyle: TDSciVisualStyleData;
+  lJavascriptGroup: TDSciVisualStyleGroup;
   lRcFileName: string;
   lResFileName: string;
   lTempDir: string;
@@ -1970,8 +2143,34 @@ begin
     try
       lConfig.LoadFromFile(lConfigFileName);
       CheckEquals('cpp', lConfig.ResolveLanguageByFileName('sample.cpp'));
+      CheckEquals('javascript.js', lConfig.ResolveLanguageByFileName('sample.js'));
+      CheckEquals('javascript.js', lConfig.ResolveLanguageByFileName('component.vue'));
       Check(lConfig.StyleOverrides.FindGroup('default') <> nil,
         'SciConfGen should preserve the default/global style group');
+      lEmbeddedJavascriptGroup := lConfig.StyleOverrides.FindGroup('javascript');
+      Check(lEmbeddedJavascriptGroup <> nil,
+        'SciConfGen should keep embedded JavaScript styles as a metadata group');
+      CheckEquals('', lEmbeddedJavascriptGroup.Extensions,
+        'Embedded JavaScript styles must not inherit stale .js extensions from the seed config');
+      Check(lEmbeddedJavascriptGroup.HasLexerID,
+        'Embedded JavaScript should carry the HTML lexer id from Lexilla metadata');
+      CheckEquals(SCLEX_HTML, lEmbeddedJavascriptGroup.LexerID,
+        'Embedded JavaScript SCE_HJ_* styles belong to the HTML lexer, not SCLEX_CPP');
+      lEmbeddedJavascriptKeywordStyle := lEmbeddedJavascriptGroup.FindStyle('KEYWORD',
+        dvskLexer);
+      Check(lEmbeddedJavascriptKeywordStyle <> nil,
+        'Embedded JavaScript should keep its keyword style');
+      Check(lEmbeddedJavascriptKeywordStyle.HasKeywordsID,
+        'Embedded JavaScript keyword style should have an explicit HTML keyword-list index');
+      CheckEquals(1, lEmbeddedJavascriptKeywordStyle.KeywordsID,
+        'HTML lexer keyword list 1 is JavaScript keywords in Lexilla');
+      lJavascriptGroup := lConfig.StyleOverrides.FindGroup('javascript.js');
+      Check(lJavascriptGroup <> nil,
+        'SciConfGen should keep the standalone JavaScript language group');
+      CheckEquals(SCLEX_CPP, lJavascriptGroup.LexerID,
+        'Standalone JavaScript uses the C-family runtime lexer');
+      Check(Pos('vue', lJavascriptGroup.Extensions) > 0,
+        'Standalone JavaScript extensions should come from langs.model.xml, including vue');
     finally
       lConfig.Free;
     end;
@@ -2125,6 +2324,10 @@ begin
       lSavedStyle.HasFontName := True;
       lSavedStyle.HasFontSize := True;
       lSavedStyle.FontSize := 11;
+      lSavedStyle.HasUpperLineSpacing := True;
+      lSavedStyle.UpperLineSpacing := -2;
+      lSavedStyle.HasLowerLineSpacing := True;
+      lSavedStyle.LowerLineSpacing := 3;
 
       lConfig.StyleOverrides.EnsureGroup('cpp').HasLexerID := True;
       lConfig.StyleOverrides.FindGroup('cpp').LexerID := 99;
@@ -2176,6 +2379,12 @@ begin
       CheckEquals('Consolas', lLoadedStyle.FontName);
       Check(lLoadedStyle.HasFontSize, 'Font size override should survive config round-trip');
       CheckEquals(11, lLoadedStyle.FontSize);
+      Check(lLoadedStyle.HasUpperLineSpacing,
+        'Upper line spacing override should survive config round-trip');
+      CheckEquals(-2, lLoadedStyle.UpperLineSpacing);
+      Check(lLoadedStyle.HasLowerLineSpacing,
+        'Lower line spacing override should survive config round-trip');
+      CheckEquals(3, lLoadedStyle.LowerLineSpacing);
 
       lLoadedGroup := lLoaded.StyleOverrides.FindGroup('cpp');
       Check(lLoadedGroup <> nil, 'Config round-trip should preserve lexer groups');
@@ -2266,6 +2475,7 @@ var
   lDefaultStyle: TDSciVisualStyleData;
   lDialog: TDSciVisualSettingsDialog;
   lDefaultThemeGroup: TDSciVisualStyleGroup;
+  lGlobalOverrideStyle: TDSciVisualStyleData;
   lImportThemeButton: TButton;
   lTempDir: string;
   lThemeCombo: TComboBox;
@@ -2287,6 +2497,24 @@ begin
     try
       lConfig.LoadFromFile(TPath.Combine(ResolveSettingsDir, 'DScintilla.config.xml'));
       lConfig.ThemeName := '';
+      lGlobalOverrideStyle := lConfig.EnsureStyleOverride('default', 'Global override',
+        dvskGlobal);
+      lGlobalOverrideStyle.HasForeColor := True;
+      lGlobalOverrideStyle.ForeColor := RGB($10, $20, $30);
+      lGlobalOverrideStyle.HasBackColor := True;
+      lGlobalOverrideStyle.BackColor := RGB($40, $50, $60);
+      lGlobalOverrideStyle.HasFontName := True;
+      lGlobalOverrideStyle.FontName := 'Consolas';
+      lGlobalOverrideStyle.HasFontStyle := True;
+      lGlobalOverrideStyle.FontStyle := 3;
+      lGlobalOverrideStyle.HasFontSize := True;
+      lGlobalOverrideStyle.FontSize := 17;
+      lGlobalOverrideStyle.HasEOLFill := True;
+      lGlobalOverrideStyle.EOLFill := 1;
+      lGlobalOverrideStyle.HasUpperLineSpacing := True;
+      lGlobalOverrideStyle.UpperLineSpacing := -4;
+      lGlobalOverrideStyle.HasLowerLineSpacing := True;
+      lGlobalOverrideStyle.LowerLineSpacing := 5;
 
       lDialog := TDSciVisualSettingsDialog.Create(nil);
       lThemeSelection := TThemeSelectionDialog.Create;
@@ -2323,6 +2551,41 @@ begin
           CheckEquals(Integer(ColorToRGB(lThemeStyle.BackColor)),
             Integer(ColorToRGB(lDefaultStyle.BackColor)));
           CheckEquals(lThemeStyle.FontName, lDefaultStyle.FontName);
+
+          lGlobalOverrideStyle := lConfig.FindStyleOverride('default',
+            'Global override', dvskGlobal);
+          lThemeStyle := lDefaultThemeGroup.FindStyle('Global override',
+            dvskGlobal);
+          Check(lThemeStyle <> nil,
+            'Theme file should expose the Global override style');
+          Check(lGlobalOverrideStyle <> nil,
+            'Applied config should keep the Global override style');
+          Check(lGlobalOverrideStyle.HasForeColor,
+            'Global override foreground should come from the selected theme');
+          CheckEquals(Integer(ColorToRGB(lThemeStyle.ForeColor)),
+            Integer(ColorToRGB(lGlobalOverrideStyle.ForeColor)));
+          Check(lGlobalOverrideStyle.HasBackColor,
+            'Global override background should come from the selected theme');
+          CheckEquals(Integer(ColorToRGB(lThemeStyle.BackColor)),
+            Integer(ColorToRGB(lGlobalOverrideStyle.BackColor)));
+          Check(lGlobalOverrideStyle.HasFontName,
+            'Global override font name should stay user-configured');
+          CheckEquals('Consolas', lGlobalOverrideStyle.FontName);
+          Check(lGlobalOverrideStyle.HasFontStyle,
+            'Global override font style should stay user-configured');
+          CheckEquals(3, lGlobalOverrideStyle.FontStyle);
+          Check(lGlobalOverrideStyle.HasFontSize,
+            'Global override font size should stay user-configured');
+          CheckEquals(17, lGlobalOverrideStyle.FontSize);
+          Check(lGlobalOverrideStyle.HasEOLFill,
+            'Global override EOL fill should stay user-configured');
+          CheckEquals(1, lGlobalOverrideStyle.EOLFill);
+          Check(lGlobalOverrideStyle.HasUpperLineSpacing,
+            'Global override upper line spacing should stay user-configured');
+          CheckEquals(-4, lGlobalOverrideStyle.UpperLineSpacing);
+          Check(lGlobalOverrideStyle.HasLowerLineSpacing,
+            'Global override lower line spacing should stay user-configured');
+          CheckEquals(5, lGlobalOverrideStyle.LowerLineSpacing);
         finally
           lThemeModel.Free;
         end;
@@ -3796,7 +4059,10 @@ begin
     _DSciLogOutput := cDSciOutputFile;
     _DSciLogPath := lLogFile;
 
+    // This test intentionally exercises the deprecated legacy wrapper.
+    {$WARN SYMBOL_DEPRECATED OFF}
     SciBridgeLog('LegacyWrapperTest', cSciBridgeLogInfo);
+    {$WARN SYMBOL_DEPRECATED ON}
 
     Check(FileExists(lLogFile), 'SciBridgeLog must write via DSciLog');
     lContent := TFile.ReadAllText(lLogFile);
