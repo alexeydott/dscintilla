@@ -8,7 +8,7 @@ In my opinion, the final result is quite competitive and can be used in other pr
 
 ## Features
 - **Its still VCL component** - `TDScintilla` derived from `TWinControl` with full design-time support
-- **Fresh API** - methods and properties automatically generated from latest (now 5.6.1) Scintilla `.iface` definitions using the reworked IFGen utility
+- **Fresh API** - methods and properties automatically generated from latest (now 5.6.7) Scintilla `.iface` definitions using the reworked IFGen utility
 - **Reusable dialog boxes** - Ready-to-use `Find and Replace`, `Go To`, and `Visual Settings` dialog boxes
 - **2 ways files loading** - Synchronous / Asynchronous file loading with automatic encoding detection (used [chsdet](https://github.com/alexeydott/chsdet/) library)
 - **Themes suppors** - Applying editor configurations, syntax themes, and language selection from XML directories (themes compatible with Notepad++)
