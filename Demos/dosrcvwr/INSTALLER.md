@@ -2,7 +2,7 @@
 
 Build the Win64 plugin and combined Scintilla runtime first, then run
 `build-dopus-plugin-installer.bat`. The script reads the version from
-`bin64/DOSrcVwr.dll` and creates `bin64/DOSrcVwr-DOpusPlugin-x64-<version>.exe`.
+`bin64/DOSrcVwr.dll` and creates `bin64/DOSrcVwr-DOpusPlugin-x64.exe`.
 It uses `D:\tools\InnoSetup\6\ISCC.exe`; set `ISCC` to override that path.
 
 Setup detects Directory Opus through the per-user and machine-wide App Paths

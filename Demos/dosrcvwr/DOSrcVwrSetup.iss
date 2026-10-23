@@ -31,7 +31,7 @@ RestartApplications=no
 ; Opus owns Viewers/. Do not place an uninstaller there or remove a shared DLL.
 Uninstallable=no
 OutputDir={#InstallerOutputDir}
-OutputBaseFilename=DOSrcVwr-DOpusPlugin-x64-{#MyAppVersion}
+OutputBaseFilename=DOSrcVwr-DOpusPlugin-x64
 Compression=lzma2
 SolidCompression=yes
 WizardStyle=modern
