@@ -56,6 +56,7 @@
 !/bin32/scintilla.dll
 !/bin64/DOSrcVwr.dll
 !/bin64/DSciSrcVwr-PreviewHandler-x64-*.exe
+!/bin64/DOSrcVwr-DOpusPlugin-x64-*.exe
 !/bin64/DSciSrcVwr.64.dll
 !/bin64/scintilla64.dll
 

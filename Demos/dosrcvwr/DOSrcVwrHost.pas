@@ -18,9 +18,8 @@ procedure NotifyViewersConfigChanged;
 
 { Create the dedicated VCL thread that isolates VCL from DOpus's main UI
   thread, preventing VCL window hooks (WH_CBT etc.) from intercepting DO
-  window events and corrupting DO window state.  Idempotent; the thread
-  survives across Uninit/InitEx cycles and is stopped only in DLL
-  finalization. }
+  window events and corrupting DO window state. Idempotent; DVP_Uninit
+  stops the thread before FreeLibrary, outside the Windows loader lock. }
 procedure InitVCLThread;
 procedure UninitVCLThread;
 
@@ -82,8 +81,7 @@ type
     leaving DO windows disabled / corrupt after our dialog closed.
     but we will act more cunningly: we run VCL on a private thread DOpus never uses.
     VCL hooks stay on this thread and cannot reach DOpus windows on the DO UI thread.
-    The thread survives across Uninit/InitEx cycles so that
-    Application.FMainThreadID remains constant. }
+    DVP_Uninit joins this thread before DLL unload. }
   TVCLThread = class(TThread)
   private
     FReadyEvent: THandle;
@@ -162,14 +160,17 @@ end;
 
 procedure UninitVCLThread;
 begin
-  { The VCL thread survives Uninit/InitEx cycles so Application.FMainThreadID
-    stays constant - recreating the thread would invalidate it.
-    The thread is stopped in DLL finalization only. }
-  if GVCLThread <> nil then
-    LogInfo('UninitVCLThread: VCL thread retained (thread=%d)',
-      [GVCLThread.ThreadID])
-  else
-    LogInfo('UninitVCLThread: no VCL thread');
+  if GVCLThread = nil then
+    Exit;
+  LogInfo('UninitVCLThread: stopping thread=%d before DLL unload',
+    [GVCLThread.ThreadID]);
+  GVCLThread.Terminate;
+  // Wake Application.HandleMessage without WM_QUIT: Application.Terminated
+  // would otherwise remain set during a later InitEx in the same DLL.
+  PostThreadMessage(GVCLThread.ThreadID, WM_NULL, 0, 0);
+  GVCLThread.WaitFor;
+  FreeAndNil(GVCLThread);
+  LogInfo('UninitVCLThread: thread stopped');
 end;
 
 { --- TVCLAppExceptionHandler --- }
@@ -214,8 +215,8 @@ procedure TVCLThread.Execute;
 begin
   LogInfo('VCLThread.Execute: starting on dedicated thread %d', [GetCurrentThreadId]);
   { Initialise VCL on THIS private thread - NOT on DOpus's main UI thread.
-    GVCLAppInitialized guards against double-init on DLL reload cycles
-    where the thread survives and the flag persists. }
+    GVCLAppInitialized avoids repeating process-wide VCL initialization
+    when InitEx is called again without unloading the DLL. }
   if not GVCLAppInitialized then
   begin
     Application.Initialize;
@@ -232,14 +233,17 @@ begin
   SetEvent(FReadyEvent);
   { VCL message pump - Application.HandleMessage calls IsKeyMsg/IsDlgMsg
     so keyboard navigation (Tab etc.) works properly in the settings dialog. }
-  repeat
-    Application.HandleMessage;
-  until Application.Terminated;
-  LogInfo('VCLThread.Execute: terminated - cleaning up');
-  FreeAndNil(FDispatcher);
-  Application.OnException := nil;
-  FreeAndNil(FExHandler);
-  LogInfo('VCLThread.Execute: done');
+  try
+    while not Terminated and not Application.Terminated do
+      Application.HandleMessage;
+  finally
+    CloseConfigureDialog;
+    LogInfo('VCLThread.Execute: terminated - cleaning up');
+    FreeAndNil(FDispatcher);
+    Application.OnException := nil;
+    FreeAndNil(FExHandler);
+    LogInfo('VCLThread.Execute: done');
+  end;
 end;
 
 { Each CreateViewer call creates a TDOSrcVwrViewerFrame (a VCL control parented
@@ -385,11 +389,15 @@ begin
 
       DVPLUGINMSG_RESIZE:
       begin
-        // wParam = MAKELONG(left, top), lParam = MAKELONG(width, height)
+        // Opus already positions/resizes the viewer HWND. These parameters
+        // describe the content area, not a new position in the parent window.
+        // Moving the HWND to their usual (0,0) covers the host toolbar and
+        // leaves a matching gap below the plugin's status bar.
         if LFrame <> nil then
-          LFrame.SetBounds(
-            SmallInt(LoWord(AWParam)), SmallInt(HiWord(AWParam)),
-            SmallInt(LoWord(ALParam)), SmallInt(HiWord(ALParam)));
+        begin
+          LFrame.Realign;
+          LFrame.Invalidate;
+        end;
         Result := 1;
         Exit;
       end;
@@ -482,6 +490,11 @@ begin
         if (LFrame <> nil) and (ALParam <> 0) then
         begin
           LAccelMsg := PMsg(ALParam);
+          if HandleConfigureDialogEscape(LAccelMsg^, LFrame.SettingsDialogHandle) then
+          begin
+            Result := 1;
+            Exit;
+          end;
           LogInfo('WndProc.TRANSLATEACCEL: msg=$%x wP=$%x', [LAccelMsg^.message, LAccelMsg^.wParam]);
           if LAccelMsg^.message = WM_KEYDOWN then
           begin
@@ -508,6 +521,12 @@ begin
 
       DVPLUGINMSG_ISDLGMESSAGE:
       begin
+        if (LFrame <> nil) and (ALParam <> 0) and
+          HandleConfigureDialogEscape(PMsg(ALParam)^, LFrame.SettingsDialogHandle) then
+        begin
+          Result := 1;
+          Exit;
+        end;
         // Only handle messages for the modeless Find dialog.
         // Do NOT call IsDialogMessage on the main frame - it causes
         // infinite message loops in a non-dialog VCL control.
@@ -708,14 +727,8 @@ initialization
   GViewerLock := TCriticalSection.Create;
 
 finalization
-  if GVCLThread <> nil then
-  begin
-    LogInfo('Finalization: stopping VCL thread (thread=%d)...', [GVCLThread.ThreadID]);
-    PostThreadMessage(GVCLThread.ThreadID, WM_QUIT, 0, 0);
-    GVCLThread.WaitFor;
-    FreeAndNil(GVCLThread);
-    LogInfo('Finalization: VCL thread stopped');
-  end;
+  // DVP_Uninit joins the worker before FreeLibrary. Never wait for a thread
+  // from DLL finalization: its DLL_THREAD_DETACH needs the loader lock.
   FreeAndNil(GViewerLock);
   FreeAndNil(GViewerHandles);
 

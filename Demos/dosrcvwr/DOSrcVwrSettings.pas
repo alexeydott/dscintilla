@@ -1,4 +1,4 @@
-unit DOSrcVwrSettings;
+﻿unit DOSrcVwrSettings;
 
 interface
 
@@ -31,7 +31,7 @@ implementation
 
 uses
   System.IOUtils, System.Classes, System.StrUtils,
-  DOSrcVwrLog;
+  DOSrcVwrLog, DOSrcVwrConfigPaths;
 
 const
   cSettingsFileName = 'dosrcvwr.settings';
@@ -52,19 +52,12 @@ end;
 
 function TDOSrcVwrSettings.ResolveConfigFilePath: string;
 var
-  LBuf: array[0..MAX_PATH] of WideChar;
   LConfigRoot: string;
 begin
   if FConfigFilePath <> '' then
     Exit(FConfigFilePath);
 
-  if (FHelper <> nil) and FHelper.GetConfigPath(OPUSPATH_CONFIG, @LBuf[0], MAX_PATH + 1) then
-    LConfigRoot := TPath.Combine(string(LBuf), 'dosrcvwr')
-  else
-    LConfigRoot := TPath.Combine(
-      TPath.Combine(GetEnvironmentVariable('APPDATA'),
-        'GPSoftware\Directory Opus\ConfigFiles'),
-      'dosrcvwr');
+  LConfigRoot := GetDOSrcVwrConfigDir(FHelper);
 
   FConfigFilePath := TPath.Combine(LConfigRoot, cSettingsFileName);
 

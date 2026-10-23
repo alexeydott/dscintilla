@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<opus_plugin name="Scintilla Source Code Viewer">
+  <usb_safe safe="yes">
+    <export platform="x86">scintilla.dll</export>
+    <export platform="x64">scintilla64.dll</export>
+  </usb_safe>
+</opus_plugin>

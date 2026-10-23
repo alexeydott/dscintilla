@@ -1,4 +1,4 @@
-unit uSciConfGenImport;
+﻿unit uSciConfGenImport;
 
 interface
 
@@ -330,6 +330,22 @@ begin
     ATarget.KeywordClass := AOverlay.KeywordClass;
   if AOverlay.KeywordsText <> '' then
     ATarget.KeywordsText := AOverlay.KeywordsText;
+end;
+
+procedure ClearBaseLexerColors(AModel: TDSciVisualStyleModel);
+var
+  LGroup: TDSciVisualStyleGroup;
+  LStyle: TDSciVisualStyleData;
+begin
+  // A theme may omit token styles intentionally: they inherit STYLE_DEFAULT.
+  // Keep the base model's IDs and keywords, but not its light-theme colours.
+  for LGroup in AModel.Groups do
+    for LStyle in LGroup.Styles do
+      if LStyle.Kind = dvskLexer then
+      begin
+        LStyle.HasForeColor := False;
+        LStyle.HasBackColor := False;
+      end;
 end;
 
 procedure MergeModel(ATarget, AOverlay: TDSciVisualStyleModel);
@@ -941,21 +957,16 @@ end;
 
 function LoadSeedConfig(const AFileName: string): TDSciVisualConfig;
 var
-  lColor: TColor;
-  lFileSizeNode: IXMLNode;
+  lSeedStream: TFileStream;
   lGroup: TDSciVisualStyleGroup;
-  lHighlightNode: IXMLNode;
   lInit: HRESULT;
   lNode: IXMLNode;
   lRoot: IXMLNode;
   lStep: string;
   lStyleNode: IXMLNode;
   lStylesNode: IXMLNode;
-  lThemeNode: IXMLNode;
   lWordStylesNode: IXMLNode;
   lXml: IXMLDocument;
-  lInt64Value: Int64;
-  lValue: Integer;
   lIndex: Integer;
   lWordIndex: Integer;
   lStyle: TDSciLegacyStyleData;
@@ -965,6 +976,15 @@ begin
     Exit;
 
   try
+    lStep := 'read complete seed settings';
+    lSeedStream := TFileStream.Create(AFileName, fmOpenRead or fmShareDenyWrite);
+    try
+      Result.LoadFromStream(lSeedStream);
+    finally
+      lSeedStream.Free;
+    end;
+    // Reimport legacy style attributes below using the compatibility parser.
+    Result.StyleOverrides.Clear;
     lStep := 'initialize com';
     lInit := CoInitializeEx(nil, COINIT_APARTMENTTHREADED);
     if Failed(lInit) and (lInit <> RPC_E_CHANGED_MODE) then
@@ -981,53 +1001,6 @@ begin
       lRoot := lXml.DocumentElement;
       if lRoot = nil then
         Exit;
-
-      lStep := 'read theme';
-      lThemeNode := FindChildNode(lRoot, 'Theme');
-      if lThemeNode <> nil then
-        Result.ThemeName := Trim(GetNodeAttribute(lThemeNode, 'Name'));
-
-      lStep := 'read highlight';
-      lHighlightNode := FindChildNode(lRoot, 'Highlight');
-      if lHighlightNode <> nil then
-      begin
-        if ParseHexColor(GetNodeAttribute(lHighlightNode, 'Foreground'), lColor) then
-          Result.HighlightColor := lColor;
-        if ParseOptionalInt('$' + GetNodeAttribute(lHighlightNode, 'ForegroundAlpha'),
-            lValue) then
-          Result.HighlightAlpha := Byte(EnsureRange(lValue, 0, 255));
-        if ParseOptionalInt('$' + GetNodeAttribute(lHighlightNode, 'OutlineAlpha'),
-            lValue) then
-          Result.HighlightOutlineAlpha := Byte(EnsureRange(lValue, 0, 255));
-      end;
-
-      lStep := 'read file size limit';
-      lFileSizeNode := FindChildNode(lRoot, 'FileSizeLimit');
-      if (lFileSizeNode <> nil) and ParseOptionalInt64(Trim(lFileSizeNode.Text), lInt64Value) then
-        Result.FileSizeLimit := Max(Int64(0), lInt64Value);
-
-      lStep := 'read line numbering';
-      lNode := FindChildNode(lRoot, 'LineNumbering');
-      if lNode <> nil then
-        Result.LineNumbering := ParseYesNo(GetNodeAttribute(lNode, 'Enabled'),
-          Result.LineNumbering);
-
-      lStep := 'read line wrapping';
-      lNode := FindChildNode(lRoot, 'LineWrapping');
-      if lNode <> nil then
-        Result.LineWrapping := ParseYesNo(GetNodeAttribute(lNode, 'Enabled'),
-          Result.LineWrapping);
-
-      lStep := 'read tab settings';
-      lNode := FindChildNode(lRoot, 'Tabulator');
-      if (lNode <> nil) and ParseOptionalInt(GetNodeAttribute(lNode, 'Width'), lValue) then
-        Result.TabWidth := Max(1, lValue);
-
-      lStep := 'read search sync';
-      lNode := FindChildNode(lRoot, 'SearchSync');
-      if lNode <> nil then
-        Result.SearchSync := ParseYesNo(GetNodeAttribute(lNode, 'Enabled'),
-          Result.SearchSync);
 
       lStep := 'read style overrides';
       lStylesNode := FindChildNode(lRoot, 'Styles');
@@ -1065,21 +1038,21 @@ begin
         end;
     finally
       lWordStylesNode := nil;
-      lThemeNode := nil;
       lStylesNode := nil;
       lStyleNode := nil;
       lRoot := nil;
       lNode := nil;
-      lHighlightNode := nil;
-      lFileSizeNode := nil;
       lXml := nil;
       if (lInit = S_OK) or (lInit = S_FALSE) then
         CoUninitialize;
     end;
   except
     on E: Exception do
+    begin
+      Result.Free;
       raise Exception.CreateFmt('LoadSeedConfig %s failed: %s - %s',
         [lStep, E.ClassName, E.Message]);
+    end;
   end;
 end;
 
@@ -1088,15 +1061,8 @@ begin
   if (ASource = nil) or (ATarget = nil) then
     Exit;
 
-  ATarget.ThemeName := ASource.ThemeName;
-  ATarget.HighlightColor := ASource.HighlightColor;
-  ATarget.HighlightAlpha := ASource.HighlightAlpha;
-  ATarget.HighlightOutlineAlpha := ASource.HighlightOutlineAlpha;
-  ATarget.LineNumbering := ASource.LineNumbering;
-  ATarget.LineWrapping := ASource.LineWrapping;
-  ATarget.TabWidth := ASource.TabWidth;
-  ATarget.FileSizeLimit := ASource.FileSizeLimit;
-  ATarget.SearchSync := ASource.SearchSync;
+  ATarget.Assign(ASource);
+  LogConfGenFix('Preserved complete seed editor, rendering, status and logging settings');
 end;
 
 function LoadBaseModel(const ASettingsDirectory: string): TDSciVisualStyleModel;
@@ -1139,15 +1105,10 @@ begin
     lStep := 'load seed config';
     lSeedConfig := LoadSeedConfig(ASeedConfigFileName);
     try
-      lStep := 'copy misc settings';
-      AConfig.ResetDefaults;
-      CopyMiscSettings(lSeedConfig, AConfig);
-
       lStep := 'resolve theme name';
       lThemeName := Trim(AThemeName);
       if lThemeName = '' then
         lThemeName := Trim(lSeedConfig.ThemeName);
-      AConfig.ThemeName := lThemeName;
 
       lStep := 'load base style model';
       lImportedModel := LoadBaseModel(lSettingsDirectory);
@@ -1158,6 +1119,7 @@ begin
           lThemeModel := LoadStyleModel(ResolveThemeFileName(lSettingsDirectory, lThemeName));
           try
             lStep := 'merge theme model';
+            ClearBaseLexerColors(lImportedModel);
             MergeModel(lImportedModel, lThemeModel);
           finally
             lThemeModel.Free;
@@ -1181,6 +1143,8 @@ begin
         NormalizeImportedStyleModel(lImportedModel);
 
         lStep := 'commit imported model';
+        CopyMiscSettings(lSeedConfig, AConfig);
+        AConfig.ThemeName := lThemeName;
         AConfig.ReplaceStyleModel(lImportedModel, False);
       finally
         lImportedModel.Free;

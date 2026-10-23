@@ -1,4 +1,4 @@
-unit DScintillaVisualSettingsDLG;
+﻿unit DScintillaVisualSettingsDLG;
 
 interface
 
@@ -259,6 +259,7 @@ type
     // Sets owner HWND from FOwnerWnd (top-level host window), Application.Handle,
     // or GetDesktopWindow as emergency fallback only.
     procedure CreateParams(var Params: TCreateParams); override;
+    procedure KeyDown(var Key: Word; Shift: TShiftState); override;
     procedure CreateWnd; override;
     procedure Resize; override;
   public
@@ -1899,6 +1900,7 @@ begin
   FCancelButton := TButton.Create(Self);
   FCancelButton.Parent := FButtonsPanel;
   FCancelButton.Caption := 'Cancel';
+  FCancelButton.Cancel := True;
   FCancelButton.Width := Scale(cButtonWidth);
   FCancelButton.OnClick := CancelButtonClick;
 
@@ -3346,6 +3348,17 @@ begin
   end
   else
     ModalResult := mrOk;
+end;
+
+procedure TDSciVisualSettingsDialog.KeyDown(var Key: Word; Shift: TShiftState);
+begin
+  if Key = VK_ESCAPE then
+  begin
+    Key := 0;
+    CancelButtonClick(Self);
+  end
+  else
+    inherited KeyDown(Key, Shift);
 end;
 
 procedure TDSciVisualSettingsDialog.CancelButtonClick(Sender: TObject);

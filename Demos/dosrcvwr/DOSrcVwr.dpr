@@ -1,6 +1,7 @@
-library DOSrcVwr;
+﻿library DOSrcVwr;
 
 {$R *.res}
+{$R DOSrcVwrOpus.res}
 
 uses
   DOSrcVwrExports in 'DOSrcVwrExports.pas',

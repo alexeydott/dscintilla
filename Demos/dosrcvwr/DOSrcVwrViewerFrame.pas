@@ -132,6 +132,7 @@ type
     procedure OpenSettingsDialog;
     procedure HandleKeyDown(var Key: Word; Shift: TShiftState);
     function FindDialogHandle: HWND;
+    function SettingsDialogHandle: HWND;
     procedure CancelAndFreeDialogs;
     { Set FDestroying and cancel all dialogs. Called from WM_DESTROY (before
       the frame object is freed in WM_NCDESTROY) so that the FDestroying flag
@@ -1172,6 +1173,13 @@ begin
   FFindDialog.Show;
   FFindDialog.BringToFront;
   FFindDialog.FocusSearchText;
+end;
+
+function TDOSrcVwrViewerFrame.SettingsDialogHandle: HWND;
+begin
+  Result := 0;
+  if (FSettingsDialog <> nil) and FSettingsDialog.HandleAllocated then
+    Result := FSettingsDialog.Handle;
 end;
 
 function TDOSrcVwrViewerFrame.FindDialogHandle: HWND;

@@ -1,4 +1,4 @@
-unit DOSrcVwrLog;
+﻿unit DOSrcVwrLog;
 
 {.$DEFINE use_dopus_logging}
 
@@ -133,7 +133,8 @@ procedure InitLogging(ALevel: TDOpusPluginLogLevel);
 begin
   GConfiguredLogLevel := ALevel;
   SetDSciLogPath(GetDefaultLogPath);
-  SetDSciLogEnabled(True);
+  // Do not write before the Opus config/portable path and XML are known.
+  SetDSciLogEnabled(False);
   SetDSciLogLevel(Ord(ALevel));
   SetDSciLogOutput(cDSciOutputFile);
   SetDOpusPluginLogProc(DOpusLogHandler);
@@ -145,6 +146,7 @@ procedure ShutdownLogging;
 begin
   LogInfo('ShutdownLogging: closing log');
   SetDOpusPluginLogProc(nil);
+  SetDSciLogEnabled(False);
 end;
 
 procedure SetLogEnabled(AEnabled: Boolean);
@@ -162,8 +164,6 @@ end;
 
 procedure SetLogOutput(AOutput: Integer);
 begin
-  if AOutput = cDSciOutputFile then
-    SetDSciLogPath(GetDefaultLogPath);
   SetDSciLogOutput(AOutput);
 end;
 

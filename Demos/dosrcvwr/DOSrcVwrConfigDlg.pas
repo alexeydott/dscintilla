@@ -8,6 +8,8 @@ uses
 function ShowConfigureDialog(AParentWnd: HWND; ANotifyWnd: HWND;
   ANotifyData: DWORD): HWND;
 function ShowAboutDialog(AParentWnd: HWND): HWND;
+procedure CloseConfigureDialog;
+function HandleConfigureDialogEscape(var AMsg: TMsg; ADialog: HWND = 0): Boolean;
 
 implementation
 
@@ -42,6 +44,7 @@ type
 var
   GDialogHelper: TConfigDialogHelper;
   GDialogHandle: HWND;
+  GSuppressEscapeUp: Boolean;
   { Weak reference to the open modeless dialog.  Used only at finalization to
     clear callbacks before GDialogHelper is freed, preventing a dangling
     method-pointer if the DLL is unloaded while the dialog is still open. }
@@ -249,6 +252,42 @@ begin
   MessageBoxW(AParentWnd, PWideChar(LText), 'About DOSrcVwr',
     MB_OK or MB_ICONINFORMATION);
   Result := 0;
+end;
+
+function HandleConfigureDialogEscape(var AMsg: TMsg; ADialog: HWND): Boolean;
+begin
+  if ADialog = 0 then ADialog := GDialogHandle;
+  Result := False;
+  if AMsg.wParam <> VK_ESCAPE then
+    Exit;
+  if (AMsg.message = WM_KEYUP) and GSuppressEscapeUp then
+  begin
+    GSuppressEscapeUp := False;
+    Exit(True);
+  end;
+  if AMsg.message <> WM_KEYDOWN then
+    Exit;
+  if GSuppressEscapeUp then
+    Exit(True);
+  if (ADialog <> 0) and IsWindow(ADialog) and
+    ((AMsg.hwnd = ADialog) or IsChild(ADialog, AMsg.hwnd)) then
+  begin
+    // Opus processes its own Escape accelerator before dispatching to VCL.
+    // Consume both key transitions so only the settings window closes.
+    GSuppressEscapeUp := True;
+    PostMessage(ADialog, WM_CLOSE, 0, 0);
+    Result := True;
+  end;
+end;
+
+procedure CloseConfigureDialog;
+begin
+  // Called on the dispatcher thread before it exits, while the DLL is loaded.
+  if GDialog <> nil then
+    GDialog.Free;
+  GDialog := nil;
+  GDialogHandle := 0;
+  FreeAndNil(GDialogHelper);
 end;
 
 initialization

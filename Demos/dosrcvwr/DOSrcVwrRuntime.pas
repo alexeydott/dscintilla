@@ -1,4 +1,4 @@
-unit DOSrcVwrRuntime;
+﻿unit DOSrcVwrRuntime;
 
 interface
 
@@ -21,7 +21,7 @@ type
     constructor Create;
     destructor Destroy; override;
     { Lazily resolved plugin config directory
-      (e.g. ...\ConfigFiles\dosrcvwr). }
+      (normally ...\User Data\dosrcvwr, with legacy migration). }
     function ConfigDir: string;
     { Full path to dosrcvwr.config.xml inside ConfigDir. }
     function ConfigFile: string;
@@ -47,7 +47,7 @@ uses
   DOpusPluginSupport,
   DScintillaVisualConfig,
   DScintillaDefaultConfig,
-  DOSrcVwrLog,
+  DOSrcVwrLog, DOSrcVwrConfigPaths,
   DOSrcVwrHost;
 
 var
@@ -70,19 +70,8 @@ begin
 end;
 
 function TDOSrcVwrHelper.ResolveConfigDir: string;
-var
-  LBuf: array[0..MAX_PATH] of WideChar;
 begin
-  if FInner.GetConfigPath(OPUSPATH_CONFIG, @LBuf[0], MAX_PATH + 1) then
-    Result := TPath.Combine(string(LBuf), 'dosrcvwr')
-  else
-  begin
-    Result := TPath.Combine(
-      TPath.Combine(GetEnvironmentVariable('APPDATA'),
-        'GPSoftware\Directory Opus\ConfigFiles'),
-      'dosrcvwr');
-    LogInfo('TDOSrcVwrHelper.ResolveConfigDir: API unavailable, fallback to %s', [Result]);
-  end;
+  Result := GetDOSrcVwrConfigDir(FInner);
 end;
 
 function TDOSrcVwrHelper.ConfigDir: string;
@@ -151,6 +140,7 @@ begin
   // Ensure the singleton helper exists (may already exist from DVP_Identify)
   LogInfo('HandleInitEx: ensuring helper singleton...');
   PluginHelper;
+  RelocateLogToDir(PluginHelper.ConfigDir);
   LogInfo('HandleInitEx: helper ready');
 
   // Log USB/portable install status
@@ -209,7 +199,9 @@ begin
   if (AUSBSafeData <> nil) and (AUSBSafeData^.cbSize >= SizeOf(OPUSUSBSAFEDATA)) then
   begin
     if (AUSBSafeData^.pszOtherExports <> nil) and (AUSBSafeData^.cchOtherExports > 0) then
-      StrPLCopy(AUSBSafeData^.pszOtherExports, 'scintilla64.dll', AUSBSafeData^.cchOtherExports);
+      StrPLCopy(AUSBSafeData^.pszOtherExports,
+        {$IFDEF WIN64}'scintilla64.dll'{$ELSE}'scintilla.dll'{$ENDIF},
+        AUSBSafeData^.cchOtherExports - 1);
   end;
   Result := True;
 end;

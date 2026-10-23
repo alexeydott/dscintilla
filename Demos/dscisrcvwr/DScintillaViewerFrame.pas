@@ -218,7 +218,7 @@ implementation
 
 uses
   System.Math, Winapi.KnownFolders, System.Win.Registry, VCL.Themes,
-  DScintillaDefaultConfig, DScintillaSettings
+  DScintillaDefaultConfig, DScintillaSettings, DSciPreviewLogging
   ;
 
 {$R *.dfm}
@@ -386,26 +386,9 @@ begin
   end;
 end;
 
-// Re-applies the preview handler's fixed logging settings.
-// Must be called after every LoadConfigFile because DScintillaSettings overwrites
-// the global logger variables (_DSciLogEnabled etc.) from the config model,
-// which defaults to logging disabled.
-procedure ApplyLoggingSettings;
-begin
-  SetDSciLogPath(GetLogFilePath);
-  SetDSciLogEnabled(True);
-  SetDSciLogLevel(cDSciLogDebug);
-  SetDSciLogOutput(cDSciOutputFile);
-end;
-
 procedure InitializeLogging;
 begin
-  try
-    ForceDirectories(GetConfigDir);
-  except
-    // Ignore
-  end;
-  ApplyLoggingSettings;
+  ConfigurePreviewLogging(GetConfigFilePath, GetLogFilePath);
   DSciLog('=== DSciSrcVwr loaded (PID=' + IntToStr(GetCurrentProcessId) + ') ===', cDSciLogInfo);
 end;
 
@@ -570,9 +553,7 @@ begin
     EnsureConfigFileExists;
     FConfigFileName := GetConfigFilePath;
     FEditor.Settings.LoadConfigFile(FConfigFileName);
-    // LoadConfigFile overwrites the global logger state from the config model
-    // (defaults to disabled). Re-apply the preview handler's logging settings.
-    ApplyLoggingSettings;
+    // Settings.Reapply uses the XML logging state; do not force logging on.
     DSciLog('Config loaded: ' + FConfigFileName, cDSciLogInfo);
   except
     on E: Exception do
@@ -1860,7 +1841,6 @@ begin
         ForceDirectories(LSettingsDir);
         LConfig.SaveToFile(FConfigFileName);
         FEditor.Settings.LoadConfigFile(FConfigFileName);
-        ApplyLoggingSettings; // Re-apply: see ResolveAndLoadConfig
         if FCurrentFileName <> '' then
         begin
           // ReapplyPreferredLanguageSelection would reset the lexer because
