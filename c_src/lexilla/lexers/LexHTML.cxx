@@ -518,6 +518,19 @@ constexpr bool isLineEnd(int ch) noexcept {
 	return ch == '\r' || ch == '\n';
 }
 
+// Find whether there is a closing '/' for a regex starting at start.
+bool CheckRegexClosed(Accessor &styler, Sci_PositionU start) {
+	for (Sci_Position pos = 1; ; pos++) {
+		const char ch = styler.SafeGetCharAt(start + pos, '\n');
+		if (ch == '/') {
+			return true;
+		}
+		if (isLineEnd(ch)) {
+			return false;
+		}
+	}
+}
+
 bool isMakoBlockEnd(const int ch, const int chNext, const std::string &blockType) noexcept {
 	if (blockType.empty()) {
 		return ((ch == '%') && (chNext == '>'));
@@ -733,10 +746,9 @@ Sci_Position FindPhpStringDelimiter(std::string &phpStringDelimiter, Sci_Positio
 				isQuoted = false;
 				j++;
 				break;
-			} else {
-				phpStringDelimiter.clear();
-				return beginning;
 			}
+			phpStringDelimiter.clear();
+			return beginning;
 		}
 		phpStringDelimiter.push_back(styler[j]);
 	}
@@ -1070,8 +1082,7 @@ public:
 		osHTML(isPHPScript_),
 		nonFoldingTags(std::begin(tagsThatDoNotFold), std::end(tagsThatDoNotFold)) {
 	}
-	~LexerHTML() override {
-	}
+	~LexerHTML() override = default;
 	void SCI_METHOD Release() override {
 		delete this;
 	}
@@ -1693,6 +1704,9 @@ void SCI_METHOD LexerHTML::Lex(Sci_PositionU startPos, Sci_Position length, int 
 				}
 			} else if ((state != SCE_H_SGML_BLOCK_DEFAULT) && isWordCdata(i + 1, i + 7, styler)) {
 				state = SCE_H_CDATA;
+				styler.ColourTo(i + 1, SCE_H_SGML_DEFAULT);
+				styler.ColourTo(i + 1 + 5, SCE_H_SGML_COMMAND);
+				styler.ColourTo(i + 1 + 5 + 1, SCE_H_SGML_DEFAULT);
 			} else {
 				styler.ColourTo(i, SCE_H_SGML_DEFAULT); // <! is default
 				beforeLanguage = scriptLanguage;
@@ -1771,7 +1785,7 @@ void SCI_METHOD LexerHTML::Lex(Sci_PositionU startPos, Sci_Position length, int 
 
 		// handle the end of a pre-processor = Non-HTML
 		else if ((!isMako && !isDjango && ((inScriptType == eNonHtmlPreProc) || (inScriptType == eNonHtmlScriptPreProc)) &&
-				  (((scriptLanguage != eScriptNone) && stateAllowsTermination(state))) &&
+				  ((scriptLanguage != eScriptNone) && stateAllowsTermination(state)) &&
 				  ((chNext == '>') && isPreProcessorEndTag(state, ch))) ||
 		         ((scriptLanguage == eScriptSGML) && (ch == '>') && !AnyOf(state, SCE_H_SGML_COMMENT, SCE_H_SGML_DOUBLESTRING, SCE_H_SGML_SIMPLESTRING))) {
 			if (state == SCE_H_ASPAT) {
@@ -1944,7 +1958,8 @@ void SCI_METHOD LexerHTML::Lex(Sci_PositionU startPos, Sci_Position length, int 
 			break;
 		case SCE_H_CDATA:
 			if ((chPrev2 == ']') && (chPrev == ']') && (ch == '>')) {
-				styler.ColourTo(i, StateToPrint);
+				styler.ColourTo(i - 3, StateToPrint);
+				styler.ColourTo(i, SCE_H_SGML_DEFAULT);
 				state = SCE_H_DEFAULT;
 				levelCurrent--;
 			}
@@ -2201,7 +2216,7 @@ void SCI_METHOD LexerHTML::Lex(Sci_PositionU startPos, Sci_Position length, int 
 			} else if (ch == '/' && chNext == '/') {
 				styler.ColourTo(i - 1, StateToPrint);
 				state = SCE_HJ_COMMENTLINE;
-			} else if (ch == '/' && setOKBeforeJSRE.Contains(chPrevNonWhite)) {
+			} else if (ch == '/' && setOKBeforeJSRE.Contains(chPrevNonWhite) && CheckRegexClosed(styler, i)) {
 				styler.ColourTo(i - 1, StateToPrint);
 				state = SCE_HJ_REGEX;
 			} else if (ch == '\"') {
@@ -2570,7 +2585,7 @@ void SCI_METHOD LexerHTML::Lex(Sci_PositionU startPos, Sci_Position length, int 
 			} else if (ch == '$' && IsPhpWordStart(chNext)) {
 				styler.ColourTo(i - 1, StateToPrint);
 				state = SCE_HPHP_HSTRING_VARIABLE;
-			} else if (styler.Match(i, phpStringDelimiter.c_str())) {
+			} else if (styler.Match(i, phpStringDelimiter)) {
 				if (phpStringDelimiter == "\"") {
 					styler.ColourTo(i, StateToPrint);
 					state = SCE_HPHP_DEFAULT;
@@ -2594,7 +2609,7 @@ void SCI_METHOD LexerHTML::Lex(Sci_PositionU startPos, Sci_Position length, int 
 					styler.ColourTo(i, StateToPrint);
 					state = SCE_HPHP_DEFAULT;
 				}
-			} else if (lineStartVisibleChars == 1 && styler.Match(i, phpStringDelimiter.c_str())) {
+			} else if (lineStartVisibleChars == 1 && styler.Match(i, phpStringDelimiter)) {
 				const int psdLength = static_cast<int>(phpStringDelimiter.length());
 				if (!IsPhpWordChar(styler.SafeGetCharAt(i + psdLength))) {
 					i += (((i + psdLength) < lengthDoc) ? psdLength : lengthDoc) - 1;

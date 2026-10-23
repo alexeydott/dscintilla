@@ -1,0 +1,121 @@
+# Delphi compiler and linker output
+*.dcu
+*.bpl
+*.dcp
+*.map
+*.drc
+*.rsm
+*.eof
+*.vrc
+*.$manifest
+*.res
+!/Packages/*.res
+!/Sources/DScintillaDefaultConfig.res
+
+# Native compiler/linker output
+*.obj
+*.o
+*.a
+*.lib
+*.exp
+*.pdb
+*.ilk
+*.idb
+*.ipdb
+*.iobj
+*.tlog
+*.lastbuildstate
+
+# Delphi needs these prebuilt objects for DLL/static linking.
+!/Sources/scibridge32.obj
+!/Sources/scibridge64.obj
+/Sources/obj/*
+!/Sources/obj/sci_combined_bcc64x.o
+!/Sources/obj/sci_combined_clang32.o
+/c_src/scintilla/win32/obj/
+/c_src/lexilla/src/obj/
+/c_src/scintilla/bin/*
+!/c_src/scintilla/bin/empty.txt
+/c_src/lexilla/bin/*
+!/c_src/lexilla/bin/empty.txt
+
+# Executables, shared libraries, installers and distribution archives
+*.exe
+*.exe.old
+*.dll
+*.so
+*.so.*
+*.dylib
+*.msi
+*.msix
+*.zip
+*.7z
+*.rar
+
+# Shipped runtime libraries, viewer plugins and preview-handler installers
+!/bin32/scintilla.dll
+!/bin64/DOSrcVwr.dll
+!/bin64/DSciSrcVwr-PreviewHandler-x64-*.exe
+!/bin64/DSciSrcVwr.64.dll
+!/bin64/scintilla64.dll
+
+# Delphi project build directories (do not ignore c_src/scintilla/win32 sources).
+DCU/
+/Demos/**/Win32/
+/Demos/**/Win64/
+/Tests/**/Win32/
+/Tests/**/Win64/
+/Packages/**/Win32/
+/Packages/**/Win64/
+/Sources/IFGen/Win32/
+/Sources/IFGen/Win64/
+/Sources/ConfGen/Win32/
+/Sources/ConfGen/Win64/
+
+# IDE state and local history
+__history/
+__recovery/
+*.local
+*.identcache
+*.delphilsp.json
+*.dsk
+*.stat
+*.dproj.skincfg
+.vs/
+*.suo
+*.user
+*.sdf
+*.opensdf
+*.VC.db
+*.VC.opendb
+
+# Logs, temporary files and editor backups
+*.log
+*.tmp
+*.temp
+*.bak
+*.orig
+*.rej
+*.swp
+*.swo
+*.~*
+~*
+Thumbs.db
+Desktop.ini
+.DS_Store
+*.effective-theme.xml
+settings/
+
+# Python and CMake caches
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.venv/
+CMakeFiles/
+CMakeCache.txt
+cmake_install.cmake
+compile_commands.json
+
+# Keep source catalogs (settings/), compiler .cfg files, icons, .dcr files,
+# upstream lexer fixtures and build scripts visible to Git.

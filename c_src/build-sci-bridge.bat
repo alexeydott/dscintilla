@@ -28,7 +28,7 @@ set "SRC_CPP=%SCRIPT_DIR%SciBridge.cpp"
 set "SCI_INC=%SCRIPT_DIR%scintilla\include"
 set "SCI_WIN32=%SCRIPT_DIR%scintilla\win32"
 set "LEX_INC=%SCRIPT_DIR%lexilla\include"
-set "OUT_DIR=%SCRIPT_DIR%..\source"
+set "OUT_DIR=%SCRIPT_DIR%..\Sources"
 set "OUT_OBJ=%OUT_DIR%\scibridge%PLATFORM%.obj"
 
 if not exist "%SRC_CPP%" (

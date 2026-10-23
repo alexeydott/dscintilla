@@ -40,7 +40,7 @@ where python >nul 2>nul || (
 
 rem --- Paths ------------------------------------------------------------------
 for %%I in ("%~dp0.") do set "C_SRC=%%~fI"
-for %%I in ("%C_SRC%\..\source") do set "SOURCE=%%~fI"
+for %%I in ("%C_SRC%\..\Sources") do set "SOURCE=%%~fI"
 set "OBJ_DIR=%SOURCE%\obj\test_bcc64x"
 set "COMBINED_DIR=%SOURCE%\obj\bcc64x_combined"
 set "OUTPUT_OBJ=%SOURCE%\obj\sci_combined_bcc64x.o"

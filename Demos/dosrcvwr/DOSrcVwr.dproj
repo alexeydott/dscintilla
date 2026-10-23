@@ -53,11 +53,11 @@
         <DCC_Namespace>System;Xml;Data;Datasnap;Web;Soap;VCL;$(DCC_Namespace)</DCC_Namespace>
         <DCC_ExeOutput>..\..\bin64\</DCC_ExeOutput>
         <DCC_DcuOutput>$(Platform)\$(Config)</DCC_DcuOutput>
-        <DCC_UnitSearchPath>..\..\source;..\..\..\..\externals\chsdet;$(DCC_UnitSearchPath)</DCC_UnitSearchPath>
+        <DCC_UnitSearchPath>..\..\sources;..\..\..\..\externals\chsdet;$(DCC_UnitSearchPath)</DCC_UnitSearchPath>
         <VerInfo_IncludeVerInfo>true</VerInfo_IncludeVerInfo>
         <VerInfo_MinorVer>5</VerInfo_MinorVer>
         <VerInfo_Release>6</VerInfo_Release>
-        <VerInfo_Build>160</VerInfo_Build>
+        <VerInfo_Build>761</VerInfo_Build>
         <VerInfo_DLL>true</VerInfo_DLL>
         <PluginProductName>Directory Opus Source code viewer plugin</PluginProductName>
         <PluginCopyright>(c) 2024-2026 alexey.t</PluginCopyright>
@@ -66,7 +66,7 @@
         <PluginVersionRelease>$(VerInfo_Release)</PluginVersionRelease>
         <PluginVersionBuild>$(VerInfo_Build)</PluginVersionBuild>
         <PluginVersionString>$(VerInfo_MajorVer).$(VerInfo_MinorVer).$(VerInfo_Release).$(VerInfo_Build)</PluginVersionString>
-        <VerInfo_Keys>FileDescription=$(PluginProductName) - $(Config) / $(Platform);FileVersion=1.5.6.160;InternalName=DOSrcVwr;LegalCopyright=$(PluginCopyright);OriginalFilename=DOSrcVwr.dll;ProgramID=$(MSBuildProjectName);ProductName=$(PluginProductName);ProductVersion=1.5.6.160;Comments=$(PluginProductName) - $(Config) / $(Platform)</VerInfo_Keys>
+        <VerInfo_Keys>FileDescription=$(PluginProductName) - $(Config) / $(Platform);FileVersion=1.5.6.761;InternalName=DOSrcVwr;LegalCopyright=$(PluginCopyright);OriginalFilename=DOSrcVwr.dll;ProgramID=$(MSBuildProjectName);ProductName=$(PluginProductName);ProductVersion=1.5.6.160;Comments=$(PluginProductName) - $(Config) / $(Platform)</VerInfo_Keys>
         <Icon_MainIcon>DOSrcVwr.ico</Icon_MainIcon>
         <DCC_Define>DScintilla_USE_chsdet;$(DCC_Define)</DCC_Define>
     </PropertyGroup>
@@ -94,9 +94,10 @@
     <PropertyGroup Condition="'$(Cfg_1_Win64)'!=''">
         <Manifest_File>$(BDS)\bin\default_app.manifest</Manifest_File>
         <AppDPIAwarenessMode>PerMonitorV2</AppDPIAwarenessMode>
-        <VerInfo_Build>309</VerInfo_Build>
-        <VerInfo_Keys>FileDescription=Directory Opus Source code viewer plugin - Release / Win64;FileVersion=1.5.6.309;InternalName=DOSrcVwr;LegalCopyright=(c) 2024-2026 alexey.t;OriginalFilename=DOSrcVwr.dll;ProgramID=DOSrcVwr;ProductName=Directory Opus Source code viewer plugin;ProductVersion=1.5.6.309;Comments=Directory Opus Source code viewer plugin - Release / Win64</VerInfo_Keys>
+        <VerInfo_Build>720</VerInfo_Build>
+        <VerInfo_Keys>FileDescription=Directory Opus Source code viewer plugin - Release / Win64;FileVersion=1.5.6.720;InternalName=DOSrcVwr;LegalCopyright=(c) 2024-2026 alexey.t;OriginalFilename=DOSrcVwr.dll;ProgramID=DOSrcVwr;ProductName=Directory Opus Source code viewer plugin;ProductVersion=1.5.6.719;Comments=Directory Opus Source code viewer plugin - Release / Win64</VerInfo_Keys>
         <VerInfo_AutoIncVersion>true</VerInfo_AutoIncVersion>
+        <DCC_UnitSearchPath>..\..\sources;$(DCC_UnitSearchPath)</DCC_UnitSearchPath>
     </PropertyGroup>
     <PropertyGroup Condition="'$(Cfg_2)'!=''">
         <DCC_Define>DEBUG;$(DCC_Define)</DCC_Define>

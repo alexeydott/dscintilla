@@ -171,6 +171,8 @@
     property UndoTentative: Integer read GetUndoTentative write SetUndoTentative;
     /// <summary>Retrieve whether tabs will be used in indentation.</summary>
     property UseTabs: Boolean read GetUseTabs write SetUseTabs default True;
+    /// <summary>Get the scale technique</summary>
+    property ScaleTechnique: TDSciScaleTechnique read GetScaleTechnique write SetScaleTechnique;
     /// <summary>Retrieve state of ignore case flag.</summary>
     property AutoCIgnoreCase: Boolean read AutoCGetIgnoreCase write AutoCSetIgnoreCase default False;
     /// <summary>Get the identifier.</summary>

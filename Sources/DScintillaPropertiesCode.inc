@@ -2460,6 +2460,16 @@ begin
   Result := SendEditor(SCI_GETNAMEDSTYLES, 0, 0);
 end;
 
+procedure TDScintilla.SetScaleTechnique(ATechnique: TDSciScaleTechnique);
+begin
+  SendEditor(SCI_SETSCALETECHNIQUE, WPARAM(TDSciScaleTechniqueToInt(ATechnique)), 0);
+end;
+
+function TDScintilla.GetScaleTechnique: TDSciScaleTechnique;
+begin
+  Result := TDSciScaleTechniqueFromInt(SendEditor(SCI_GETSCALETECHNIQUE, 0, 0));
+end;
+
 function TDScintilla.GetBidirectional: TDSciBidirectional;
 begin
   Result := TDSciBidirectionalFromInt(SendEditor(SCI_GETBIDIRECTIONAL, 0, 0));

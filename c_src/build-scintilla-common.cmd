@@ -86,7 +86,7 @@ set "LEX_LIB=%LEX_BIN_DIR%\liblexilla.lib"
 set "OUT_DLL=%OUT_DIR%\%DLL_NAME%"
 set "OUT_LIB=%OUT_DIR%\%~n2.lib"
 set "OUT_PDB=%OUT_DIR%\%~n2.pdb"
-set "OUT_BRIDGE_OBJ=%SCRIPT_DIR%..\source\scibridge%BRIDGE_PLATFORM%.obj"
+set "OUT_BRIDGE_OBJ=%SCRIPT_DIR%..\Sources\scibridge%BRIDGE_PLATFORM%.obj"
 
 if not exist "%SCI_DLL_OBJ%" (
   echo Missing Scintilla DLL object: "%SCI_DLL_OBJ%"

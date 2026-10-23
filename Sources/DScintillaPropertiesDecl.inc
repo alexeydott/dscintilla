@@ -1517,6 +1517,12 @@
     /// <summary>Retrieve the number of named styles for the lexer.</summary>
     function GetNamedStyles: Integer;
 
+    /// <summary>Set the scale technique</summary>
+    procedure SetScaleTechnique(ATechnique: TDSciScaleTechnique);
+
+    /// <summary>Get the scale technique</summary>
+    function GetScaleTechnique: TDSciScaleTechnique;
+
     /// <summary>Retrieve bidirectional text display state.</summary>
     function GetBidirectional: TDSciBidirectional;
 

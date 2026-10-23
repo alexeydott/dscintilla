@@ -17,5 +17,5 @@ In my opinion, the final result is quite competitive and can be used in other pr
 - **Static linking** - experimental version with static linking of the Scinlilla&Lexilla code directly 
     for more information and examples see SCINТILLA_STATIC_LINKING in ./demos/dscieditor/
 
-## [Scintilla documentation](scintilla.org/ScintillaDoc.html)
+## [Scintilla documentation](https://scintilla.org/ScintillaDoc.html)
 

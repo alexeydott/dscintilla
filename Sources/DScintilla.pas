@@ -131,6 +131,7 @@ type
     FOnSCNotificationEvent: TDSciNotificationEvent;
 
     FOnUpdateUI: TDSciUpdateUIEvent;
+    FOnUpdateUIEx: TDSciUpdateUIExEvent;
     FOnSavePointReached: TDSciSavePointReachedEvent;
     FOnZoom: TDSciZoomEvent;
     FOnUserListSelection: TDSciUserListSelectionEvent;
@@ -274,6 +275,7 @@ type
     procedure DoDropFiles(AFiles: TStrings); override;
     function DoSCNotification(const ASCNotification: TDSciSCNotification): Boolean; virtual;
     procedure DoUpdateUI(AFlags: TDSciUpdateFlagsSet); virtual;
+    procedure DoUpdateUIEx(AFlags: TDSciUpdateFlagsSet; APosition: NativeInt); virtual;
     procedure ShowContextMenu(APopupMenu: TPopupMenu; const AScreenPoint: TPoint); virtual;
     procedure UpdateBraceHighlighting; virtual;
   protected
@@ -374,6 +376,8 @@ type
     property OnSavePointLeft: TDSciSavePointLeftEvent read FOnSavePointLeft write FOnSavePointLeft;
     property OnModifyAttemptRO: TDSciModifyAttemptROEvent read FOnModifyAttemptRO write FOnModifyAttemptRO;
     property OnUpdateUI: TDSciUpdateUIEvent read FOnUpdateUI write FOnUpdateUI;
+    /// <summary>Update flags and native notification position (Scintilla 5.6.6+).</summary>
+    property OnUpdateUIEx: TDSciUpdateUIExEvent read FOnUpdateUIEx write FOnUpdateUIEx;
     property OnModified: TDSciModifiedEvent read FOnModified write FOnModified; // deprecated - use OnModified2
     property OnModified2: TDSciModified2Event read FOnModified2 write FOnModified2;
     property OnMacroRecord: TDSciMacroRecordEvent read FOnMacroRecord write FOnMacroRecord;
@@ -3404,7 +3408,8 @@ begin
         ApplyBraceHighlight(INVALID_POSITION, INVALID_POSITION);
 
       FSettings.NotifyUpdateUI(ASCNotification.updated);
-      DoUpdateUI(TDSciUpdateFlagsSet(TDSciUpdateSetFromInt(ASCNotification.updated)));
+      DoUpdateUIEx(TDSciUpdateFlagsSet(TDSciUpdateSetFromInt(ASCNotification.updated)),
+        ASCNotification.position);
     end;
 
   SCN_FOCUSIN:
@@ -3512,6 +3517,15 @@ begin
   else
     Result := False;
   end;
+end;
+
+procedure TDScintilla.DoUpdateUIEx(AFlags: TDSciUpdateFlagsSet; APosition: NativeInt);
+begin
+  if csDestroying in ComponentState then
+    Exit;
+  DoUpdateUI(AFlags);
+  if Assigned(FOnUpdateUIEx) then
+    FOnUpdateUIEx(Self, AFlags, APosition);
 end;
 
 procedure TDScintilla.DoUpdateUI(AFlags: TDSciUpdateFlagsSet);

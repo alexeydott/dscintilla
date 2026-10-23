@@ -54,7 +54,7 @@
         <Base>true</Base>
     </PropertyGroup>
     <PropertyGroup Condition="'$(Base)'!=''">
-        <DCC_UnitSearchPath>..\..\source;..\..\..\chsdet;$(DCC_UnitSearchPath)</DCC_UnitSearchPath>
+        <DCC_UnitSearchPath>..\..\Sources;..\..\..\chsdet;$(DCC_UnitSearchPath)</DCC_UnitSearchPath>
         <DCC_DcuOutput>DCU\$(Platform)\$(Config)</DCC_DcuOutput>
         <DCC_ImageBase>00400000</DCC_ImageBase>
         <SanitizedProjectName>DSciEditor</SanitizedProjectName>
@@ -63,7 +63,7 @@
         <VerInfo_Keys>CompanyName=;FileDescription=DSciVisualTest;FileVersion=1.0.0.0;InternalName=;LegalCopyright=;LegalTrademarks=;OriginalFilename=DSciVisualTest.exe;ProductName=DSciVisualTest;ProductVersion=1.0.0.0;Comments=</VerInfo_Keys>
         <DCC_MapFile>3</DCC_MapFile>
         <DCC_GenerateStackFrames>true</DCC_GenerateStackFrames>
-        <DCC_Define>DScintilla_USE_chsdet;SCINTILLA_STATIC_LINKING;EUREKALOG_VER7;$(DCC_Define)</DCC_Define>
+        <DCC_Define>DScintilla_USE_chsdet;EUREKALOG_VER7;$(DCC_Define)</DCC_Define>
         <Defines>EUREKALOG_VER7;$(Defines)</Defines>
     </PropertyGroup>
     <PropertyGroup Condition="'$(Base_Win32)'!=''">
@@ -87,7 +87,7 @@
         <DCC_ExeOutput>..\..\bin64\</DCC_ExeOutput>
         <AppDPIAwarenessMode>PerMonitorV2</AppDPIAwarenessMode>
         <Defines>EUREKALOG;$(Defines)</Defines>
-        <DCC_Define>EUREKALOG;SCINTILLA_STATIC_LINKING;$(DCC_Define)</DCC_Define>
+        <DCC_Define>EUREKALOG;$(DCC_Define)</DCC_Define>
     </PropertyGroup>
     <PropertyGroup Condition="'$(Cfg_1)'!=''">
         <DCC_LocalDebugSymbols>false</DCC_LocalDebugSymbols>
@@ -113,6 +113,12 @@
     <PropertyGroup Condition="'$(Cfg_2_Win64)'!=''">
         <BT_BuildType>Debug</BT_BuildType>
         <DCC_DebugDCUs>true</DCC_DebugDCUs>
+    </PropertyGroup>
+    <PropertyGroup>
+        <DSciStaticLink Condition="'$(DSciStaticLink)'==''">true</DSciStaticLink>
+    </PropertyGroup>
+    <PropertyGroup Condition="'$(DSciStaticLink)'=='true'">
+        <DCC_Define>SCINTILLA_STATIC_LINKING;$(DCC_Define)</DCC_Define>
     </PropertyGroup>
     <ItemGroup>
         <DelphiCompile Include="$(MainSource)">

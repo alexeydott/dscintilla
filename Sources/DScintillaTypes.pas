@@ -843,7 +843,9 @@ type
     scuCONTENT,                             /// <summary>SC_UPDATE_CONTENT = $1
     scuSELECTION,                           /// <summary>SC_UPDATE_SELECTION = $2
     scuV_SCROLL,                            /// <summary>SC_UPDATE_V_SCROLL = $4
-    scuH_SCROLL                             /// <summary>SC_UPDATE_H_SCROLL = $8
+    scuH_SCROLL,                            /// <summary>SC_UPDATE_H_SCROLL = $8
+    scuTEXT,                                /// <summary>SC_UPDATE_TEXT = $10
+    scuLINE_COUNT                           /// <summary>SC_UPDATE_LINE_COUNT = $20
   );
   TDSciUpdateSet = set of TDSciUpdate;
 
@@ -898,6 +900,11 @@ type
     sccsDIRECT_INPUT,                       /// <summary>SC_CHARACTERSOURCE_DIRECT_INPUT = 0
     sccsTENTATIVE_INPUT,                    /// <summary>SC_CHARACTERSOURCE_TENTATIVE_INPUT = 1
     sccsIME_RESULT                          /// <summary>SC_CHARACTERSOURCE_IME_RESULT = 2
+  );
+
+  TDSciScaleTechnique = (
+    scstDEFAULT,                            /// <summary>SCALE_TECHNIQUE_DEFAULT = 0
+    scstPIXEL_ALIGNED                       /// <summary>SCALE_TECHNIQUE_PIXEL_ALIGNED = 1
   );
 
   TDSciBidirectional = (
@@ -4237,6 +4244,8 @@ const
   SC_UPDATE_SELECTION = $2;
   SC_UPDATE_V_SCROLL = $4;
   SC_UPDATE_H_SCROLL = $8;
+  SC_UPDATE_TEXT = $10;
+  SC_UPDATE_LINE_COUNT = $20;
 
   /// <summary>For compatibility, these go through the COMMAND notification rather than NOTIFY
   /// and should have had exactly the same values as the EN_* constants.
@@ -4290,6 +4299,15 @@ const
 
   /// <summary>IME (either inline or windowed mode) full composited string.</summary>
   SC_CHARACTERSOURCE_IME_RESULT = 2;
+
+  SCALE_TECHNIQUE_DEFAULT = 0;
+  SCALE_TECHNIQUE_PIXEL_ALIGNED = 1;
+
+  /// <summary>Set the scale technique</summary>
+  SCI_SETSCALETECHNIQUE = 2820;
+
+  /// <summary>Get the scale technique</summary>
+  SCI_GETSCALETECHNIQUE = 2821;
 
   SC_BIDIRECTIONAL_DISABLED = 0;
   SC_BIDIRECTIONAL_L2R = 1;
@@ -7124,6 +7142,8 @@ function TDSciCompletionMethodsToInt(AEnum: TDSciCompletionMethods): Integer;
 function TDSciCompletionMethodsFromInt(AEnum: Integer): TDSciCompletionMethods;
 function TDSciCharacterSourceToInt(AEnum: TDSciCharacterSource): Integer;
 function TDSciCharacterSourceFromInt(AEnum: Integer): TDSciCharacterSource;
+function TDSciScaleTechniqueToInt(AEnum: TDSciScaleTechnique): Integer;
+function TDSciScaleTechniqueFromInt(AEnum: Integer): TDSciScaleTechnique;
 function TDSciBidirectionalToInt(AEnum: TDSciBidirectional): Integer;
 function TDSciBidirectionalFromInt(AEnum: Integer): TDSciBidirectional;
 function TDSciLexerIdToInt(AEnum: TDSciLexerId): Integer;
@@ -7145,6 +7165,8 @@ type
   // evt  Key=2005(Integer ch; Integer modifiers)
   // evt  DoubleClick=2006()
   TDSciUpdateUIEvent = procedure(ASender: TObject; AUpdated: TDSciUpdateFlagsSet) of object;
+  TDSciUpdateUIExEvent = procedure(ASender: TObject; AUpdated: TDSciUpdateFlagsSet;
+    APosition: NativeInt) of object;
   TDSciModifiedEvent = procedure(ASender: TObject; APosition: NativeInt; AModificationType: Integer;
     AText: UnicodeString; ALength: NativeInt; ALinesAdded: NativeInt; ALine: NativeInt;
     AFoldLevelNow: Integer; AFoldLevelPrev: Integer) of object;
@@ -9950,6 +9972,10 @@ begin
     Result := $4;
   scuH_SCROLL:                            /// <summary>SC_UPDATE_H_SCROLL = $8
     Result := $8;
+  scuTEXT:                                /// <summary>SC_UPDATE_TEXT = $10
+    Result := $10;
+  scuLINE_COUNT:                          /// <summary>SC_UPDATE_LINE_COUNT = $20
+    Result := $20;
   else
     Result := $1;
   end;
@@ -9966,6 +9992,10 @@ begin
     Result := scuV_SCROLL;                            /// <summary>SC_UPDATE_V_SCROLL = $4
   $8:
     Result := scuH_SCROLL;                            /// <summary>SC_UPDATE_H_SCROLL = $8
+  $10:
+    Result := scuTEXT;                                /// <summary>SC_UPDATE_TEXT = $10
+  $20:
+    Result := scuLINE_COUNT;                          /// <summary>SC_UPDATE_LINE_COUNT = $20
   else
     Result := scuCONTENT;                             /// <summary>SC_UPDATE_CONTENT = $1;
   end;
@@ -10238,6 +10268,30 @@ begin
     Result := sccsIME_RESULT;                         /// <summary>SC_CHARACTERSOURCE_IME_RESULT = 2
   else
     Result := sccsDIRECT_INPUT;                       /// <summary>SC_CHARACTERSOURCE_DIRECT_INPUT = 0;
+  end;
+end;
+
+function TDSciScaleTechniqueToInt(AEnum: TDSciScaleTechnique): Integer;
+begin
+  case AEnum of
+  scstDEFAULT:                            /// <summary>SCALE_TECHNIQUE_DEFAULT = 0
+    Result := 0;
+  scstPIXEL_ALIGNED:                      /// <summary>SCALE_TECHNIQUE_PIXEL_ALIGNED = 1
+    Result := 1;
+  else
+    Result := 0;
+  end;
+end;
+
+function TDSciScaleTechniqueFromInt(AEnum: Integer): TDSciScaleTechnique;
+begin
+  case AEnum of
+  0:
+    Result := scstDEFAULT;                            /// <summary>SCALE_TECHNIQUE_DEFAULT = 0
+  1:
+    Result := scstPIXEL_ALIGNED;                      /// <summary>SCALE_TECHNIQUE_PIXEL_ALIGNED = 1
+  else
+    Result := scstDEFAULT;                            /// <summary>SCALE_TECHNIQUE_DEFAULT = 0;
   end;
 end;
 
